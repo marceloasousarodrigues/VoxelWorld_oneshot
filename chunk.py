@@ -53,3 +53,9 @@ class Chunk:
             block_type: BlockType to set
         """
         self.blocks[x, y, z] = block_type
+        
+    def refresh(self):
+        """Rebuilds the chunk's mesh using neighbor data if available."""
+        # Get necessary data for mesh regeneration 
+        # In a complete implementation, this would rebuild the mesh
+        pass
