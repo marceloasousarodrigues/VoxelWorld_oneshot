@@ -28,6 +28,16 @@ class World:
         # Store chunks that have been modified and need mesh regeneration
         self.dirty_chunks = set()
         
+    def dirty(self, chunk_id):
+        """Mark chunk for mesh regeneration."""
+        self.dirty_chunks.add(chunk_id)
+        
+    def refresh(self):
+        """Refresh all dirty chunks."""
+        # For now, just clear the dirty chunks set
+        # In a more complete implementation, this would rebuild meshes 
+        self.dirty_chunks.clear()
+        
     def get_chunk(self, chunk_x: int, chunk_y: int, chunk_z: int) -> Chunk:
         """
         Get a chunk from the world, loading it if necessary.
