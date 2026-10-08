@@ -1,0 +1,17 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "developer": {
+      "temperature": 0.25
+    },
+    "reviewer": {
+      "temperature": 0.10,
+      "permission": {
+        "edit": "deny",
+        "write": "deny",
+        "bash": "deny",
+        "task": "deny"
+      }
+    }
+  }
+}
