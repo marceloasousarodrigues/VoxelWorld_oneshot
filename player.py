@@ -1,5 +1,6 @@
 ﻿from ursina import Entity, Vec3, color, camera
 from math import floor
+from raycast import raycast
 
 
 class VoxelPlayer(Entity):
@@ -183,6 +184,11 @@ class VoxelPlayer(Entity):
         # --------------------------------------------------------------
 
         self._update_vertical_movement(dt)
+
+        # --------------------------------------------------------------
+        # Interaction logic
+        # --------------------------------------------------------------
+        self._update_interaction()
 
         # --------------------------------------------------------------
         # Keep camera synchronized
@@ -862,3 +868,28 @@ class VoxelPlayer(Entity):
         # If an actual block object exists and no explicit "air"
         # marker was found, treat it as solid.
         return True
+
+    def _update_interaction(self):
+        """Handle player interaction with blocks (e.g., block breaking/placing)."""
+        from ursina import mouse
+        
+        # Check left mouse button press for block interaction
+        if mouse.left_pressed:
+            self.interaction_state['left_button'] = True
+            # Perform raycast to find what was clicked
+            if self.world:
+                direction = self.forward
+                origin = self.position + (0, self.eye_height, 0)
+                hit_result = raycast(origin, direction, self.world)
+                if hit_result:
+                    self.interaction_state['last_interaction_point'] = hit_result['position']
+                    # Store highlighted block for visual feedback
+                    self.interaction_state['highlighted_block'] = hit_result['position']
+        else:
+            self.interaction_state['left_button'] = False
+
+        # Check right mouse button press for block placing
+        if mouse.right_pressed:
+            self.interaction_state['right_button'] = True
+        else:
+            self.interaction_state['right_button'] = False
