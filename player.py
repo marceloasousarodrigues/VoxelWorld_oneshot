@@ -42,6 +42,14 @@ class VoxelPlayer(Entity):
 
         self.world = world
 
+        # Interaction state
+        self.interaction_state = {
+            'left_button': False,
+            'right_button': False,
+            'last_interaction_point': None,
+            'highlighted_block': None
+        }
+
         # Movement
         self.speed = speed
         self.jump_strength = jump_strength
