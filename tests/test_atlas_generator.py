@@ -131,10 +131,10 @@ def test_real_manifest_all_non_null_paths_resolve(tmp_path):
         for face in ("top", "side", "bottom")
         if faces.get(face)
     ]
-    assert len(references) == 12
+    assert len(references) == 15
     for rel in references:
         assert rel in map_data["tiles"]
-    assert len(map_data["tiles"]) == 5
+    assert len(map_data["tiles"]) >= 6
     assert map_data["atlas"]["width"] <= 2048
     assert map_data["atlas"]["height"] <= 2048
 

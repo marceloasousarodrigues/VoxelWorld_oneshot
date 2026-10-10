@@ -23,9 +23,9 @@
       "bottom": "voxel_textures/blocks/sand_ugly.png"
     },
     "WATER": {
-      "top": null,
-      "side": null,
-      "bottom": null
+      "top": "voxel_textures/blocks/water.png",
+      "side": "voxel_textures/blocks/water.png",
+      "bottom": "voxel_textures/blocks/water.png"
     },
     "AIR": {
       "top": null,

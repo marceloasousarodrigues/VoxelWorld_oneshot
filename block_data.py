@@ -62,9 +62,9 @@ BLOCK_PROPERTIES = {
         'name': 'Water',
         'is_solid': False,
         'texture': 'water.png',
-        'top_texture': None,
-        'side_texture': None,
-        'bottom_texture': None,
+        'top_texture': 'voxel_textures/blocks/water.png',
+        'side_texture': 'voxel_textures/blocks/water.png',
+        'bottom_texture': 'voxel_textures/blocks/water.png',
         'is_transparent': True,
     },
     BlockType.SAND: {
