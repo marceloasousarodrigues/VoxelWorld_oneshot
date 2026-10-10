@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "description": "Authoritative M9 texture manifest. Maps every BlockType to its per-face source PNGs (top/side/bottom). Paths are relative to the repository root and use forward slashes. A null face means no source texture is available for that face; consumers must skip null entries. Any non-null path that is missing on disk is a hard error for the atlas generator (scripts/pack_textures.py).",
+  "blocks": {
+    "GRASS": {
+      "top": "voxel_textures/blocks/grass_top.png",
+      "side": "voxel_textures/blocks/grass_side.png",
+      "bottom": "voxel_textures/blocks/dirt.png"
+    },
+    "DIRT": {
+      "top": "voxel_textures/blocks/dirt.png",
+      "side": "voxel_textures/blocks/dirt.png",
+      "bottom": "voxel_textures/blocks/dirt.png"
+    },
+    "STONE": {
+      "top": "voxel_textures/blocks/stone_generic.png",
+      "side": "voxel_textures/blocks/stone_generic.png",
+      "bottom": "voxel_textures/blocks/stone_generic.png"
+    },
+    "SAND": {
+      "top": "voxel_textures/blocks/sand_ugly.png",
+      "side": "voxel_textures/blocks/sand_ugly.png",
+      "bottom": "voxel_textures/blocks/sand_ugly.png"
+    },
+    "WATER": {
+      "top": null,
+      "side": null,
+      "bottom": null
+    },
+    "AIR": {
+      "top": null,
+      "side": null,
+      "bottom": null
+    }
+  },
+  "unavailable": {
+    "WATER": "No water source texture exists under voxel_textures/blocks/. A texture must be added before WATER can be rendered.",
+    "AIR": "AIR is never rendered."
+  }
+}

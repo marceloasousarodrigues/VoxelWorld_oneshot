@@ -1,0 +1,337 @@
+{
+  "meta": {
+    "tool": "scripts/measure_baseline.py",
+    "milestone": "M9 Task 1 - Performance Baseline & Asset Audit",
+    "python_version": "3.14.5 (tags/v3.14.5:5607950, May 10 2026, 10:43:50) [MSC v.1944 64 bit (AMD64)]",
+    "ursina_version": "8.3.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "scene_mode": "render",
+    "render_error": null,
+    "scene": "TerrainGenerator(seed=42) chunks x/z in [-1,1], y=0; one chunk entity per chunk; VoxelPlayer spawn (8,8,8)",
+    "chunk_entity_count": 9,
+    "vsync": true,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "duration_seconds": 30.0,
+    "warmup_seconds": 2.0,
+    "warmup_frames": 123
+  },
+  "fps": {
+    "duration_seconds": 30.000343599822372,
+    "frames": 1799,
+    "measured_frames": 1799,
+    "average_fps": 59.96597985666576,
+    "average_fps_from_frame_time": 59.966063807838516,
+    "frame_time_ms": {
+      "mean": 16.676098721511952,
+      "median": 16.66049999999686,
+      "min": 1.0961999999992145,
+      "max": 83.70580000000061,
+      "p5": 14.716939999999745,
+      "p95": 18.21340999999954
+    }
+  },
+  "refresh": {
+    "description": "Break then restore the topmost solid block of 16 columns (x,z in {2,6,10,14}) of chunk (0, 0, 0); one World.refresh() per single-block change.",
+    "chunk": [
+      0,
+      0,
+      0
+    ],
+    "block_count": 16,
+    "blocks": [
+      [
+        2,
+        6,
+        2
+      ],
+      [
+        2,
+        6,
+        6
+      ],
+      [
+        2,
+        6,
+        10
+      ],
+      [
+        2,
+        6,
+        14
+      ],
+      [
+        6,
+        6,
+        2
+      ],
+      [
+        6,
+        7,
+        6
+      ],
+      [
+        6,
+        7,
+        10
+      ],
+      [
+        6,
+        7,
+        14
+      ],
+      [
+        10,
+        6,
+        2
+      ],
+      [
+        10,
+        7,
+        6
+      ],
+      [
+        10,
+        8,
+        10
+      ],
+      [
+        10,
+        7,
+        14
+      ],
+      [
+        14,
+        6,
+        2
+      ],
+      [
+        14,
+        7,
+        6
+      ],
+      [
+        14,
+        7,
+        10
+      ],
+      [
+        14,
+        8,
+        14
+      ]
+    ],
+    "mesh_initial": {
+      "vertices": 2384,
+      "triangles": 1192
+    },
+    "mesh_after_break": {
+      "vertices": 2592,
+      "triangles": 1296
+    },
+    "mesh_after_regenerate": {
+      "vertices": 2384,
+      "triangles": 1192
+    },
+    "break": {
+      "samples": 16,
+      "total_seconds": 0.6253090002574027,
+      "mean_ms": 39.081812516087666,
+      "median_ms": 35.88294982910156,
+      "min_ms": 35.15999997034669,
+      "max_ms": 63.564800191670656,
+      "p95_ms": 53.55530011001974,
+      "per_call_seconds": [
+        0.0359652996994555,
+        0.03566299984231591,
+        0.04032109957188368,
+        0.03558789985254407,
+        0.05021880008280277,
+        0.03557970002293587,
+        0.039737300015985966,
+        0.03562430012971163,
+        0.03515999997034669,
+        0.03538609994575381,
+        0.036077599972486496,
+        0.06356480019167066,
+        0.03880960028618574,
+        0.03638520045205951,
+        0.035800599958747625,
+        0.03542770026251674
+      ]
+    },
+    "regenerate": {
+      "samples": 16,
+      "total_seconds": 0.6444591004401445,
+      "mean_ms": 40.278693777509034,
+      "median_ms": 37.6936502289027,
+      "min_ms": 35.33499967306852,
+      "max_ms": 50.93319993466139,
+      "p95_ms": 50.093424739316106,
+      "per_call_seconds": [
+        0.03559989994391799,
+        0.04835440032184124,
+        0.03802860016003251,
+        0.04981349967420101,
+        0.03533499967306852,
+        0.03596640005707741,
+        0.037358700297772884,
+        0.041739700362086296,
+        0.04233889980241656,
+        0.035342799965292215,
+        0.035768600180745125,
+        0.04215240012854338,
+        0.03631829982623458,
+        0.04245760012418032,
+        0.05093319993466139,
+        0.03695109998807311
+      ]
+    },
+    "combined_total_seconds": 1.2697681006975472
+  },
+  "texture_memory": {
+    "method": "PNG dimensions decoded with Pillow; GPU estimate assumes RGBA8 (4 bytes/pixel); with_mipmaps = base * 4/3.",
+    "legacy_atlas": {
+      "path": "voxel_textures/blocks.png",
+      "width": 48,
+      "height": 16,
+      "bands": 3,
+      "decoded_bytes": 2304,
+      "gpu_rgba8_bytes": 3072,
+      "gpu_rgba8_bytes_with_mipmaps": 4096
+    },
+    "manifest_textures": {
+      "unique_files": 5,
+      "total_gpu_rgba8_bytes": 5120,
+      "total_gpu_rgba8_bytes_with_mipmaps": 6825,
+      "files": [
+        {
+          "path": "voxel_textures/blocks/dirt.png",
+          "width": 16,
+          "height": 16,
+          "bands": 4,
+          "decoded_bytes": 1024,
+          "gpu_rgba8_bytes": 1024,
+          "gpu_rgba8_bytes_with_mipmaps": 1365
+        },
+        {
+          "path": "voxel_textures/blocks/grass_side.png",
+          "width": 16,
+          "height": 16,
+          "bands": 4,
+          "decoded_bytes": 1024,
+          "gpu_rgba8_bytes": 1024,
+          "gpu_rgba8_bytes_with_mipmaps": 1365
+        },
+        {
+          "path": "voxel_textures/blocks/grass_top.png",
+          "width": 16,
+          "height": 16,
+          "bands": 4,
+          "decoded_bytes": 1024,
+          "gpu_rgba8_bytes": 1024,
+          "gpu_rgba8_bytes_with_mipmaps": 1365
+        },
+        {
+          "path": "voxel_textures/blocks/sand_ugly.png",
+          "width": 16,
+          "height": 16,
+          "bands": 4,
+          "decoded_bytes": 1024,
+          "gpu_rgba8_bytes": 1024,
+          "gpu_rgba8_bytes_with_mipmaps": 1365
+        },
+        {
+          "path": "voxel_textures/blocks/stone_generic.png",
+          "width": 16,
+          "height": 16,
+          "bands": 4,
+          "decoded_bytes": 1024,
+          "gpu_rgba8_bytes": 1024,
+          "gpu_rgba8_bytes_with_mipmaps": 1365
+        }
+      ]
+    }
+  },
+  "texture_manifest_audit": {
+    "all_present": true,
+    "checked_count": 12,
+    "missing_files": [],
+    "entries": [
+      {
+        "block": "GRASS",
+        "face": "top",
+        "path": "voxel_textures/blocks/grass_top.png",
+        "exists": true
+      },
+      {
+        "block": "GRASS",
+        "face": "side",
+        "path": "voxel_textures/blocks/grass_side.png",
+        "exists": true
+      },
+      {
+        "block": "GRASS",
+        "face": "bottom",
+        "path": "voxel_textures/blocks/dirt.png",
+        "exists": true
+      },
+      {
+        "block": "DIRT",
+        "face": "top",
+        "path": "voxel_textures/blocks/dirt.png",
+        "exists": true
+      },
+      {
+        "block": "DIRT",
+        "face": "side",
+        "path": "voxel_textures/blocks/dirt.png",
+        "exists": true
+      },
+      {
+        "block": "DIRT",
+        "face": "bottom",
+        "path": "voxel_textures/blocks/dirt.png",
+        "exists": true
+      },
+      {
+        "block": "STONE",
+        "face": "top",
+        "path": "voxel_textures/blocks/stone_generic.png",
+        "exists": true
+      },
+      {
+        "block": "STONE",
+        "face": "side",
+        "path": "voxel_textures/blocks/stone_generic.png",
+        "exists": true
+      },
+      {
+        "block": "STONE",
+        "face": "bottom",
+        "path": "voxel_textures/blocks/stone_generic.png",
+        "exists": true
+      },
+      {
+        "block": "SAND",
+        "face": "top",
+        "path": "voxel_textures/blocks/sand_ugly.png",
+        "exists": true
+      },
+      {
+        "block": "SAND",
+        "face": "side",
+        "path": "voxel_textures/blocks/sand_ugly.png",
+        "exists": true
+      },
+      {
+        "block": "SAND",
+        "face": "bottom",
+        "path": "voxel_textures/blocks/sand_ugly.png",
+        "exists": true
+      }
+    ]
+  }
+}
