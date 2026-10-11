@@ -8,7 +8,7 @@ from collections import defaultdict
 import numpy as np
 from chunk import Chunk
 from coordinate_system import get_chunk_containing_world_coords, chunk_to_world_coords
-from block_data import BlockType
+from block_data import BlockType, is_block_solid
 
 
 class World:
@@ -167,6 +167,14 @@ class World:
         chunk.set_water_level(local_x, local_y, local_z, 0)
         chunk.set_water_source(local_x, local_y, local_z, False)
         chunk.set_block(local_x, local_y, local_z, block_type)
+
+        # M14 vegetation: an edit invalidates any decoration in the edited cell
+        # (a placed block must not contain a tuft) and, when the new block cannot
+        # support a plant, the decoration directly above it, so a tuft never
+        # floats once its support is removed.
+        chunk.clear_decoration(local_x, local_y, local_z)
+        if not is_block_solid(block_type) and local_y + 1 < Chunk.SIZE_Y:
+            chunk.clear_decoration(local_x, local_y + 1, local_z)
 
         if old_block != block_type:
             self.changed_blocks.add((world_x, world_y, world_z))
