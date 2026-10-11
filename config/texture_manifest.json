@@ -23,6 +23,16 @@
         "default_sand.png": "SAND"
       }
     },
+    "m14_foliage_textures": {
+      "license": "Refer to the Minetest default game license for this local pack; not asserted here.",
+      "source": "local extracted Minetest default texture pack (voxel_textures/MINETEST_TEXTURES)",
+      "assets": {
+        "default_tree.png": "OAK_LOG side",
+        "default_tree_top.png": "OAK_LOG top and bottom",
+        "default_leaves.png": "OAK_LEAVES all faces (alpha cutout)",
+        "default_grass_1.png..default_grass_5.png": "grass tuft decoration variants (alpha cutout)"
+      }
+    },
     "m12_grass_side_composite": {
       "license": "Derived from the local Minetest default texture pack; refer to that pack's license.",
       "source": "voxel_textures/blocks/grass_side_composite.png: default_grass_side.png overlay composited over default_dirt.png into a single fully opaque 128x128 PNG",
@@ -56,6 +66,16 @@
       "top": "voxel_textures/blocks/water.png",
       "side": "voxel_textures/blocks/water.png",
       "bottom": "voxel_textures/blocks/water.png"
+    },
+    "OAK_LOG": {
+      "top": "voxel_textures/MINETEST_TEXTURES/default_tree_top.png",
+      "side": "voxel_textures/MINETEST_TEXTURES/default_tree.png",
+      "bottom": "voxel_textures/MINETEST_TEXTURES/default_tree_top.png"
+    },
+    "OAK_LEAVES": {
+      "top": "voxel_textures/MINETEST_TEXTURES/default_leaves.png",
+      "side": "voxel_textures/MINETEST_TEXTURES/default_leaves.png",
+      "bottom": "voxel_textures/MINETEST_TEXTURES/default_leaves.png"
     },
     "AIR": {
       "top": null,

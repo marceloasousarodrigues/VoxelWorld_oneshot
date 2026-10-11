@@ -131,7 +131,9 @@ def test_real_manifest_all_non_null_paths_resolve(tmp_path):
         for face in ("top", "side", "bottom")
         if faces.get(face)
     ]
-    assert len(references) == 15
+    # 15 block face references through M13 plus 3 each for the M14 OAK_LOG and
+    # OAK_LEAVES blocks (AIR contributes none).
+    assert len(references) == 21
     for rel in references:
         assert rel in map_data["tiles"]
     assert len(map_data["tiles"]) >= 6

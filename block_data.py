@@ -20,6 +20,8 @@ class BlockType(IntEnum):
     STONE = 3
     WATER = 4
     SAND = 5
+    OAK_LOG = 6
+    OAK_LEAVES = 7
 
 
 # Block properties dictionary. Per-face texture paths are populated from the
@@ -61,6 +63,22 @@ BLOCK_PROPERTIES = {
         'name': 'Sand',
         'is_solid': True,
         'texture': 'sand.png',
+        'is_transparent': False,
+    },
+    # M14 vegetation. Leaves are solid and opaque-pass blocks: their cutout holes
+    # come from the alpha-test material on the opaque chunk entity (spec D3/D6),
+    # not from the transparent pass, so face culling and collision stay identical
+    # to every other solid block.
+    BlockType.OAK_LOG: {
+        'name': 'Oak Log',
+        'is_solid': True,
+        'texture': 'default_tree.png',
+        'is_transparent': False,
+    },
+    BlockType.OAK_LEAVES: {
+        'name': 'Oak Leaves',
+        'is_solid': True,
+        'texture': 'default_leaves.png',
         'is_transparent': False,
     },
 }
