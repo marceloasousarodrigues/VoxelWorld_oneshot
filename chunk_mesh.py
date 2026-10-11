@@ -11,7 +11,12 @@ from block_data import (
     is_block_solid,
     is_block_transparent,
 )
-from texture_config import load_atlas_map
+from texture_config import decoration_textures, load_atlas_map
+
+
+# M14: crossed-plane decorations are inset slightly from the cell faces so they
+# cannot z-fight with an adjacent cube face.
+_DECORATION_INSET = 0.05
 
 
 # Per-face UV corner order. Corners are indexed in the canonical tile order
@@ -114,6 +119,25 @@ def generate_chunk_mesh_split(
                             force_transparent=True,
                         )
 
+    # M14 foliage: crossed-plane grass tufts join the opaque lists, so no extra
+    # Entity is created per tuft and the water split stays untouched.
+    decorations = chunk.decorations
+    for x in range(Chunk.SIZE_X):
+        for y in range(Chunk.SIZE_Y):
+            for z in range(Chunk.SIZE_Z):
+                variant = int(decorations[x, y, z])
+                if variant:
+                    _add_cross_planes(
+                        vertices_opaque,
+                        triangles_opaque,
+                        uvs_opaque,
+                        x,
+                        y,
+                        z,
+                        variant,
+                        atlas_map,
+                    )
+
     return (
         vertices_opaque,
         triangles_opaque,
@@ -122,6 +146,88 @@ def generate_chunk_mesh_split(
         triangles_transparent,
         uvs_transparent,
     )
+
+
+def _decoration_tile(variant: int, atlas_map):
+    """Atlas tile for a decoration variant, or ``None`` when unavailable."""
+    if atlas_map is None or "tiles" not in atlas_map:
+        return None
+    rel = decoration_textures().get(f"grass_tuft_{variant}")
+    if not rel:
+        return None
+    return atlas_map["tiles"].get(rel)
+
+
+def _add_cross_planes(
+    vertices: list[float],
+    triangles: list[int],
+    uvs: list[tuple[float, float]],
+    x: int,
+    y: int,
+    z: int,
+    variant: int,
+    atlas_map,
+) -> None:
+    """Append two crossed vertical quads for one decoration cell (spec D6).
+
+    One quad runs along the cell's main diagonal and one along the other, each
+    spanning the full cell height and inset by ``_DECORATION_INSET`` on both
+    horizontal axes so the planes do not z-fight with neighbouring cube faces.
+    Both quads use the variant's full tile UVs, oriented so the image top is at
+    the higher Y, matching the block-face convention.
+
+    Args:
+        vertices: Opaque vertex list to extend
+        triangles: Opaque triangle-index list to extend
+        uvs: Opaque UV list to extend
+        x: Chunk-local X of the decoration cell
+        y: Chunk-local Y of the decoration cell
+        z: Chunk-local Z of the decoration cell
+        variant: Decoration variant (1..5), selecting the tuft texture
+        atlas_map: Atlas map whose ``tiles`` hold decoration paths
+    """
+    tile = _decoration_tile(variant, atlas_map)
+    if tile is None:
+        return
+
+    u0 = tile["u0"]
+    u1 = tile["u1"]
+    v_top = _flip_v(tile["v0"])
+    v_bottom = _flip_v(tile["v1"])
+    # Canonical tile corners, the same order the block faces use: the image top
+    # pairs with the higher world Y, so the sprites stand upright.
+    corners = [(u0, v_top), (u1, v_top), (u1, v_bottom), (u0, v_bottom)]
+
+    lo = _DECORATION_INSET
+    hi = 1.0 - _DECORATION_INSET
+    bottom = float(y)
+    top = float(y + 1)
+
+    for (start_x, start_z), (end_x, end_z) in (
+        ((lo, lo), (hi, hi)),
+        ((hi, lo), (lo, hi)),
+    ):
+        vertex_offset = len(vertices) // 3
+        # Top edge first so vertex order matches the canonical corner order.
+        vertices.extend(
+            [
+                x + start_x, top, z + start_z,
+                x + end_x, top, z + end_z,
+                x + end_x, bottom, z + end_z,
+                x + start_x, bottom, z + start_z,
+            ]
+        )
+        triangles.extend(
+            [
+                vertex_offset + 0,
+                vertex_offset + 1,
+                vertex_offset + 2,
+                vertex_offset + 0,
+                vertex_offset + 2,
+                vertex_offset + 3,
+            ]
+        )
+        uvs.extend(corners)
 
 
 def _block_has_non_null_face_textures(block_type) -> bool:
