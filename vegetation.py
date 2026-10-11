@@ -10,6 +10,17 @@ No code here calls Python's builtin ``hash()`` (salted per process) or the
 chunk generation order, load order or process.
 """
 
+# Decoration layer values stored in ``Chunk.decorations``.
+DECORATION_NONE = 0
+GRASS_TUFT_VARIANTS = 5
+
+# Placement tuning.
+GRASS_DENSITY_PERCENT = 30
+
+# Domain separators so one world column can drive several independent choices.
+PLANT_SALT = 1
+VARIANT_SALT = 2
+
 UINT32_MASK = 0xFFFFFFFF
 UINT64_MASK = 0xFFFFFFFFFFFFFFFF
 
@@ -58,3 +69,84 @@ def hash32(seed: int, x: int, z: int, salt: int = 0) -> int:
         ^ ((salt & UINT32_MASK) * _SALT_MUL_SALT)
     ) & UINT64_MASK
     return _mix64(combined) & UINT32_MASK
+
+
+def grass_variant_for_column(seed: int, x: int, z: int) -> int:
+    """
+    Decoration value for a world column: ``DECORATION_NONE`` or a tuft variant.
+
+    Pure and order-independent: depends only on the column's own world
+    coordinates and the seed.
+
+    Args:
+        seed: World seed
+        x: X world coordinate of the column
+        z: Z world coordinate of the column
+
+    Returns:
+        ``0`` when no tuft is placed, otherwise ``1..GRASS_TUFT_VARIANTS``
+    """
+    if hash32(seed, x, z, PLANT_SALT) % 100 >= GRASS_DENSITY_PERCENT:
+        return DECORATION_NONE
+    return 1 + hash32(seed, x, z, VARIANT_SALT) % GRASS_TUFT_VARIANTS
+
+
+def generate_vegetation_for_chunk(chunk, seed: int) -> None:
+    """
+    Populate a single chunk's vegetation (spec D5).
+
+    Only the ground-level chunk layer (``chunk_y == 0``) carries terrain, so
+    only that layer carries vegetation.
+
+    Args:
+        chunk: The Chunk to populate
+        seed: World seed
+    """
+    if chunk.chunk_y != 0:
+        return
+
+    _generate_tufts_for_chunk(chunk, seed)
+
+
+def _generate_tufts_for_chunk(chunk, seed: int) -> None:
+    """Place grass tufts into a chunk's decoration layer (spec D5).
+
+    Tufts are written into ``chunk.decorations`` only; the block grid is never
+    modified, so they cannot affect collision, raycast, placement or water.
+    """
+    from block_data import BlockType
+    from terrain_generation import in_lake, surface_height
+
+    size_x = chunk.SIZE_X
+    size_y = chunk.SIZE_Y
+    size_z = chunk.SIZE_Z
+    base_x = chunk.chunk_x * size_x
+    base_z = chunk.chunk_z * size_z
+
+    for x in range(size_x):
+        for z in range(size_z):
+            gx = base_x + x
+            gz = base_z + z
+
+            # Never place vegetation over the lake.
+            if in_lake(gx, gz):
+                continue
+
+            surface = surface_height(seed, gx, gz)
+            y = surface + 1
+
+            # No room for a tuft inside this chunk layer.
+            if y > size_y - 1:
+                continue
+
+            # Require exposed grass: the surface block is GRASS and the cell
+            # above is AIR. This also keeps tufts out of trees, which are
+            # written as solid blocks before tufts are placed.
+            if chunk.get_block(x, surface, z) != BlockType.GRASS:
+                continue
+            if chunk.get_block(x, y, z) != BlockType.AIR:
+                continue
+
+            variant = grass_variant_for_column(seed, gx, gz)
+            if variant != DECORATION_NONE:
+                chunk.set_decoration(x, y, z, variant)
