@@ -108,6 +108,9 @@ class Chunk:
                     static=True,
                 )
                 self.entity.model = new_mesh
+                from chunk_entity import apply_foliage_cutout
+
+                apply_foliage_cutout(self.entity)
                 if getattr(self.entity, "collider", None) is not None:
                     self.entity.collider = "mesh"
                 self.entity.enabled = True

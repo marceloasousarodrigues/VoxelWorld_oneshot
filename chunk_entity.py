@@ -36,6 +36,24 @@ def apply_water_material(entity: Entity) -> None:
     model.setBin("transparent", 0)
 
 
+def apply_foliage_cutout(entity: Entity) -> None:
+    """Give the opaque chunk entity a binary alpha test (spec D3/D6).
+
+    Leaves and grass tufts are painted with non-zero alpha only where the sprite
+    is solid, so a binary alpha test discards the empty texels and leaves holes,
+    while the fully opaque terrain tiles (alpha 255) are unaffected. Depth write
+    and depth test stay enabled so cutout foliage still occludes correctly, and
+    the transparent water child keeps its own ``apply_water_material`` state.
+
+    Re-apply after every mesh reassignment (see ``Chunk.refresh``): assigning a
+    new model resets the node's transparency state.
+    """
+    model = entity.model
+    if model is None:
+        return
+    model.setTransparency(TransparencyAttrib.M_binary)
+
+
 def _mesh_from_lists(vertices: list[float], triangles: list[int], uvs):
     vertex_tuples = [
         (
@@ -103,6 +121,7 @@ def create_chunk_entity(
             shader=unlit_shader,
             double_sided=True,
         )
+        apply_foliage_cutout(entity)
 
         if transparent_has_geom:
             mesh_trans = _mesh_from_lists(vertices_t, triangles_t, uvs_t)
