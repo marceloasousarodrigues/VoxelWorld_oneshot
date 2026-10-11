@@ -85,8 +85,13 @@ class World:
         chunk_x, chunk_y, chunk_z = get_chunk_containing_world_coords(world_x, world_y, world_z)
         local_x, local_y, local_z = world_x - (chunk_x * 16), world_y - (chunk_y * 16), world_z - (chunk_z * 16)
         
-        # Get chunk and block data
-        chunk = self.get_chunk(chunk_x, chunk_y, chunk_z)
+        # A read must never generate a chunk as a side effect. Serving reads by
+        # creating an empty chunk made "is this chunk generated" checks answer
+        # yes for the phantom chunks those same reads produced, which let the
+        # player walk out of the generated world and fall forever.
+        chunk = self.chunks.get((chunk_x, chunk_y, chunk_z))
+        if chunk is None:
+            return int(BlockType.AIR)
         return int(chunk.get_block(local_x, local_y, local_z))
         
     def is_loaded(self, world_x: int, world_y: int, world_z: int) -> bool:

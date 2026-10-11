@@ -1840,10 +1840,10 @@ Performed as a controlled pixel experiment, not inferred from startup success:
   `find_ground_y()` returns `None`. A validated minimal fix (make `World.get_block`
   non-creating, and stop `player._chunk_exists` creating the chunk it asks
   about) contains the player in every tested case while keeping the suite green,
-  but it changes M1/M6 read semantics and is therefore left for an explicit
-  decision rather than folded into M14.
+  but it changes M1/M6 read semantics, so it was **not** folded into M14; it was
+  applied afterwards as a separate, self-contained commit on explicit user
+  approval, with regression coverage in `tests/test_player_boundary.py`.
 
 **Milestone status: COMPLETE.** Every mandatory acceptance criterion above is
 satisfied and evidenced separately as automated, runtime/smoke and visual
-results. The only outstanding item is the unrelated, pre-existing world-boundary
-defect described above.
+results.

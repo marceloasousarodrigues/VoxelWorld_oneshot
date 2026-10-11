@@ -634,7 +634,15 @@ class VoxelPlayer(Entity):
         return 16
 
     def _chunk_exists(self, chunk_x, chunk_z):
-        """Check whether a generated chunk exists."""
+        """
+        Check whether a generated chunk exists.
+
+        This must never generate the chunk it is asked about. The world's
+        ``get_chunk`` creates on demand, so asking it here would make every
+        chunk look generated and defeat the generated-world boundary guard in
+        ``_position_inside_generated_world``: the player would be free to walk
+        off the generated region, where every block is AIR, and fall forever.
+        """
 
         # Common World implementations.
         for attribute in (
@@ -660,34 +668,27 @@ class VoxelPlayer(Entity):
                     return True
 
             except Exception:
-                pass
+                continue
 
-        # If the world exposes a direct getter, use it.
+            # A chunk container exists and does not hold this chunk, so it is
+            # not generated. Do not fall through to a creating getter.
+            return False
+
+        # No container was found, so ask the world whether the chunk is loaded
+        # without generating anything.
         try:
-            chunk = self.world.get_chunk(
-                chunk_x,
-                0,
-                chunk_z,
+            chunk_size = self._get_chunk_size()
+
+            return bool(
+                self.world.is_loaded(
+                    chunk_x * chunk_size,
+                    0,
+                    chunk_z * chunk_size,
+                )
             )
 
-            return chunk is not None
-
         except Exception:
-            pass
-
-        # Some implementations may use get_chunk(x, z).
-        try:
-            chunk = self.world.get_chunk(
-                chunk_x,
-                chunk_z,
-            )
-
-            return chunk is not None
-
-        except Exception:
-            pass
-
-        return False
+            return False
 
     # ------------------------------------------------------------------
     # BLOCK ACCESS
