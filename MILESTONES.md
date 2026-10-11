@@ -1492,9 +1492,7 @@ rendered pixels, so no visual-correctness claim is made.
 
 # M14 — Natural World Generation
 
-**Status:** PLANNED — NOT IMPLEMENTED. The design spec and implementation plan are written
-and have received review corrections (this task). No M14 code, tests, textures, manifests or
-atlas changes exist yet, and M14 must not be reported as implemented.
+**Status:** IMPLEMENTED — see the completion report at the end of this section.
 
 Design spec: `docs/superpowers/specs/2026-10-11-m14-natural-world-generation-design.md`
 Implementation plan: `docs/superpowers/plans/2026-10-11-m14-natural-world-generation.md`
@@ -1635,3 +1633,217 @@ automated tests pass, runtime and visual verification are reported separately an
 honestly, and M1–M13 behavior (especially water) is preserved.
 
 M15 must not be started automatically.
+
+### M14 Completion Report
+
+**Files changed** (12 commits, `def0551..476a15a`)
+
+Created: `vegetation.py`; tests `test_vegetation_determinism.py`,
+`test_vegetation_placement.py`, `test_tree_structure.py`,
+`test_tree_chunk_boundaries.py`, `test_vegetation_mesh.py`,
+`test_vegetation_interaction.py`, `test_m14_textures.py`.
+
+Modified: `chunk.py` (decoration layer; cutout re-application after refresh),
+`terrain_generation.py` (module-level pure helpers; vegetation after terrain),
+`block_data.py`, `config/texture_manifest.json`, `scripts/pack_textures.py`,
+`texture_config.py`, `chunk_mesh.py`, `chunk_entity.py`, `world.py`,
+`voxel_textures/gen_atlas.png`, `voxel_textures/atlas_map.json`,
+`tests/test_atlas_generator.py` (real-manifest face count 15 -> 21),
+`docs/superpowers/plans/2026-10-11-m14-natural-world-generation.md` (three
+test-snippet defects, below), `MILESTONES.md` (this report).
+
+Not modified, as planned: `water.py`, `raycast.py`, `player.py`, `inventory.py`,
+`inventory_ui.py`, `highlight.py`, `coordinate_system.py`, `main.py`, and every
+existing texture other than the regenerated atlas output.
+
+**Block and decoration design**
+
+- Grass tufts are a per-`Chunk` `decorations` int8 layer and never enter the
+  block grid, so they cannot affect movement, collision, raycast, placement or
+  water passability. Variants 1..5 select `default_grass_1..5.png`.
+- `OAK_LOG = 6` and `OAK_LEAVES = 7` are the only new block types; IDs
+  `AIR..SAND` are unchanged. Both are solid and use the opaque pass, so face
+  culling, collision, breaking, placing and collection work with no new gameplay
+  code; their cutout holes come from the material state, not the transparent
+  pass.
+- Measured in the default 9-chunk seed-42 world: **629** decorations, **125**
+  `OAK_LOG`, **1204** `OAK_LEAVES`, **23** trunk columns, all five tuft variants
+  present. Observed tuft density over 9 chunks: **29.72%** of eligible columns
+  against the 30% constant.
+
+**Deterministic generation evidence**
+
+- Generation uses `vegetation.hash32(seed, x, z, salt)` (explicit 32-bit mixing
+  over a 64-bit accumulator). No `random` module use and no builtin `hash()`:
+  verified by inspection of every vegetation path.
+- Lifting the lake constants and height math to module level was verified to
+  leave terrain output **byte-identical**: 110,592 sampled values (block, water
+  level, source flag) for chunks (-1..1, 0, -1..1) hashed to
+  `10779b20730993ed` both before and after, for seeds 42, 7 and 999999; 0 height
+  mismatches over x,z in -60..60.
+- Permuted chunk order yields identical `blocks` **and** `decorations` arrays,
+  compared per chunk key with `numpy.array_equal` (never dict/tuple `==` over
+  NumPy arrays), for 4 permutations of a 25-chunk region, including the
+  X-, Z- and corner-crossing trees. The comparison is guarded by asserting the
+  region actually grew both trees and tufts, so an all-equal result cannot pass
+  vacuously.
+- Re-running `generate_vegetation` on the same seed is idempotent, and seed 43
+  provably differs from seed 42.
+
+**D7.1 non-overlap and D7.2 ownership evidence**
+
+- `TREE_GRID = 6` with jitter `[2, 3]` and `CANOPY_RADIUS = 2` satisfies both
+  containment inequalities with zero slack: `TREE_JITTER_MIN - R = 0 >= 0` and
+  `TREE_JITTER_MAX + R = 5 <= TREE_GRID - 1 = 5`. Both are asserted as tests as
+  well as documented, and every generated footprint was checked to stay inside
+  its own grid cell (`test_tree_footprint_stays_inside_its_own_grid_cell`).
+- Brute force over generated trees: **0** cells claimed by more than one tree,
+  **0** tree blocks buried in terrain, **0** over the lake, **0** above y=15,
+  **0** decorations inside a solid block, and **0** pre-existing terrain/water
+  blocks replaced.
+- `cell_owner(cx, cy, cz, seed)` is the closed form
+  `(cx // TREE_GRID, cz // TREE_GRID)` with floor division (correct for negative
+  coordinates), returning `None` when that grid cell holds no tree, and
+  `tree_owns_cell` is exactly the comparison against the candidate's
+  `(grid_x, grid_z)`. It is computed from the cell's own coordinates only, so it
+  cannot depend on chunk-generation order; a mutation shifting the owner by one
+  grid cell fails 6 tests.
+
+**Chunk-boundary evidence (X, Z and corner)**
+
+- `TREE_GRID = 6` does not divide `CHUNK_SIZE = 16`, so crossing grid cells must
+  exist. This is proven arithmetically and seed-independently: for each grid cell
+  the footprint spans `[6i + JITTER_MIN - R, 6i + JITTER_MAX + R]`, at least one
+  index straddles a boundary, each straddling span contains at most one boundary
+  and at least two straddling cells exist (so a corner case exists too).
+- Three tests locate crossing candidates with the real algorithm and generate
+  every involved chunk in three different orders, comparing whole chunk arrays:
+
+  | case | seed | grid cell | anchor | chunks involved |
+  |---|---|---|---|---|
+  | X boundary | 42 | (-6, -8) | (-33, -46) | 2 |
+  | Z boundary | 42 | (-8, 2) | (-46, 15) | 2 |
+  | corner | 42 | (-6, -3) | (-33, -16) | 4 |
+
+- For each case the test additionally requires that the union of tree blocks
+  across the involved chunks equals the cells planned by the trees intersecting
+  those chunks, where the planned set is computed by an independently padded
+  scan. A production scan that under-covers therefore shows up as missing cells
+  instead of agreeing with itself; shrinking the scan range by one grid cell
+  fails all three tests.
+- The candidate's own trunk column is asserted contiguous at full height even
+  though it is assembled from more than one chunk, and no cell may be claimed by
+  two trees.
+
+**Water preservation (spec 5.2 protocol), seed 42, 200 identical ticks**
+
+| measurement | vegetation-free | vegetated | equal |
+|---|---|---|---|
+| water cells, before | 339 | 339 | yes |
+| level total, before | 2712 | 2712 | yes |
+| source count, before | 113 | 113 | yes |
+| water cells, after | 339 | 339 | yes |
+| level total, after | 2712 | 2712 | yes |
+| source count, after | 113 | 113 | yes |
+
+Both worlds are built by one helper from the same seed, terrain function,
+initial state, tick count and budget; the only variable is whether vegetation is
+generated. Additionally, **0** cells became passable and **0** pre-existing
+non-AIR blocks were changed by vegetation. The predicate itself is unchanged:
+its passable set is exactly `{AIR, WATER}`, and `water.py` was not modified.
+
+**Textures and atlas**
+
+- Manifest gains `OAK_LOG` (top/bottom `default_tree_top.png`, side
+  `default_tree.png`) and `OAK_LEAVES` (all faces `default_leaves.png`), plus a
+  top-level `decorations` map for the five tuft variants; the packer collects
+  that section and `texture_config.decoration_textures()` exposes it.
+- Regenerated atlas: 680x132 / 6 tiles -> **1416x132 / 14 tiles** (well under the
+  2048 limit). Regeneration is byte-deterministic, every new tile is an exact
+  copy of its source, the WATER tile is a **pixel-identical** copy of its source,
+  and the leaf/tuft tiles retain their alpha (leaves 13.2% transparent, tufts
+  53-93%). No new external or derived texture was required.
+
+**Automated test evidence**
+
+- `python -m pytest tests -q` -> **208 passed** (baseline 155).
+- Beyond green tests, the new tests were mutation-tested so a passing suite could
+  not hide a regression: shifting `cell_owner`, setting `TREE_JITTER_MAX = 4`,
+  setting `CANOPY_RADIUS = 3`, writing canopy before trunk, shrinking the anchor
+  scan, removing the tuft `AIR` guard, removing the ground-layer guard, not
+  clearing a stale decoration, removing the lake guard and removing the
+  `GRASS`-support guard each fail at least one test. Removing the scan *padding*
+  does **not** fail anything, because padding is a provable superset rather than
+  load-bearing: a footprint lies inside its own grid cell, so
+  `[chunk_min // TREE_GRID, chunk_max // TREE_GRID]` already covers every
+  candidate that can reach the chunk.
+
+**Startup / smoke evidence**
+
+- `python -u main.py` ran for 12 s: "Generating terrain...", "Terrain complete.
+  Chunks: 9", "9 chunk entities created successfully", "Player spawned at
+  Vec3(8, 8, 8)", "application successfully started", with no traceback and no
+  error. `asset_folder: .` and no missing-texture warning, so the new atlas tiles
+  resolve in the real application. Terminated manually.
+- This proves integration only, not visual correctness.
+
+**Visual verification**
+
+Performed as a controlled pixel experiment, not inferred from startup success:
+
+- A render of the same camera with and without vegetation changes **39.47%** of
+  the 1536x864 frame, so foliage geometry reaches the framebuffer.
+- Close-ups with a fixed camera: a tuft view changes **26.94%** of pixels and a
+  tree view **63.53%**, versus the vegetation-free render.
+- Cutout state: a full-viewport quad carrying the atlas leaf tile was rendered
+  three ways. A forced-opaque control showed **0.00%** background bleed, while
+  the cutout state produced **12.46%** background holes against the source
+  texture's **13.16%** transparent fraction (0.69 points apart). Alpha-test
+  cutout therefore works with `unlit_shader` on the real atlas, resolving the
+  runtime question left open in the design's 9.3.
+- A human run of the game also reported that "trees, bushes, water" look right.
+  Brightness, sprite proportion, tuft scale and tree silhouette were **not**
+  judged beyond that, so aesthetic quality is not claimed.
+
+**Deviations, decisions and limitations**
+
+- **Task order:** the `OAK_LOG`/`OAK_LEAVES` block types (plan Task 6) landed
+  before the tree-shape task (plan Task 4), because Task 4's implementation and
+  tests reference those enum members. Both landed as separate, green commits.
+- **Plan defects fixed** while writing the tests (documented in the plan as
+  well): the Task 5 snippet used an undefined `CHUNK` name and 2-tuple keys
+  against `World.chunks`, which is keyed by 3-tuples, so it could not run; the
+  Task 7 snippet called `pt.load_manifest()` without its required path argument.
+  `tests/test_atlas_generator.py`'s real-manifest count assertion was updated
+  15 -> 21 because M14 intentionally adds six non-null block faces.
+- **`TREE_DENSITY_PERCENT` remains 35**, as instructed, now evaluated per 6x6
+  cell instead of the design's original 8x8, so tree count is roughly 1.8x
+  higher; that is a free parameter that does not affect the non-overlap proof or
+  crossing existence, but it is worth retuning if the density reads as high.
+- **Canopy truncation near steep terrain** is inherent to the approved design:
+  a canopy cell below a neighbouring column's surface height is omitted rather
+  than floating, so trees on slopes can appear one-sided.
+- **Under pytest, every relative texture load reports "missing texture"**,
+  including the pre-existing `gen_atlas.png`; this is Ursina's asset root under
+  the test runner, not an M14 defect (the real application loads them).
+- **Foliage cutout is only observable with a GL context**, so it is verified by
+  the pixel experiment above, not by the pytest suite; the harness was removed
+  after measurement and is not committed.
+- **Unrelated defect found, not caused by M14 and not fixed:** walking out of the
+  3x3 generated chunk region makes the player fall forever. It reproduces
+  identically on the pre-M14 baseline `def0551` (same first no-ground frame at
+  `(291, 6.99, 8.0, 32.33)` and the same final y). The cause is that reads create
+  chunks: `World.get_block` calls the creating `get_chunk`, and
+  `player._chunk_exists` falls through to `world.get_chunk(...)` too, so the
+  "is this chunk generated" guard answers True for the phantom chunks those same
+  reads create, after which every block outside the region is AIR and
+  `find_ground_y()` returns `None`. A validated minimal fix (make `World.get_block`
+  non-creating, and stop `player._chunk_exists` creating the chunk it asks
+  about) contains the player in every tested case while keeping the suite green,
+  but it changes M1/M6 read semantics and is therefore left for an explicit
+  decision rather than folded into M14.
+
+**Milestone status: COMPLETE.** Every mandatory acceptance criterion above is
+satisfied and evidenced separately as automated, runtime/smoke and visual
+results. The only outstanding item is the unrelated, pre-existing world-boundary
+defect described above.
