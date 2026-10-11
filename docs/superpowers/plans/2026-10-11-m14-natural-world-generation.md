@@ -528,7 +528,7 @@ def _find_crossing(kind, seeds=CROSSING_SEEDS, grid_range=range(-8, 9)):
 
 
 def _owned_chunks(cells):
-    return sorted({(c[0] // CHUNK, c[2] // CHUNK) for c in cells})
+    return sorted({(c[0] // CHUNK_SIZE, c[2] // CHUNK_SIZE) for c in cells})
 
 
 def test_generation_order_does_not_change_output():
@@ -550,7 +550,7 @@ def test_crossing_grid_cells_exist_by_construction():
 
     assert CHUNK_SIZE % TREE_GRID != 0
     crossing = [i for i in range(-32, 33)
-                if span(i)[0] // CHUNK_SIZE != span(i)[1] // CHUNK]
+                if span(i)[0] // CHUNK_SIZE != span(i)[1] // CHUNK_SIZE]
     assert crossing, "no grid cell straddles a chunk boundary"
     assert all(span(i)[1] // CHUNK_SIZE - span(i)[0] // CHUNK_SIZE <= 1 for i in crossing)
     assert len(crossing) >= 2  # so a corner-crossing cell exists too

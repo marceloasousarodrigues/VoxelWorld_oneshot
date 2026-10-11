@@ -333,6 +333,23 @@ def generate_vegetation_for_chunk(chunk, seed: int) -> None:
     _generate_tufts_for_chunk(chunk, seed)
 
 
+def generate_vegetation(world, seed: int) -> None:
+    """
+    Generate vegetation for every chunk currently loaded in ``world`` (spec D8).
+
+    The visiting order cannot change the result: every cell has exactly one
+    owner (D7.1/D7.2) and no chunk ever reads a neighbour's data, so an X-, Z- or
+    corner-crossing tree is assembled identically however the chunks are ordered.
+    Keys are sorted only to make the traversal itself deterministic.
+
+    Args:
+        world: World whose loaded chunks should be populated
+        seed: World seed
+    """
+    for key in sorted(world.chunks):
+        generate_vegetation_for_chunk(world.chunks[key], seed)
+
+
 def _generate_trees_for_chunk(chunk, seed: int) -> None:
     """Write the tree blocks owned by this chunk (spec D7).
 
