@@ -29,11 +29,39 @@ class Chunk:
             dtype=np.int32,
         )
 
+        self.water_levels = np.full(
+            (self.SIZE_X, self.SIZE_Y, self.SIZE_Z),
+            0,
+            dtype=np.int8,
+        )
+
+        self.water_sources = np.full(
+            (self.SIZE_X, self.SIZE_Y, self.SIZE_Z),
+            False,
+            dtype=bool,
+        )
+
     def get_block(self, local_x: int, local_y: int, local_z: int) -> int:
         return int(self.blocks[local_x, local_y, local_z])
 
     def set_block(self, local_x: int, local_y: int, local_z: int, block_type: int) -> None:
         self.blocks[local_x, local_y, local_z] = block_type
+
+    def get_water_level(self, local_x: int, local_y: int, local_z: int) -> int:
+        return int(self.water_levels[local_x, local_y, local_z])
+
+    def set_water_level(self, local_x: int, local_y: int, local_z: int, level: int) -> None:
+        self.water_levels[local_x, local_y, local_z] = np.clip(level, 0, 8)
+
+    def get_water_source(self, local_x: int, local_y: int, local_z: int) -> bool:
+        return bool(self.water_sources[local_x, local_y, local_z])
+
+    def set_water_source(self, local_x: int, local_y: int, local_z: int, source: bool) -> None:
+        self.water_sources[local_x, local_y, local_z] = source
+
+    def clear_water(self, local_x: int, local_y: int, local_z: int) -> None:
+        self.water_levels[local_x, local_y, local_z] = 0
+        self.water_sources[local_x, local_y, local_z] = False
 
     def refresh(self, world=None):
         from chunk_mesh import generate_chunk_mesh_split
