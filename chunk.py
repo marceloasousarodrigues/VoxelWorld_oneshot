@@ -115,6 +115,9 @@ class Chunk:
                     static=True,
                 )
                 self.entity_transparent.model = new_mesh_t
+                from chunk_entity import apply_water_material
+
+                apply_water_material(self.entity_transparent)
                 self.entity_transparent.enabled = True
             else:
                 self.entity_transparent.model = None

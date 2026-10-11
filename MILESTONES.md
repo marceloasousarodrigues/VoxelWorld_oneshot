@@ -393,4 +393,1245 @@ M7 must not automatically introduce inventory, crafting, drops, tools, mobs, or 
 
 M8 must not be started automatically.
 
-The next milestone becomes active only when explicitly selected by the user or parent task.
+# M8 — Inventory, Hotbar & Resource Collection
+
+## Objective
+
+Introduce a basic inventory and resource collection system into the existing voxel world.
+
+M8 must extend the block interaction mechanics established in M7 by allowing the player to collect resources, store block items, select blocks through a hotbar, and use collected resources for block placement.
+
+The milestone must establish the foundation for future gameplay systems without introducing unrelated mechanics.
+
+M8 must build on M1–M7 and preserve the existing world, Chunk, mesh, texture, player, and interaction architecture.
+
+## Requirements
+
+### 1. Inventory System
+
+Implement a player inventory capable of storing block items.
+
+The inventory must:
+
+- Store item types and quantities.
+- Support adding items.
+- Support removing items.
+- Track available quantities correctly.
+- Reject invalid item types and invalid quantities.
+- Prevent item quantities from becoming negative.
+- Handle inventory capacity consistently.
+
+The initial implementation may use a fixed number of inventory slots.
+
+The inventory must be independent of the World and Chunk block-data representations.
+
+### 2. Item Stacks
+
+Implement stackable inventory items.
+
+The system must:
+
+- Allow multiple items of the same type to occupy one slot.
+- Enforce a configurable maximum stack size.
+- Merge compatible stacks when adding items.
+- Use empty slots when an existing stack cannot accommodate the full quantity.
+- Handle inventory-full conditions without silently losing items.
+- Preserve item type and quantity consistency.
+
+Stacking rules must be defined independently of visual rendering.
+
+### 3. Hotbar
+
+Implement a hotbar that allows the player to select an inventory slot.
+
+The hotbar must:
+
+- Expose a configurable number of quick-access slots.
+- Support selection through keyboard input.
+- Track the currently selected slot.
+- Display the selected slot visually.
+- Show the item type and quantity in each occupied slot.
+- Handle empty slots correctly.
+- Update immediately when inventory contents change.
+
+The hotbar must provide the selected block type to the existing block-placement system.
+
+### 4. Block Collection
+
+Implement resource collection when the player breaks a block.
+
+When a block is broken:
+
+- The block must be removed using the existing M7 interaction system.
+- The corresponding resource must be added to the player's inventory.
+- The collected item type must correspond to the broken block type.
+- Collection must respect inventory and stack limits.
+- Resources must not be duplicated.
+- Inventory updates must not modify unrelated world blocks.
+
+The initial implementation may collect resources immediately without spawning physical item entities.
+
+### 5. Inventory-Aware Block Placement
+
+Integrate the hotbar and inventory with the existing M7 placement system.
+
+When the player places a block:
+
+- The selected hotbar item determines the block type.
+- The inventory must contain the required item.
+- A successful placement consumes the appropriate quantity.
+- A rejected placement must not consume items.
+- Placement safety, interaction range, and existing raycast behaviour must remain intact.
+- Chunk mesh regeneration and texture preservation must continue to work.
+
+The existing fixed/default DIRT placement behaviour may remain available as a fallback during development, but the completed system must use the selected item when inventory-based placement is active.
+
+### 6. Item and Block Type Mapping
+
+Define a consistent mapping between world block types and inventory item types.
+
+The initial implementation must support the existing block types:
+
+- GRASS;
+- DIRT;
+- STONE.
+
+The mapping must not rely on visual textures or mesh data to identify an item.
+
+World block IDs, inventory item IDs, and texture assignments must remain consistent with their respective systems.
+
+### 7. Inventory Interface
+
+Implement a basic inventory interface suitable for the current game.
+
+The interface must:
+
+- Display inventory slots.
+- Display item quantities.
+- Show the selected hotbar slot.
+- Allow the player to open and close the inventory.
+- Remain separate from world rendering and Chunk entities.
+- Avoid creating UI entities for individual world voxels.
+- Update when inventory contents or selected slots change.
+
+A simple functional interface is sufficient. Advanced UI styling is outside the scope of this milestone.
+
+### 8. Tools and Mining Behaviour
+
+Introduce a basic tool system only if the inventory and block-item pipeline is stable.
+
+The initial tool system may support:
+
+- Tool item definitions.
+- Tool-to-block compatibility.
+- Configurable mining speed.
+- Optional durability values.
+
+Tools must integrate with the existing block-breaking action rather than replacing the raycast or world mutation systems.
+
+Tool durability must not become negative, and rejected or unsuccessful mining actions must not consume durability incorrectly.
+
+Advanced tool progression and enchantments are outside the scope of M8.
+
+### 9. World and Chunk Integration
+
+M8 must reuse the systems established by previous milestones:
+
+- M1 coordinate system;
+- M2 Chunk block data;
+- M3 Chunk mesh generation;
+- M4 World container;
+- M5 terrain generation and rendered Chunk Entities;
+- M6 player, camera, movement, and collision;
+- M7 raycasting, block selection, breaking, placement, and mesh refresh.
+
+Inventory and item management must not introduce an alternative representation of the world.
+
+The existing architecture invariants must remain intact:
+
+- One logical block-data structure per Chunk.
+- One combined mesh per rendered Chunk.
+- One Ursina Entity per rendered Chunk.
+- No entity per voxel or per mesh face.
+
+### 10. Runtime Validation
+
+The application must be executed and directly validated.
+
+Validation must demonstrate:
+
+- Opening and closing the inventory.
+- Selecting hotbar slots.
+- Adding and removing inventory items.
+- Stack merging and maximum stack limits.
+- Collecting resources by breaking blocks.
+- Correct resource types and quantities.
+- Placing the selected block type.
+- Consuming items only after successful placement.
+- Preserving inventory contents when placement is rejected.
+- Correct inventory-full behaviour.
+- Correct integration with existing block textures and chunk mesh regeneration.
+- Continued compatibility with M6 movement and collision.
+- Continued compatibility with M7 block selection and highlighting.
+
+Source-code inspection alone is insufficient to prove runtime interaction requirements.
+
+### 11. Previous Milestone Compatibility
+
+M8 must not break functionality established by M1–M7.
+
+The following must continue to work:
+
+- Coordinate conversion.
+- Chunk block-data operations.
+- Mesh generation and texture UVs.
+- World and terrain generation.
+- Chunk rendering.
+- First-person camera and movement.
+- Mouse look, gravity, jumping, and terrain collision.
+- Raycasting and block selection.
+- Block highlighting.
+- Block breaking and placement.
+- Placement collision safety.
+- Chunk-boundary mesh updates.
+
+## Out of Scope
+
+The following are explicitly outside M8:
+
+- Crafting stations.
+- Complex crafting interfaces.
+- Large recipe systems.
+- World persistence and save/load.
+- Multiplayer inventory synchronisation.
+- Trading.
+- Equipment progression.
+- Enchantments.
+- Advanced durability and repair mechanics.
+- Mobs and NPCs.
+- Combat.
+- Health and damage.
+- Farming.
+- Advanced resource processing.
+- World streaming.
+- Dynamic Chunk loading/unloading.
+- Advanced UI styling.
+- LOD.
+- Greedy meshing.
+- Unrelated refactoring.
+
+## Validation
+
+The following requirements require direct runtime validation:
+
+- Inventory interaction.
+- Hotbar selection.
+- Resource collection.
+- Stack management.
+- Inventory-aware block placement.
+- Inventory-full handling.
+- UI updates.
+- Compatibility with M6 movement and M7 interaction.
+- Preservation of existing textures and chunk rendering.
+
+The application must be executed and the player must be directly tested inside the generated voxel world.
+
+Automated tests must cover inventory rules, item quantities, stack limits, resource collection,
+
+
+# M10 — Centralized Texture Configuration
+
+## Objective
+
+Consolidate the M9 texture configuration so that `config/texture_manifest.json`
+is the single source of truth for per-face texture source paths and for the
+atlas/legacy asset locations.
+
+M10 must remove the duplicated hardcoded texture paths currently defined in
+`block_data.py`, `chunk_entity.py`, and `chunk_mesh.py`, without changing
+rendering behavior.
+
+## Requirements
+
+### 1. Single Source of Truth
+
+`config/texture_manifest.json` must remain the authoritative mapping from block
+type to per-face source PNGs. No other module may hardcode those paths.
+
+### 2. Centralized Configuration Module
+
+Introduce a single configuration module that:
+
+- loads the manifest once;
+- exposes the per-face source paths for a block type;
+- exposes the generated atlas image and atlas map paths;
+- exposes the legacy atlas path;
+- exposes a single M9-assets-available check.
+
+### 3. Consumer Integration
+
+`block_data.py`, `chunk_entity.py`, and `chunk_mesh.py` must obtain texture
+paths and asset locations from the centralized configuration module.
+
+### 4. Backward Compatibility
+
+Public functions (`get_block_face_textures`, `is_block_transparent`,
+`get_block_texture`) must keep their current behavior and signatures.
+
+### 5. No Behavior Change
+
+Rendered output, UV generation, atlas selection, transparency handling, and
+block textures must be unchanged.
+
+### 6. Tests
+
+Focused tests must validate the centralized configuration and manifest
+consistency, replacing assertions that duplicated the hardcoded paths.
+
+## Out of Scope
+
+- new block types or textures;
+- rendering, UV math, or shader changes;
+- performance changes;
+- gameplay changes;
+- unrelated refactoring.
+
+## Completion
+
+M10 is complete only when all mandatory requirements above are satisfied, the
+relevant automated tests pass, and no behavior change is observed.
+
+M11 must not be started automatically.
+# M11 — Texture Quality Investigation & Upgrade
+
+## Objective
+
+Improve the visual quality of VoxelWorld's existing block textures, building on the centralized texture configuration introduced in M10.
+
+Investigate the actual source textures and suitable built-in Ursina textures before choosing an implementation. Make a visual change only when the replacement is demonstrably suitable and compatible with the existing renderer.
+
+M11 must preserve the current game architecture and all functionality established by M1–M10.
+
+## Execution and Context Constraints
+
+This project has experienced OpenCode subagent failures caused by excessive context.
+
+- Execute tasks sequentially; do not launch parallel subagents.
+- Keep each task and delegated prompt narrowly scoped.
+- Do not pass the entire repository, conversation history, or all milestone documents to subagents.
+- Reuse a concise findings summary between phases instead of repeating project-wide discovery.
+- Delegate only when it provides a clear benefit.
+- Do not change global OpenCode configuration or agent definitions.
+- If a task fails because of context pressure, reduce its scope and supplied context before retrying.
+
+## Requirements
+
+### 1. Inspect the Existing Texture Pipeline
+
+Inspect only the files and assets needed to understand:
+
+- `texture_config.py`;
+- `config/texture_manifest.json`;
+- `block_data.py`;
+- `chunk_mesh.py`;
+- `chunk_entity.py`;
+- the current atlas image and atlas mapping;
+- relevant mesh, UV, texture, and runtime tests.
+
+Determine how source textures, atlas entries, and UV coordinates are used. Establish the current source texture dimensions and formats where possible. Do not modify code during this inspection phase.
+
+### 2. Evaluate Built-in Ursina Textures
+
+Inspect the built-in textures available in the installed Ursina/Panda3D environment.
+
+For each suitable candidate, record:
+
+- asset name and source path;
+- actual width and height in pixels;
+- image format;
+- visual suitability for the intended block;
+- whether it tiles cleanly;
+- compatibility with the current atlas and UV system.
+
+Evaluate existing block types, including GRASS, DIRT, and STONE, and WOOD or SAND if those types exist in the project.
+
+Prefer the highest-quality suitable built-in assets, but do not assume built-in textures are high-resolution. Enlarging a small texture does not create additional source detail.
+
+Do not download external assets during M11.
+
+### 3. Choose a Compatible Implementation
+
+Use the findings to select the smallest compatible solution.
+
+- Keep `config/texture_manifest.json` as the authoritative texture-path manifest.
+- Keep `texture_config.py` as the centralized configuration interface.
+- Do not introduce a second texture registry.
+- Preserve block IDs and logical block data.
+- Preserve the existing combined-mesh-per-chunk renderer.
+- If the renderer requires an atlas, keep the chosen textures and atlas UV mapping compatible.
+- Do not switch to per-block Ursina entities.
+- Avoid unnecessary generators, build steps, or asset-management abstractions.
+
+Before implementation, summarize the chosen approach and the exact files expected to change. If the available built-in assets cannot produce a meaningful improvement, report the limitation rather than forcing a poor replacement.
+
+### 4. Improve Existing Block Textures
+
+Where suitable assets are available, update the centralized configuration and required atlas assets so existing blocks look visibly better.
+
+- Preserve appropriate differences between grass top, side, and bottom faces.
+- Prefer genuine source detail and clean tiling.
+- Avoid atlas bleeding, incorrect UVs, and visible seams where practical.
+- Keep texture selection independent of terrain generation and gameplay logic.
+- Do not change block coordinates, collision, world logic, or unrelated rendering behavior.
+
+Do not claim a visual improvement solely because paths or configuration files changed. The result must be checked in-game when runtime GUI verification is available.
+
+### 5. Water Compatibility
+
+Water behavior is out of scope.
+
+- Preserve its current rendering and gameplay behavior.
+- Do not implement flow, simulation, animation, transparency changes, or new water mechanics.
+- Do not break its current texture assignment.
+- Keep the configuration extensible for future dedicated water rendering work.
+
+### 6. Preserve Previous Milestones
+
+M11 must preserve M1–M10 functionality, including:
+
+- coordinate conversion and block data;
+- terrain generation and World/Chunk behavior;
+- combined mesh generation and UVs;
+- one combined mesh per rendered Chunk;
+- one Ursina Entity per rendered Chunk;
+- cross-chunk face culling;
+- dirty-chunk regeneration;
+- player movement, camera, gravity, jumping, and collision;
+- block selection, highlighting, breaking, and placement;
+- inventory and hotbar behavior, where implemented;
+- the centralized M10 texture configuration.
+
+No unrelated refactoring is permitted.
+
+### 7. Automated Tests
+
+Add or update focused tests as needed.
+
+Verify:
+
+- all configured texture references resolve;
+- selected source assets have the expected dimensions and formats;
+- atlas entries and UV coordinates remain valid when an atlas is used;
+- grass face assignments remain correct;
+- mesh generation and chunk-boundary culling remain correct;
+- dirty-chunk regeneration still works;
+- block interaction and inventory-related behavior remain compatible;
+- existing tests continue to pass.
+
+Run the project's established test command. If applicable, run:
+
+`python -m pytest tests -q`
+
+Record the actual command and result. Do not claim tests passed unless they were executed.
+
+### 8. Runtime Visual Verification
+
+Launch VoxelWorld using its normal startup procedure when possible.
+
+Inspect the terrain in-game and verify:
+
+- existing block types render correctly;
+- any claimed texture-quality improvement is visibly present;
+- grass face assignments are correct;
+- there is no obvious atlas bleeding, incorrect UVs, or texture discontinuity at chunk boundaries;
+- breaking and placing blocks still works;
+- water remains compatible with its previous behavior.
+
+If the GUI cannot be launched, state that clearly. Automated tests and source inspection alone do not establish visual improvement.
+
+### 9. Documentation and Completion Report
+
+Update this milestone's completion status and report:
+
+- files changed;
+- chosen texture assets and verified dimensions/formats;
+- implementation decisions;
+- automated test command and results;
+- whether in-game visual verification was completed;
+- limitations or deferred work.
+
+Do not rewrite previous milestones or repair unrelated documentation as part of M11.
+
+## Out of Scope
+
+- downloading third-party texture packs;
+- implementing a complete custom texture pack;
+- new block types or gameplay mechanics;
+- water simulation or new water rendering behavior;
+- changes to inventory or hotbar behavior;
+- chunk architecture rewrites;
+- per-block Ursina entities;
+- global OpenCode configuration or agent-definition changes;
+- unrelated refactoring.
+
+## Completion
+
+M11 is complete only when the selected solution is compatible with the centralized M10 configuration, previous milestone functionality is preserved, relevant automated tests pass, and runtime visual verification is documented accurately.
+
+If no suitable built-in texture can produce a meaningful improvement, document the evidence and stop for a user decision before introducing external assets.
+
+M12 must not be started automatically.
+
+## M11 Investigation Results (background; superseded by the completion report below)
+
+Investigation performed. The user then authorized introducing external CC0 assets,
+so the milestone proceeded (see "M11 Completion Report" below). At investigation
+time no code, assets, manifest entries, or atlas outputs had been changed, and
+`python -m pytest tests -q` reported `83 passed`.
+
+### Current texture pipeline (verified)
+
+- Block types: AIR, GRASS, DIRT, STONE, WATER, SAND.
+- Manifest sources are all **16x16 RGBA PNG**: `grass_top.png`, `grass_side.png`,
+  `dirt.png`, `stone_generic.png`, `sand_ugly.png`, `water.png`.
+- Atlas output `voxel_textures/gen_atlas.png` is **120x20**, 6 tiles, 2px padding,
+  `nearest` filter; `voxel_textures/atlas_map.json` holds the UV rects.
+- The local `voxel_textures/blocks/` pack contains 84 PNGs and **every one is
+  16x16 RGBA** — no higher-resolution local source exists.
+
+### Built-in assets evaluated (measured with Pillow; edge-seam metric = mean abs
+difference between opposite edges; lower is more tileable)
+
+| Asset | Size | Format | Seam (V/H) | Suitable as block texture? |
+|---|---|---|---|---|
+| ursina `brick.png` | 16x16 | PNG RGB | 10.1 / 23.6 | No — same resolution as current; masonry look, not natural STONE |
+| ursina `grass.png` | 256x256 | PNG **P** (16 colors) | 3.3 / 3.7 | Marginal — tiles, but only 16 flat green colors with no real detail; soft/palette look clashes with the pixel-art set and would cover only GRASS top |
+| ursina `grass_tintable.png` | 2048x2048 | PNG RGBA | 0.5 / 0.8 | No — near-white (mean ~255) tint mask; renders white standalone |
+| ursina `shore.jpg` | 2000x1098 | JPEG RGB | 70.1 / 125.4 | No — non-tiling photograph |
+| ursina `perlin_noise.png` | 512x512 | PNG RGB | 1.1 / 1.1 | No — abstract noise, not block-like |
+| ursina `noise.png` | 64x64 | PNG RGB | 143.8 / 128.7 | No — non-tiling high-frequency noise |
+| ursina `white_cube.png` | 64x64 | PNG RGB | 0.0 / 0.0 | No — plain near-white |
+| ursina `test_tileset.png` | 64x32 | PNG RGBA | 21.9 / 20.2 | No — multi-tile tileset sheet, not a single texture |
+| panda3d `envir-ground.jpg` | 128x128 | JPEG RGB | 16.7 / 14.7 | No — photo-like ground with visible seams at per-block repetition |
+| panda3d `envir-rock1.jpg` | 256x256 | JPEG RGB | 14.8 / 22.3 | Marginal — photo grayscale; seams |
+| panda3d `envir-rock2.jpg` | 256x256 | JPEG RGB | 11.5 / 86.0 | No — poor horizontal tiling |
+| panda3d `envir-treetrunk.jpg` | 256x256 | JPEG RGB | 28.4 / 34.8 | No — no WOOD block type exists |
+
+### Conclusion
+
+No built-in Ursina/Panda3D asset forms a coherent, higher-detail, cleanly-tiling
+replacement set for GRASS/DIRT/STONE/SAND. Each candidate is either the same
+16x16 resolution, flat/abstract, a palette/photo texture, a white tint mask, or
+non-tiling with visible seams when repeated per block. The higher-resolution
+local candidates that would produce a genuine improvement are external assets
+(and still 16x16 in the present pack), so per M11 the milestone is stopped here
+pending a user decision.
+
+### Limitations
+
+- In-game visual verification was **not** performed. The agent environment cannot
+  inspect rendered images (no image/GUI input), so no visual claim is made.
+- Selecting the built-in `grass.png`, `envir-ground.jpg`, or `envir-rock*.jpg`
+  options was not implemented because it would replace only a subset of faces
+  with stylistically inconsistent, seam-prone textures and would not constitute a
+  meaningful, coherent improvement.
+
+## M11 Completion Report — status: COMPLETE (visual verification limited)
+
+After the built-in inspection found no suitable built-in improvement, the user
+authorized introducing external CC0 textures, so the milestone proceeded.
+
+### Files changed
+
+- `config/texture_manifest.json` — GRASS/DIRT/STONE/SAND face paths repointed to
+  new HD assets; added a CC0 `provenance` block. WATER unchanged.
+- `voxel_textures/blocks/grass_top_hd.png`, `grass_side_hd.png`, `dirt_hd.png`,
+  `stone_hd.png`, `sand_hd.png` (new, 256x256 RGB PNG).
+- `voxel_textures/gen_atlas.png` (regenerated: 1320x260, 6 tiles, 2px padding,
+  `nearest`).
+- `voxel_textures/atlas_map.json` (regenerated).
+- `tests/test_m11_texture_quality.py` (new).
+- `tests/test_chunk_mesh.py`, `tests/test_texture_config.py`,
+  `tests/test_block_data_m9_task3.py` — updated hardcoded source paths to HD names.
+- `MILESTONES.md` — this report.
+
+`texture_config.py`, `block_data.py`, `chunk_mesh.py`, and `chunk_entity.py` were
+**not** changed: the centralized M10 configuration and renderer are preserved.
+
+### Chosen assets (CC0, ambientCG; verified dimensions/formats)
+
+| New asset | Source (ambientCG, CC0) | Source size/format | In-atlas |
+|---|---|---|---|
+| `grass_top_hd.png` | Grass004 1K-JPG Color | 1024x1024 JPEG | 256x256 PNG |
+| `dirt_hd.png` | Ground037 1K-JPG Color | 1024x1024 JPEG | 256x256 PNG |
+| `stone_hd.png` | Rock051 1K-JPG Color | 1024x1024 JPEG | 256x256 PNG |
+| `sand_hd.png` | Ground054 1K-JPG Color | 1024x1024 JPEG | 256x256 PNG |
+| `grass_side_hd.png` | derived: Grass004 top 25% over Ground037 | 256x256 PNG | 256x256 |
+| `water.png` | unchanged (out of scope) | 16x16 PNG | 16x16 |
+
+All four sources tile cleanly (edge-seam V/H: Grass004 13/13, Ground037 24/21,
+Rock051 10/13, Ground054 8/9) and were downscaled 1024->256 with LANCZOS
+(16x the original 16x16 linear resolution).
+
+### Implementation decisions
+
+- Kept `config/texture_manifest.json` authoritative and `texture_config.py` the
+  single configuration interface; no second texture registry.
+- Preserved combined-mesh-per-chunk, one Ursina Entity per chunk, atlas UVs,
+  transparency split, and cross-chunk culling.
+- GRASS top/side/bottom remain three distinct textures.
+- WATER rendering and texture assignment untouched.
+
+### Automated tests
+
+Command: `python -m pytest tests -q` -> **88 passed** (was 83; +5 new M11 tests).
+
+New tests assert: all manifest references resolve; the five HD assets are PNG
+256x256; grass faces are distinct; water is preserved; atlas tile UV rects are
+valid and inside the atlas.
+
+### Runtime verification
+
+- Startup verified: Ursina window created (1920x1080); **9/9 chunk entities**
+  created with atlas texture `gen_atlas.png`; transparent child entity present;
+  player spawned at (8, 8, 8). No exceptions.
+- Atlas content verified programmatically (tile mean RGB): grass_top
+  [96,109,48], dirt [152,147,88], stone [118,114,97], sand [156,139,110],
+  grass_side [139,138,77] (composite), water 16x16 [25,142,202].
+- In-game visual observation was **not** possible: the agent environment cannot
+  inspect rendered pixels (no image input), so no human/agent visual claim is made.
+
+### Limitations / deferred work
+
+- No visual confirmation of on-screen appearance, seams, or grass-face
+  orientation. The improvement is supported by source resolution (16 -> 256) and
+  measured source detail, not by a rendered-frame inspection.
+- Water remains at 16x16 (explicitly out of scope).
+- `grass_side_hd.png` is a derived composite (documented in manifest provenance).
+
+
+# M12 — Texture Pack Integration & Face Orientation
+
+## Objective
+
+Integrate the extracted Minetest texture pack for existing block types through the
+centralized M10 manifest/atlas pipeline, and correct per-face UV orientation in
+`chunk_mesh.py` so that top, bottom, and side faces display their textures upright
+and consistently.
+
+M12 is narrowly scoped to texture selection and UV orientation. It must not
+rewrite the renderer, change water behavior, or introduce unrelated gameplay
+features. It must preserve all M1–M11 functionality and the combined-mesh-per-chunk
+architecture.
+
+## Execution and Context Constraints
+
+This project has experienced OpenCode subagent failures caused by excessive context.
+
+- Execute tasks sequentially; do not launch parallel subagents.
+- Keep each task and delegated prompt narrowly scoped.
+- Do not pass the entire repository, conversation history, or all milestone documents to subagents.
+- Reuse a concise findings summary between phases instead of repeating project-wide discovery.
+- Delegate only when it provides a clear benefit.
+- Do not change global OpenCode configuration or agent definitions.
+- If a task fails because of context pressure, reduce its scope and supplied context before retrying.
+
+## Requirements
+
+### 1. Inspect the Minetest Assets
+
+Inspect `voxel_textures/MINETEST_TEXTURES/` and record, for at least the following
+assets: actual dimensions, image format, and whether each tiles cleanly:
+
+- `default_grass.png`
+- `default_grass_side.png`
+- `default_dirt.png`
+- `default_stone.png`
+- `default_sand.png`
+- `default_wood.png`
+
+Do not modify code during this inspection phase.
+
+### 2. Select Assets for Existing Block Types
+
+The existing block types are AIR, GRASS, DIRT, STONE, WATER, SAND.
+
+The expected mapping (deviations must be justified in the completion report):
+
+- GRASS top -> `default_grass.png`
+- GRASS side -> `default_grass_side.png`
+- GRASS bottom -> `default_dirt.png`
+- DIRT -> `default_dirt.png`
+- STONE -> `default_stone.png`
+- SAND -> `default_sand.png`
+- WATER -> unchanged (out of scope)
+
+`default_wood.png` must be evaluated and documented, but there is no WOOD block
+type: do not add new block types.
+
+### 3. Integrate Through the Centralized Manifest and Atlas Pipeline
+
+- Update `config/texture_manifest.json` only; it remains the authoritative
+  texture-path manifest.
+- Keep `texture_config.py` as the centralized configuration interface; do not
+  introduce a second texture registry.
+- Regenerate `voxel_textures/gen_atlas.png` and `voxel_textures/atlas_map.json`
+  using `scripts/pack_textures.py`.
+- Preserve the 2px padding and `nearest` filter; keep the atlas within the 2048
+  maximum dimension.
+- Preserve block IDs and logical block data.
+
+### 4. Diagnose and Correct Per-Face UV Orientation
+
+Diagnose using the live face definitions and UV generation in `chunk_mesh.py`
+(`_add_exposed_faces_to_split`, `_get_face_uvs_optional`, `_get_face_uvs`).
+Do not assume every face needs the same rotation or flipping.
+
+Recorded diagnostic basis to verify before changing anything:
+
+- The generated UV list uses a fixed corner order:
+  `[top-left, top-right, bottom-right, bottom-left]` of the tile.
+- The face vertex sequences are not uniform: the Back face starts at the top edge
+  (upright), while the Front, Left and Right faces start at the bottom edge
+  (vertically inverted); the Top and Bottom faces lie in the x/z plane and require
+  explicit orientation checks.
+- Consequence: the vertical side faces currently render vertically flipped, so a
+  grass-side green strip appears at the bottom instead of the top.
+
+Required outcome:
+
+- All four vertical faces (front, back, left, right) render upright, with the
+  grass-side green edge at the top.
+- The Top and Bottom faces are oriented consistently (no unintended mirroring),
+  with the chosen orientation documented.
+- Adjacent blocks and chunk-boundary faces share consistent orientation (no visible
+  discontinuity at chunk boundaries).
+- Geometry vertex positions, collision, and face-culling behavior remain unchanged;
+  only UV assignment (and, if essential to consistency, per-face vertex ordering)
+  may change.
+
+Do not apply a single blanket flip or rotation to all faces. Assign UV corners per
+face based on each face's actual vertex order.
+
+### 5. Grass Face Assignment
+
+- The GRASS top face must use the grass-top texture, side faces must use the
+  grass-side texture, and the bottom face must use the dirt texture.
+- Verify this in the generated UVs (the top face UVs equal the atlas rect of the
+  top source, the side faces equal the side source, the bottom equals dirt).
+
+### 6. Preserve Previous Milestones
+
+M12 must preserve M1–M11 functionality, including:
+
+- coordinate conversion and block data;
+- terrain generation and World/Chunk behavior;
+- combined mesh generation and UVs;
+- one combined mesh per rendered Chunk;
+- one Ursina Entity per rendered Chunk;
+- cross-chunk face culling;
+- dirty-chunk regeneration;
+- player movement, camera, gravity, jumping, and collision;
+- block selection, highlighting, breaking, and placement;
+- inventory and hotbar behavior;
+- the centralized M10 texture configuration;
+- the M11 texture assets and record (do not silently change prior milestone status).
+
+No unrelated refactoring is permitted.
+
+### 7. Automated Tests
+
+Add or update focused tests verifying:
+
+- all configured texture references resolve;
+- selected source assets have the expected dimensions and formats;
+- atlas entries and UV coordinates remain valid when an atlas is used
+  (`u0 < u1`, `v0 < v1`, tiles inside the atlas, padding respected);
+- per-face UV orientation: the vertical side faces are upright (the grass-side top
+  edge maps to the upper face vertices), and the top/bottom orientation matches the
+  documented choice, with no unintended mirroring;
+- grass top/side/bottom assignments are correct;
+- mesh generation and chunk-boundary culling remain correct;
+- dirty-chunk regeneration still works;
+- block interaction and inventory-related behavior remain compatible.
+
+Run the project's established test command:
+
+`python -m pytest tests -q`
+
+Record the actual command and result. Do not claim tests passed unless they were
+executed.
+
+### 8. Runtime Visual Verification
+
+Launch VoxelWorld using its normal startup procedure when possible and verify:
+
+- existing block types render correctly with upright textures on all faces;
+- the grass-side green edge appears at the top of side faces;
+- the grass top is oriented correctly;
+- there is no obvious atlas bleeding, incorrect UVs, or texture discontinuity at
+  block or chunk boundaries;
+- breaking and placing blocks still works;
+- water remains compatible with its previous behavior.
+
+If the GUI cannot be launched, or the environment cannot inspect rendered pixels,
+state that clearly. Automated tests and source inspection alone do not establish
+visual correctness; provide atlas/UV pixel evidence where possible.
+
+### 9. Documentation and Completion Report
+
+Update this milestone's completion status and report:
+
+- files changed;
+- selected Minetest assets and verified dimensions/formats;
+- the UV orientation diagnosis and the exact fix applied;
+- the automated test command and results;
+- whether in-game visual verification was completed;
+- limitations or deferred work.
+
+Do not rewrite previous milestones or repair unrelated documentation as part of M12.
+
+## Out of Scope
+
+- adding new block types (including WOOD) or gameplay mechanics;
+- downloading third-party texture packs (use the local Minetest pack);
+- rewriting the renderer or mesh architecture;
+- per-block Ursina entities;
+- water texture changes, simulation, or new water rendering behavior;
+- changes to inventory or hotbar behavior;
+- global OpenCode configuration or agent-definition changes;
+- unrelated refactoring.
+
+## Completion
+
+M12 is complete only when the selected Minetest assets are integrated through the
+centralized manifest and atlas pipeline, per-face UV orientation is corrected and
+covered by tests, previous milestone functionality is preserved,
+`python -m pytest tests -q` passes, and in-game visual verification is documented
+accurately (or a clear limitation is stated).
+
+M13 must not be started automatically.
+
+## M12 Completion Report — status: COMPLETE (visual verification limited)
+
+### Files changed
+
+- `chunk_mesh.py` — added `_FACE_UV_ORDER` and `_order_face_uvs`, applied per-face
+  UV corner ordering in `_get_face_uvs_optional` and `_get_face_uvs`.
+- `config/texture_manifest.json` — GRASS/DIRT/STONE/SAND repointed to the local
+  Minetest assets; added an `m12_minetest_textures` provenance block. GRASS side
+  later repointed to the opaque `blocks/grass_side_composite.png` (see the grass-side
+  transparency section). WATER unchanged.
+- `voxel_textures/blocks/grass_side_composite.png` — supplied opaque 128x128 RGBA
+  grass-side composite (alpha 255 everywhere).
+- `voxel_textures/gen_atlas.png` (680x132, 6 tiles) and
+  `voxel_textures/atlas_map.json` regenerated via `scripts/pack_textures.py`.
+- `tests/test_m12_face_orientation.py` (new); updated path/orientation expectations
+  in `tests/test_chunk_mesh.py`, `tests/test_texture_config.py`,
+  `tests/test_block_data_m9_task3.py`.
+- Restored `voxel_textures/blocks/water.png` (tracked) and the five M11 `_hd`
+  assets from `blocks_bck/` after the environment renamed `blocks/` -> `blocks_bck/`.
+- `MILESTONES.md` — this report.
+
+### Selected assets (local Minetest pack; verified 128x128 RGBA PNG)
+
+| Block face | Asset |
+|---|---|
+| GRASS top | `default_grass.png` |
+| GRASS side | `voxel_textures/blocks/grass_side_composite.png` (opaque composite) |
+| GRASS bottom / DIRT | `default_dirt.png` |
+| STONE | `default_stone.png` |
+| SAND | `default_sand.png` |
+| WATER | unchanged (`voxel_textures/blocks/water.png`, 16x16) |
+
+`default_wood.png` was evaluated but not used: there is no WOOD block type, and no
+block types were added.
+
+### UV orientation diagnosis and fix
+
+Diagnosis (from the live face definitions and UV generation):
+- The generated UV corners were a fixed
+  `[top-left, top-right, bottom-right, bottom-left]` for every face.
+- The six faces use different vertex orders: Back started at the top edge (upright);
+  Front, Left and Right started at the bottom edge (vertically inverted); Top and
+  Bottom lie in the x/z plane.
+- Effect: the vertical side faces were vertically flipped, so the grass-side green
+  strip rendered at the bottom.
+
+Fix: added a per-face UV corner order `_FACE_UV_ORDER` derived from each face's
+vertex order — Back `[1,0,3,2]`; Front/Bottom/Top `[3,2,1,0]`; Left/Right
+`[3,0,1,2]` — applied in `_get_face_uvs_optional` and `_get_face_uvs`. Geometry,
+vertex winding, collision, and face culling were left unchanged.
+
+Verified: for a single GRASS block, every vertical side face maps its `y=1`
+(top) vertices to the side tile's top edge (upright); the top face uses the grass
+tile and the bottom face uses the dirt tile.
+
+### Grass-side transparency diagnosis and fix
+
+Root cause: `voxel_textures/MINETEST_TEXTURES/default_grass_side.png` is a Minetest
+*overlay* texture, not a complete cube side. Measured pixel data: 128x128 RGBA with
+3774 fully transparent (alpha 0) and 3541 semi-transparent (0 < alpha < 255) pixels
+(~45% of the image); the RGB under the fully transparent pixels is black. The other
+solid textures (`default_grass.png`, `default_dirt.png`, `default_stone.png`,
+`default_sand.png`) are fully opaque (alpha 255 everywhere). The atlas generator
+preserved the overlay's alpha, and the chunk opaque mesh renders with blending
+disabled, so the transparent pixels appeared as black/gap artifacts on grass sides.
+
+Fix (smallest, evidence-based): replace the raw overlay with the supplied opaque
+composite `voxel_textures/blocks/grass_side_composite.png` (128x128 RGBA, alpha 255
+everywhere, verified). Only `config/texture_manifest.json` `blocks.GRASS.side` was
+changed; grass top, dirt, stone, sand and water assignments were left untouched. The
+atlas was regenerated with the existing `python scripts/pack_textures.py` pipeline
+(native 128x128 sources; no resizing is performed or required). Water transparency is
+preserved (16x16 tile, alpha 130-215). No renderer changes and no global transparency
+change.
+
+### Automated tests
+
+Command: `python -m pytest tests -q` -> **96 passed** (was 94; +2 new grass-side
+composite tests, plus updated coupled tests).
+
+The new tests verify: selected Minetest assets are PNG 128x128; the manifest maps
+GRASS top/side/bottom to the expected assets; side faces are upright; side-face
+top edges are not mirrored; grass-top and dirt-bottom tiles are used; atlas UV
+rects are valid and inside the atlas.
+
+### Runtime verification
+
+- Startup verified: Ursina window created; 9/9 chunk entities built with atlas
+  `gen_atlas.png`; player spawned at (8, 8, 8); no exceptions.
+- Re-verified after the grass-side composite change: `python main.py` stayed running
+  for 12s with the regenerated atlas and no exception; only a non-fatal Panda3D
+  PNG `iCCP: known incorrect sRGB profile` warning (the atlas and composite carry no
+  ICC profile, so it originates from an unrelated PNG).
+- Atlas content verified programmatically (tile mean RGB): grass `[50,142,1]`,
+  grass_side composite `[95,131,27]` (alpha 255, no transparent pixels),
+  dirt `[172,125,68]`, stone `[155,154,151]`, sand `[218,205,172]`;
+  water 16x16 `[24,142,202]` alpha 130-215 preserved.
+- In-game visual observation was **not** possible: the agent environment cannot
+  inspect rendered pixels, so no visual claim is made.
+
+### Limitations / deferred work
+
+- No human/agent visual confirmation of on-screen orientation, seams, or grass-edge
+  placement; orientation correctness rests on the geometric UV tests.
+- The environment renamed `voxel_textures/blocks/` -> `blocks_bck/` and
+  `MINETEST_TEXTURES` -> `minetest_textures` between turns. The manifest references
+  the user-specified `voxel_textures/MINETEST_TEXTURES/...` path, which resolves on
+  the case-insensitive Windows filesystem. Water and the M11 `_hd` assets were
+  restored to `voxel_textures/blocks/`.
+
+## M13 — Water Behavior & Fluid Simulation
+
+**Status:** IMPLEMENTED — see completion report at the end of this section. Visual verification not performed.
+
+### Objective
+
+Implement functional voxel water behavior, including vertical flow, horizontal propagation, source water, flowing water, and visual updates. Reuse the existing water textures and rendering architecture.
+
+### Scope
+
+#### 1. Water State and Rules
+- Inspect the existing water block representation and behavior before making changes.
+- Define the distinction between source water and flowing water, if required by the current architecture.
+- Define deterministic propagation and update rules.
+- Prevent uncontrolled or infinite propagation.
+- Define how water interacts with air, solid blocks, and player block interactions.
+
+#### 2. Vertical Flow
+- Water should flow downward when the cell below is eligible.
+- Downward flow should take priority over horizontal propagation.
+- Water must respect solid blocks and world boundaries.
+
+#### 3. Horizontal Propagation
+- Water should spread horizontally when downward flow is blocked.
+- Define a configurable maximum propagation distance or equivalent finite flow rule.
+- Avoid unnecessary updates to unaffected cells.
+- Define how flowing water behaves when its supporting or source cells change.
+
+#### 4. Chunk Integration
+- Preserve the existing logical World and Chunk data as the source of truth.
+- Support water propagation across chunk boundaries.
+- Refresh affected chunks and neighboring chunk meshes when water changes at a boundary.
+- Preserve the invariant of one combined mesh per chunk and one Ursina Entity per rendered chunk.
+- Avoid rebuilding the entire world for individual water updates.
+
+#### 5. Water Rendering and Textures
+- Inspect and reuse the existing Minetest water textures where compatible:
+  - `default_water`
+  - `default_river_water`
+  - `default_water_flowing_animated`
+  - `default_water_source_animated`
+- Verify the actual texture dimensions, alpha channels, animation layout, and current atlas support before choosing the implementation.
+- Preserve the existing water appearance until the new rendering behavior is verified.
+- Implement appropriate transparency and visible water surfaces.
+- Avoid rendering unnecessary internal faces between adjacent water cells.
+- Do not introduce animated textures unless the existing rendering pipeline supports them or the plan explicitly includes the required changes.
+
+#### 6. Performance
+- Do not simulate
+
+### M13 Completion Report
+
+**Files changed**
+
+- `chunk_mesh.py` — culled water/water internal faces in the active split mesh
+  path; removed the dead `_add_exposed_faces` helper; guarded cross-chunk
+  neighbour lookups with `World.is_loaded` so meshing never creates chunks.
+- `chunk_entity.py` — added `apply_water_material(...)` using Panda3D
+  `TransparencyAttrib.M_alpha`, depth-write off and the depth-sorted
+  `transparent` bin; removed the unsupported `transparency=True` kwarg and the
+  `render_queue=1` fixed-bin configuration.
+- `chunk.py` — re-applies the water material after every transparent mesh
+  refresh.
+- `world.py` — added `changed_blocks`, `is_loaded`, `get_water`, `is_source`
+  and `set_water`; `set_block` clears water metadata, records external edits
+  and bumps `water_edit_version` on water-relevant changes.
+- `water.py` — horizontal spread suppressed only when the cell below is loaded
+  AIR; `_commit` publishes through `World.set_water` and no longer references
+  undefined coordinates; stale active jobs are invalidated and their seeds
+  re-queued.
+- `terrain_generation.py` — lake cells get level 8; only `y == lake_level` is a
+  permanent source.
+- `main.py` — constructs/seeds `WaterSimulation`, passes `world` to
+  `create_chunk_entity`, and ticks via `update()`.
+- New tests: `tests/test_water_mesh_culling.py`,
+  `tests/test_water_transparency.py`,
+  `tests/test_water_texture_compatibility.py`. Extended
+  `tests/test_water_rules.py` and `tests/test_water_chunk_integration.py`.
+
+**Behavior decisions**
+
+- One `WATER` block type with per-chunk level/source metadata.
+- Source-derived 0-1 BFS: downward cost 0, horizontal cost 1, horizontal
+  suppression only when the cell below is loaded AIR.
+- Only the lake top layer holds permanent sources; lower lake cells are derived.
+- Water stays flat, full-height, non-placeable and non-collectable.
+- `MAX_HORIZONTAL_SPREAD` is a **configurable** finite range (default 32) so long
+  cascades can be tested; levels clamp to a minimum of 1 so horizontal reach is
+  not prematurely cut by `MAX_LEVEL - cost`. There is no arbitrary vertical
+  distance limit.
+
+**Automated test evidence**
+
+- `python -m pytest tests -q` → 155 passed.
+
+**Startup / smoke evidence**
+
+- `python -u main.py` ran for ~10 s: 9 chunks generated, 9 chunk entities
+  created, player spawned, "application successfully started"; no exception.
+  Terminated manually.
+
+**Runtime behavior evidence (headless)**
+
+- Startup lake: 339 water cells, stable across simulation ticks.
+- Breaking a solid block beside the lake: water flowed into the opened cell
+  (level 7); 340 water cells.
+
+**Visual verification**
+
+- NOT PERFORMED. Rendered pixels could not be inspected in this environment, so
+  no visual-correctness claim is made.
+
+**Atomic publication and work budget**
+
+- Flood, solve and commit stages share the per-tick budget; the complete
+  prepared region is published in a single `_commit` call before any mesh
+  refresh, so no partial region is exposed to the renderer.
+- Limitation: commit preparation (the `_commit` loop and the solution-dict
+  build) is not itself split across budgets. Loaded-lake regions are far below
+  `DEFAULT_MAX_CELLS_PER_TICK`.
+
+**Known limitations**
+
+- Water is flat and full-height; partial-height geometry remains out of scope.
+- No animation, buckets, inventory changes or new block types.
+- The M13 scope text above remains truncated at "#### 6. Performance" and was
+  not repaired as unrelated work.
+
+### M13 Independent Verification (resumed session, 2026-10-11)
+
+M13 was re-verified from the actual repository state on an explicit user
+request to finish/verify water. No source changes were required: no defect was
+found. Evidence:
+
+- `python -m pytest tests -q` -> **155 passed** (matches the recorded baseline).
+- Headless harness, 30/30 checks passed, covering:
+  - startup lake = **exactly 339** water cells, stable over further ticks,
+    **113** source cells, all at the top lake layer (y=4), and **no water cell
+    outside the lake radius** (no uncontrolled outflow);
+  - breaking a solid block beside the lake -> the opened cell becomes water at
+    a derived level (339 -> 340);
+  - recession: removing the only source drains its whole component (266 -> 0),
+    while an untouched second component is left intact (264 -> 264);
+  - `set_water` writes never enter `World.changed_blocks` and never bump
+    `water_edit_version`;
+  - budget independence: `max_cells_per_tick=1` converges to the same cells and
+    the same level totals as the default budget;
+  - face culling (quads = index_count/6): 1 water cube = 6 quads, 2 adjacent
+    water = 10, 2x2x2 water = 24 (surface only), water against solid = 5, solid
+    against water = 6, solid against solid = 10;
+  - atomic publication: with a tiny budget only the empty and the fully
+    published states are ever visible between ticks (no partial region);
+  - the incremental simulation equals the one-shot reference solver, both at
+    startup (339 cells, identical levels) and after an external edit (340);
+  - a mid-flight external edit is not lost and converges to the reference;
+  - water propagation never creates an unloaded chunk.
+- Startup smoke: `python -u main.py` stayed running for 14 s and printed
+  "application successfully started" with 9 chunks and 9 chunk entities, no
+  exception (only the pre-existing non-fatal Panda3D iCCP sRGB warning).
+- Scale of the documented unbudgeted-commit deviation: measured with an
+  instrumented commit, the largest single commit is **340 cells** against the
+  default `max_cells_per_tick` of 65536, i.e. the whole affected region is
+  published atomically in one call and remains far below the default budget in
+  the shipped world.
+
+Visual verification remains **not performed**: this environment cannot inspect
+rendered pixels, so no visual-correctness claim is made.
+
+# M14 — Natural World Generation
+
+**Status:** PLANNED — NOT IMPLEMENTED. The design spec and implementation plan are written
+and have received review corrections (this task). No M14 code, tests, textures, manifests or
+atlas changes exist yet, and M14 must not be reported as implemented.
+
+Design spec: `docs/superpowers/specs/2026-10-11-m14-natural-world-generation-design.md`
+Implementation plan: `docs/superpowers/plans/2026-10-11-m14-natural-world-generation.md`
+
+## Objective
+
+Make the generated world feel natural by adding deterministic, chunk-boundary-safe
+vegetation: grass tufts as lightweight crossed-plane decorations and a single
+oak-like tree type (trunk + leaf canopy). Rendering must preserve one combined
+mesh and one Ursina Entity per rendered terrain chunk; no Entity may be created
+per tuft or leaf. M1–M13 behavior, especially the M13 water simulation, must be
+preserved.
+
+## Acceptance Criteria
+
+M14 is **not implemented**. When implemented it is complete only when every item
+below is satisfied. These criteria are the milestone-level summary; the design spec
+and implementation plan are the detailed source of truth.
+
+1. **Deterministic vegetation.** Grass tufts and one oak-like tree type (trunk plus
+   leaf canopy) are generated as a pure function of `(seed, world coordinates)`.
+   The same seed produces identical blocks and decorations regardless of
+   chunk-generation or chunk-load order; no `random` module use and no builtin
+   `hash()`.
+2. **Correct, conflict-free placement.** Tufts appear only on exposed `GRASS` with
+   `AIR` above and never in the lake. Trees never generate inside terrain, over
+   water, or within `CANOPY_RADIUS + 1` of the lake. Tree footprints are proven
+   non-overlapping from the anchor grid, jitter range and canopy radius (trunk
+   included), and a deterministic ownership rule makes every cell's owning tree a
+   pure function of the world coordinate rather than of arrival order. Non-overlap
+   holds because `TREE_JITTER_MIN >= CANOPY_RADIUS` and
+   `TREE_JITTER_MAX <= TREE_GRID - 1 - CANOPY_RADIUS` are both satisfied
+   with zero slack by `TREE_GRID = 6` with jitter `[2, 3]`.
+3. **Chunk-boundary consistency (X, Z and corner).** Every tree cell is written
+   exactly once by the chunk that owns it: no duplicated trunk, no missing canopy,
+   and no dependence on the order chunks are generated. This must be demonstrated,
+   not merely asserted: planned tests must locate a tree that crosses an X chunk
+   boundary, one that crosses a Z chunk boundary, and one that spans a chunk corner,
+   then generate every involved chunk in several different orders and compare the
+   per-chunk `blocks` and `decorations` arrays with `numpy.array_equal`. A separate
+   arithmetic check must show that such crossing grid cells exist by construction
+   because `TREE_GRID` does not divide `CHUNK_SIZE`.
+4. **Integration with existing block interaction.** Tufts are logical decoration
+   metadata that never occupy the block grid, so movement, collision, raycast,
+   block breaking and block placement are unaffected. Trees are solid
+   `OAK_LOG`/`OAK_LEAVES` blocks that work through the existing break, place,
+   collect, collision and inventory systems with no new gameplay code.
+   `World.set_block` clears a decoration in the target cell and above a removed
+   support.
+5. **Rendering architecture preserved.** One combined terrain mesh and one Ursina
+   Entity per rendered chunk, plus the existing single water child Entity. No
+   Entity is created per tuft, leaf or block. Foliage is rendered as alpha-cutout
+   geometry inside the existing opaque mesh; water rendering and the water material
+   are unchanged.
+6. **M1–M13 behavior preserved, especially water.** `water.py` is not modified and
+   water rendering is unchanged. Water passability for existing block types is
+   unchanged. A reproducible before/after run with an identical terrain seed,
+   identical initial world and water setup, identical simulation steps and an
+   identical measurement method shows identical water-cell counts, level totals and
+   source counts with and without vegetation.
+7. **Verification.** Automated tests cover determinism, placement, tree structure,
+   chunk-boundary consistency, mesh integration, interaction and textures, and the
+   full suite passes. Runtime startup smoke and visual verification are reported
+   separately and honestly; visual verification is reported as **not performed** if
+   rendered pixels cannot be inspected.
+
+## Requirements
+
+### 1. Grass and Small Vegetation
+- Use lightweight decorative geometry (crossed textured planes), not solid cubes.
+- Place vegetation only on suitable exposed ground (`GRASS` with `AIR` above).
+- Decorations must not obstruct player movement or interfere with block
+  interaction.
+
+### 2. Trees
+- Start with one oak-like tree: trunk plus leaf canopy.
+- Define tree dimensions, canopy shape, placement rules and spacing.
+- Prevent trees from spawning underwater, inside terrain, or in unsuitable
+  locations.
+- Define how trees interact with existing blocks and future block modifications.
+
+### 3. Deterministic Generation
+- The same world seed must produce the same vegetation positions and tree shapes.
+- Generation order and chunk loading order must not change results.
+- Trees crossing chunk boundaries must generate consistently, without
+  duplication or missing parts.
+
+### 4. Rendering and Performance
+- Preserve one combined mesh and one Ursina Entity per rendered terrain chunk.
+- Do not create an individual Ursina Entity for every grass tuft or leaf.
+- Reuse existing textures and atlas infrastructure; identify any genuinely
+  necessary new textures. (Result: none required; the local Minetest pack
+  supplies the foliage, trunk and leaf sources.)
+
+### 5. Testing
+- Automated tests for deterministic placement, valid ground placement, tree
+  structure, chunk boundaries, collisions, and regeneration.
+- Runtime and visual verification defined separately from automated tests.
+- Preserve all M1–M13 behavior, especially water simulation.
+
+## Approved Design Decisions
+
+1. Grass tufts are a per-`Chunk` decoration layer (logical metadata, like M13
+   water metadata), not a `BlockType`, so they cannot interfere with movement,
+   raycast, placement or water.
+2. Trees are two new solid block types: `OAK_LOG = 6` and `OAK_LEAVES = 7`.
+3. All foliage geometry is merged into the existing opaque chunk mesh; the
+   opaque Entity receives an alpha-test (cutout) render state. The water child
+   Entity is unchanged.
+4. Generation is a pure function of `(seed, world coordinates)` using an explicit
+   integer hash; no `random` module or builtin `hash()`.
+5. Trees use a jittered `6`-block anchor grid with jitter `[2, 3]`, height `4..6`,
+   canopy radius `2`, and a pure-function suitability test that prevents placement
+   inside terrain or over water. `TREE_GRID = 6` with jitter `[2, 3]` is required,
+   not merely default: it is the largest jitter that keeps every complete tree
+   footprint (trunk included) inside its own grid cell, so footprints cannot
+   overlap, while `CHUNK_SIZE = 16` is not a multiple of `6`, so trees really do
+   cross X and Z chunk boundaries and can span a chunk corner. Ownership of a cell
+   is the closed form `(cx // TREE_GRID, cz // TREE_GRID)`, so which tree writes a
+   cell never depends on chunk-generation order.
+
+## Out of Scope
+
+- more than one tree type; biomes, flowers or crops;
+- leaf decay, tree falling, sapling growth or regrowth;
+- animated foliage;
+- new item/tool/crafting gameplay;
+- water changes, buckets or fluid–vegetation interaction;
+- world streaming, dynamic chunk loading or persistence;
+- renderer rewrite, per-block Entities, LOD or greedy meshing;
+- changes to existing block IDs or existing texture assignments;
+- repairing the truncated M13 documentation.
+
+## Completion
+
+M14 is complete only when all mandatory requirements are satisfied, the design's
+automated tests pass, runtime and visual verification are reported separately and
+honestly, and M1–M13 behavior (especially water) is preserved.
+
+M15 must not be started automatically.

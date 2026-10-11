@@ -1,26 +1,56 @@
 {
   "version": 1,
-  "description": "Authoritative M9 texture manifest. Maps every BlockType to its per-face source PNGs (top/side/bottom). Paths are relative to the repository root and use forward slashes. A null face means no source texture is available for that face; consumers must skip null entries. Any non-null path that is missing on disk is a hard error for the atlas generator (scripts/pack_textures.py).",
+  "description": "Authoritative texture manifest (established M9; HD block sources added in M11; Minetest sources used in M12). Maps every BlockType to its per-face source PNGs (top/side/bottom). Paths are relative to the repository root and use forward slashes. A null face means no source texture is available for that face; consumers must skip null entries. Any non-null path that is missing on disk is a hard error for the atlas generator (scripts/pack_textures.py).",
+  "provenance": {
+    "m11_hd_textures": {
+      "license": "CC0",
+      "source": "ambientCG (https://ambientcg.com)",
+      "assets": {
+        "grass_top_hd.png": "Grass004 1K-JPG Color, downscaled 1024->256",
+        "dirt_hd.png": "Ground037 1K-JPG Color, downscaled 1024->256",
+        "stone_hd.png": "Rock051 1K-JPG Color, downscaled 1024->256",
+        "sand_hd.png": "Ground054 1K-JPG Color, downscaled 1024->256",
+        "grass_side_hd.png": "derived composite: Grass004 top 25% over Ground037"
+      }
+    },
+    "m12_minetest_textures": {
+      "license": "Refer to the Minetest default game license for this local pack; not asserted here.",
+      "source": "local extracted Minetest default texture pack (voxel_textures/MINETEST_TEXTURES)",
+      "assets": {
+        "default_grass.png": "GRASS top",
+        "default_dirt.png": "GRASS bottom + DIRT",
+        "default_stone.png": "STONE",
+        "default_sand.png": "SAND"
+      }
+    },
+    "m12_grass_side_composite": {
+      "license": "Derived from the local Minetest default texture pack; refer to that pack's license.",
+      "source": "voxel_textures/blocks/grass_side_composite.png: default_grass_side.png overlay composited over default_dirt.png into a single fully opaque 128x128 PNG",
+      "assets": {
+        "grass_side_composite.png": "GRASS side"
+      }
+    }
+  },
   "blocks": {
     "GRASS": {
-      "top": "voxel_textures/blocks/grass_top.png",
-      "side": "voxel_textures/blocks/grass_side.png",
-      "bottom": "voxel_textures/blocks/dirt.png"
+      "top": "voxel_textures/MINETEST_TEXTURES/default_grass.png",
+      "side": "voxel_textures/blocks/grass_side_composite.png",
+      "bottom": "voxel_textures/MINETEST_TEXTURES/default_dirt.png"
     },
     "DIRT": {
-      "top": "voxel_textures/blocks/dirt.png",
-      "side": "voxel_textures/blocks/dirt.png",
-      "bottom": "voxel_textures/blocks/dirt.png"
+      "top": "voxel_textures/MINETEST_TEXTURES/default_dirt.png",
+      "side": "voxel_textures/MINETEST_TEXTURES/default_dirt.png",
+      "bottom": "voxel_textures/MINETEST_TEXTURES/default_dirt.png"
     },
     "STONE": {
-      "top": "voxel_textures/blocks/stone_generic.png",
-      "side": "voxel_textures/blocks/stone_generic.png",
-      "bottom": "voxel_textures/blocks/stone_generic.png"
+      "top": "voxel_textures/MINETEST_TEXTURES/default_stone.png",
+      "side": "voxel_textures/MINETEST_TEXTURES/default_stone.png",
+      "bottom": "voxel_textures/MINETEST_TEXTURES/default_stone.png"
     },
     "SAND": {
-      "top": "voxel_textures/blocks/sand_ugly.png",
-      "side": "voxel_textures/blocks/sand_ugly.png",
-      "bottom": "voxel_textures/blocks/sand_ugly.png"
+      "top": "voxel_textures/MINETEST_TEXTURES/default_sand.png",
+      "side": "voxel_textures/MINETEST_TEXTURES/default_sand.png",
+      "bottom": "voxel_textures/MINETEST_TEXTURES/default_sand.png"
     },
     "WATER": {
       "top": "voxel_textures/blocks/water.png",

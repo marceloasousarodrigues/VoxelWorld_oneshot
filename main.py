@@ -5,6 +5,7 @@ from ursina import Ursina
 from world import World
 from terrain_generation import TerrainGenerator
 from chunk_entity import create_chunk_entity
+from water import WaterSimulation
 import player
 
 
@@ -20,6 +21,11 @@ print(
     f"Terrain complete. Chunks: {len(world.chunks)}"
 )
 
+# Water simulation. Sources are seeded once; edited chunks are re-evaluated
+# through the world's external-edit log on each frame.
+water_sim = WaterSimulation(world)
+water_sim.seed_all_sources()
+
 
 chunk_entities = []
 
@@ -34,6 +40,7 @@ for chunk in world.chunks.values():
     entity = create_chunk_entity(
         chunk,
         world_pos,
+        world=world,
     )
 
     if entity:
@@ -66,6 +73,12 @@ print(
     "mouse to look around, "
     "SPACE to jump when on ground."
 )
+
+
+def update():
+    """Advance the water simulation from external edits each frame."""
+    water_sim.consume_changes()
+    water_sim.tick()
 
 
 app.run()

@@ -40,35 +40,64 @@ class TerrainGenerator:
         """Generate terrain using a height map approach."""
         chunk_size = 16
         
+        lake_center_x = 0
+        lake_center_z = 0
+        lake_radius = 6
+        lake_floor = 2
+        lake_level = 4
+
         # Define a few sample chunks to generate terrain in
         for chunk_x in range(-1, 2):
             for chunk_z in range(-1, 2):
                 chunk = world.get_chunk(chunk_x, 0, chunk_z)
-                
+
                 # For each block in chunk
                 for x in range(chunk_size):
                     for z in range(chunk_size):
                         # Calculate world coordinates for this block
                         global_x = chunk_x * chunk_size + x
                         global_z = chunk_z * chunk_size + z
-                        
+
                         # Simple height map function that creates a relatively flat terrain with some hills
                         height = self._simple_terrain_height(global_x, global_z)
-                        
-                        # Generate blocks based on height and position  
+
+                        in_lake = (
+                            (global_x - lake_center_x) ** 2
+                            + (global_z - lake_center_z) ** 2
+                            <= lake_radius**2
+                        )
+
+                        # Generate blocks based on height and position
                         for y in range(chunk_size):
-                            if y > height:
-                                # Air above surface level
-                                chunk.set_block(x, y, z, BlockType.AIR)
-                            elif y == height:
-                                # Surface layer (grass)
-                                chunk.set_block(x, y, z, BlockType.GRASS)  
-                            elif y > height - 4:
-                                # Dirt layer beneath surface
-                                chunk.set_block(x, y, z, BlockType.DIRT)
+                            if in_lake:
+                                if y > lake_level:
+                                    chunk.set_block(x, y, z, BlockType.AIR)
+                                elif lake_floor <= y <= lake_level:
+                                    chunk.set_block(x, y, z, BlockType.WATER)
+                                    chunk.set_water_level(x, y, z, 8)
+                                    # Only the top lake layer holds permanent
+                                    # sources; lower cells are derived water.
+                                    chunk.set_water_source(
+                                        x, y, z, y == lake_level
+                                    )
+                                else:
+                                    if y > height:
+                                        chunk.set_block(x, y, z, BlockType.AIR)
+                                    elif y == height:
+                                        chunk.set_block(x, y, z, BlockType.GRASS)
+                                    elif y > height - 4:
+                                        chunk.set_block(x, y, z, BlockType.DIRT)
+                                    else:
+                                        chunk.set_block(x, y, z, BlockType.STONE)
                             else:
-                                # Stone layer at depth
-                                chunk.set_block(x, y, z, BlockType.STONE)
+                                if y > height:
+                                    chunk.set_block(x, y, z, BlockType.AIR)
+                                elif y == height:
+                                    chunk.set_block(x, y, z, BlockType.GRASS)
+                                elif y > height - 4:
+                                    chunk.set_block(x, y, z, BlockType.DIRT)
+                                else:
+                                    chunk.set_block(x, y, z, BlockType.STONE)
     
     def _simple_terrain_height(self, x: int, z: int) -> int:
         """

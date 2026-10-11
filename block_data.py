@@ -5,6 +5,8 @@ Defines block types and their properties.
 
 from enum import IntEnum
 
+from texture_config import block_face_textures
+
 
 class BlockType(IntEnum):
     """
@@ -20,63 +22,54 @@ class BlockType(IntEnum):
     SAND = 5
 
 
-# Block properties dictionary
+# Block properties dictionary. Per-face texture paths are populated from the
+# centralized texture configuration (config/texture_manifest.json) so the
+# manifest stays the single source of truth; only the legacy short `texture`
+# name is declared here.
 BLOCK_PROPERTIES = {
     BlockType.AIR: {
         'name': 'Air',
         'is_solid': False,
         'texture': None,
-        'top_texture': None,
-        'side_texture': None,
-        'bottom_texture': None,
         'is_transparent': False,
     },
     BlockType.GRASS: {
         'name': 'Grass',
         'is_solid': True,
         'texture': 'grass.png',
-        'top_texture': 'voxel_textures/blocks/grass_top.png',
-        'side_texture': 'voxel_textures/blocks/grass_side.png',
-        'bottom_texture': 'voxel_textures/blocks/dirt.png',
         'is_transparent': False,
     },
     BlockType.DIRT: {
         'name': 'Dirt',
         'is_solid': True,
         'texture': 'dirt.png',
-        'top_texture': 'voxel_textures/blocks/dirt.png',
-        'side_texture': 'voxel_textures/blocks/dirt.png',
-        'bottom_texture': 'voxel_textures/blocks/dirt.png',
         'is_transparent': False,
     },
     BlockType.STONE: {
         'name': 'Stone',
         'is_solid': True,
         'texture': 'stone.png',
-        'top_texture': 'voxel_textures/blocks/stone_generic.png',
-        'side_texture': 'voxel_textures/blocks/stone_generic.png',
-        'bottom_texture': 'voxel_textures/blocks/stone_generic.png',
         'is_transparent': False,
     },
     BlockType.WATER: {
         'name': 'Water',
         'is_solid': False,
         'texture': 'water.png',
-        'top_texture': 'voxel_textures/blocks/water.png',
-        'side_texture': 'voxel_textures/blocks/water.png',
-        'bottom_texture': 'voxel_textures/blocks/water.png',
         'is_transparent': True,
     },
     BlockType.SAND: {
         'name': 'Sand',
         'is_solid': True,
         'texture': 'sand.png',
-        'top_texture': 'voxel_textures/blocks/sand_ugly.png',
-        'side_texture': 'voxel_textures/blocks/sand_ugly.png',
-        'bottom_texture': 'voxel_textures/blocks/sand_ugly.png',
         'is_transparent': False,
     },
 }
+
+for _block_type, _properties in BLOCK_PROPERTIES.items():
+    _faces = block_face_textures(_block_type.name)
+    _properties['top_texture'] = _faces['top']
+    _properties['side_texture'] = _faces['side']
+    _properties['bottom_texture'] = _faces['bottom']
 
 
 def is_block_solid(block_type: int) -> bool:

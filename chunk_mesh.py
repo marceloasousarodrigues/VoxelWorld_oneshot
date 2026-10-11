@@ -4,9 +4,6 @@ Chunk mesh generation for VoxelWorld.
 Generates vertices, triangle indices and UV coordinates.
 """
 
-from pathlib import Path
-import json
-
 from chunk import Chunk
 from block_data import (
     BlockType,
@@ -14,6 +11,29 @@ from block_data import (
     is_block_solid,
     is_block_transparent,
 )
+from texture_config import load_atlas_map
+
+
+# Per-face UV corner order. Corners are indexed in the canonical tile order
+# [top-left, top-right, bottom-right, bottom-left]. Each entry lists the corner
+# to assign to face vertex 0..3 so the texture renders upright (image top at
+# world +y on side faces) and consistently wound when viewed from outside.
+# Face indices match the order in _add_exposed_faces_to_split:
+# 0 Back, 1 Front, 2 Bottom, 3 Top, 4 Left, 5 Right.
+_FACE_UV_ORDER = {
+    0: (1, 0, 3, 2),  # Back
+    1: (3, 2, 1, 0),  # Front
+    2: (3, 2, 1, 0),  # Bottom
+    3: (3, 2, 1, 0),  # Top
+    4: (3, 0, 1, 2),  # Left
+    5: (3, 0, 1, 2),  # Right
+}
+
+
+def _order_face_uvs(face_index: int, corners):
+    """Reorder canonical tile corners for a face's vertex order."""
+    order = _FACE_UV_ORDER.get(face_index, (0, 1, 2, 3))
+    return [corners[i] for i in order]
 
 
 def generate_chunk_mesh(
@@ -203,6 +223,11 @@ def _add_exposed_faces_to_split(
         if is_block_solid(neighbor_block):
             continue
 
+        if force_transparent and int(neighbor_block) == int(block_type):
+            # Cull internal faces between adjacent transparent blocks of the
+            # same type (water/water). Solid and air neighbours still render.
+            continue
+
         if force_transparent:
             face_uvs = _get_face_uvs_optional(
                 block_type,
@@ -268,165 +293,14 @@ def _get_face_uvs_optional(block_type, face_index: int, atlas_map):
         u1 = tile["u1"]
         v0 = _flip_v(tile["v0"])
         v1 = _flip_v(tile["v1"])
-        return [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
+        corners = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
+        return _order_face_uvs(face_index, corners)
 
     return _get_face_uvs(block_type, face_index=face_index, atlas_map=atlas_map)
 
 
-def _add_exposed_faces(
-    vertices,
-    triangles,
-    uvs,
-    x,
-    y,
-    z,
-    chunk,
-    block_type,
-    world=None,
-    atlas_map=None,
-):
-    """
-    Add exposed faces for one block.
-    """
-
-    faces = [
-        # Back
-        (
-            (0, 0, -1),
-            [
-                (0, 1, 0),
-                (1, 1, 0),
-                (1, 0, 0),
-                (0, 0, 0),
-            ],
-        ),
-
-        # Front
-        (
-            (0, 0, 1),
-            [
-                (0, 0, 1),
-                (1, 0, 1),
-                (1, 1, 1),
-                (0, 1, 1),
-            ],
-        ),
-
-        # Bottom
-        (
-            (0, -1, 0),
-            [
-                (0, 0, 0),
-                (1, 0, 0),
-                (1, 0, 1),
-                (0, 0, 1),
-            ],
-        ),
-
-        # Top
-        (
-            (0, 1, 0),
-            [
-                (0, 1, 1),
-                (1, 1, 1),
-                (1, 1, 0),
-                (0, 1, 0),
-            ],
-        ),
-
-        # Left
-        (
-            (-1, 0, 0),
-            [
-                (0, 0, 0),
-                (0, 1, 0),
-                (0, 1, 1),
-                (0, 0, 1),
-            ],
-        ),
-
-        # Right
-        (
-            (1, 0, 0),
-            [
-                (1, 0, 1),
-                (1, 1, 1),
-                (1, 1, 0),
-                (1, 0, 0),
-            ],
-        ),
-    ]
-
-    vertex_offset = len(vertices) // 3
-
-    for face_index, (normal, local_vertices) in enumerate(faces):
-
-        neighbor_x = x + normal[0]
-        neighbor_y = y + normal[1]
-        neighbor_z = z + normal[2]
-
-        neighbor_block = _get_neighbor_block(
-            chunk,
-            neighbor_x,
-            neighbor_y,
-            neighbor_z,
-            world=world,
-        )
-
-        # Hidden face.
-        if is_block_solid(neighbor_block):
-            continue
-
-        # ----------------------------------------------------------
-        # Vertices
-        # ----------------------------------------------------------
-
-        for vertex in local_vertices:
-            vertices.extend(
-                [
-                    x + vertex[0],
-                    y + vertex[1],
-                    z + vertex[2],
-                ]
-            )
-
-        # ----------------------------------------------------------
-        # Triangles
-        # ----------------------------------------------------------
-
-        triangles.extend(
-            [
-                vertex_offset + 0,
-                vertex_offset + 1,
-                vertex_offset + 2,
-
-                vertex_offset + 0,
-                vertex_offset + 2,
-                vertex_offset + 3,
-            ]
-        )
-
-        # ----------------------------------------------------------
-        # UVs
-        # ----------------------------------------------------------
-
-        face_uvs = _get_face_uvs(
-            block_type,
-            face_index=face_index,
-            atlas_map=atlas_map,
-        )
-
-        uvs.extend(face_uvs)
-
-        vertex_offset += 4
-
-
 def _load_default_atlas_map():
-    atlas_map_path = Path("voxel_textures") / "atlas_map.json"
-    if not atlas_map_path.is_file():
-        return None
-    with open(atlas_map_path, encoding="utf-8") as handle:
-        return json.load(handle)
+    return load_atlas_map()
 
 
 def _flip_v(v: float) -> float:
@@ -452,11 +326,13 @@ def _get_face_uvs(block_type, face_index: int, atlas_map):
             u1 = tile["u1"]
             v0 = _flip_v(tile["v0"])
             v1 = _flip_v(tile["v1"])
-            return [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
+            corners = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
+            return _order_face_uvs(face_index, corners)
 
     # Legacy fallback to 3-cell atlas; preserve previous behavior.
     u0, u1 = _get_texture_u_range(block_type)
-    return [(u0, 1.0), (u1, 1.0), (u1, 0.0), (u0, 0.0)]
+    corners = [(u0, 1.0), (u1, 1.0), (u1, 0.0), (u0, 0.0)]
+    return _order_face_uvs(face_index, corners)
 
 
 def _get_texture_u_range(block_type):
@@ -502,6 +378,9 @@ def _get_neighbor_block(
         global_x = chunk.chunk_x * Chunk.SIZE_X + x
         global_y = chunk.chunk_y * Chunk.SIZE_Y + y
         global_z = chunk.chunk_z * Chunk.SIZE_Z + z
+        # Never create a neighbouring chunk as a side effect of meshing.
+        if hasattr(world, "is_loaded") and not world.is_loaded(global_x, global_y, global_z):
+            return BlockType.AIR
         return world.get_block(global_x, global_y, global_z)
 
     return BlockType.AIR

@@ -4,31 +4,36 @@ Chunk entity creation for VoxelWorld.
 Creates Ursina entities from chunk mesh data.
 """
 
-import json
-from pathlib import Path
-
+from panda3d.core import TransparencyAttrib
 from ursina import Entity, Mesh
 from ursina.shaders import unlit_shader
 
 from chunk_mesh import generate_chunk_mesh_split
 from chunk import Chunk
+from texture_config import (
+    TEXTURE_LEGACY,
+    TEXTURE_M9,
+    atlas_assets_available,
+    load_atlas_map,
+)
 
 
-TEXTURE_LEGACY = "voxel_textures/blocks.png"
-TEXTURE_M9 = "voxel_textures/gen_atlas.png"
-ATLAS_MAP_PATH = Path("voxel_textures") / "atlas_map.json"
-ATLAS_IMAGE_PATH = Path(TEXTURE_M9)
+def apply_water_material(entity: Entity) -> None:
+    """Configure a water child entity for alpha-blended, depth-sorted rendering.
 
-
-def _m9_assets_available() -> bool:
-    return ATLAS_IMAGE_PATH.is_file() and ATLAS_MAP_PATH.is_file()
-
-
-def _load_atlas_map_if_available() -> dict | None:
-    if not _m9_assets_available():
-        return None
-    with open(ATLAS_MAP_PATH, encoding="utf-8") as handle:
-        return json.load(handle)
+    Ursina applies ``TransparencyAttrib.M_dual`` and the default (opaque) bin
+    when a model is assigned. Water needs plain alpha blending, no depth
+    writes and Panda3D's depth-sorted transparent bin so stacked water faces
+    and the terrain behind them composite correctly. Re-apply after every mesh
+    reassignment (see ``Chunk.refresh``).
+    """
+    model = entity.model
+    if model is None:
+        return
+    model.setTransparency(TransparencyAttrib.M_alpha)
+    model.setDepthWrite(False)
+    model.setDepthTest(True)
+    model.setBin("transparent", 0)
 
 
 def _mesh_from_lists(vertices: list[float], triangles: list[int], uvs):
@@ -58,7 +63,7 @@ def create_chunk_entity(
         generate_chunk_mesh_split(
             chunk,
             world=world,
-            atlas_map=_load_atlas_map_if_available(),
+            atlas_map=load_atlas_map(),
         )
     )
 
@@ -82,7 +87,7 @@ def create_chunk_entity(
     if not opaque_has_geom and not transparent_has_geom and not has_any_transparent_block:
         return None
 
-    texture = TEXTURE_M9 if _m9_assets_available() else TEXTURE_LEGACY
+    texture = TEXTURE_M9 if atlas_assets_available() else TEXTURE_LEGACY
 
     try:
         mesh_opaque = (
@@ -107,9 +112,8 @@ def create_chunk_entity(
                 texture=texture,
                 shader=unlit_shader,
                 double_sided=True,
-                transparency=True,
-                render_queue=1,
             )
+            apply_water_material(child)
             child.enabled = True
         else:
             child = Entity(
@@ -117,8 +121,6 @@ def create_chunk_entity(
                 texture=texture,
                 shader=unlit_shader,
                 double_sided=True,
-                transparency=True,
-                render_queue=1,
             )
             child.model = None
             child.enabled = False

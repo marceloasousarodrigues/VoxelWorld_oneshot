@@ -28,14 +28,21 @@ class World:
         # Store chunks that have been modified and need mesh regeneration
         self.dirty_chunks = set()
         
+        # Water edit version - incremented on external occupancy changes
+        self.water_edit_version = 0
+
+        # External block edits awaiting water re-evaluation (world coordinates)
+        self.changed_blocks = set()
+        
     def dirty(self, chunk_id):
         """Mark chunk for mesh regeneration."""
         self.dirty_chunks.add(chunk_id)
         
     def refresh(self):
-        """Refresh all dirty chunks."""
-        # For now, just clear the dirty chunks set
-        # In a more complete implementation, this would rebuild meshes 
+        """Refresh all dirty chunks by regenerating their meshes and updating entities."""
+        for chunk_key in list(self.dirty_chunks):
+            if chunk_key in self.chunks:
+                self.chunks[chunk_key].refresh(world=self)
         self.dirty_chunks.clear()
         
     def get_chunk(self, chunk_x: int, chunk_y: int, chunk_z: int) -> Chunk:
@@ -82,10 +89,66 @@ class World:
         chunk = self.get_chunk(chunk_x, chunk_y, chunk_z)
         return int(chunk.get_block(local_x, local_y, local_z))
         
+    def is_loaded(self, world_x: int, world_y: int, world_z: int) -> bool:
+        """Return True when the chunk containing the coordinate is loaded."""
+        chunk_x, chunk_y, chunk_z = get_chunk_containing_world_coords(
+            world_x, world_y, world_z
+        )
+        return (chunk_x, chunk_y, chunk_z) in self.chunks
+
+    def get_water(self, world_x: int, world_y: int, world_z: int) -> int:
+        """Return the water level at a world coordinate (0 when unloaded/dry)."""
+        chunk_x, chunk_y, chunk_z = get_chunk_containing_world_coords(
+            world_x, world_y, world_z
+        )
+        chunk = self.chunks.get((chunk_x, chunk_y, chunk_z))
+        if chunk is None:
+            return 0
+        local_x = world_x - (chunk_x * 16)
+        local_y = world_y - (chunk_y * 16)
+        local_z = world_z - (chunk_z * 16)
+        return chunk.get_water_level(local_x, local_y, local_z)
+
+    def is_source(self, world_x: int, world_y: int, world_z: int) -> bool:
+        """Return True when the world coordinate is a permanent water source."""
+        chunk_x, chunk_y, chunk_z = get_chunk_containing_world_coords(
+            world_x, world_y, world_z
+        )
+        chunk = self.chunks.get((chunk_x, chunk_y, chunk_z))
+        if chunk is None:
+            return False
+        local_x = world_x - (chunk_x * 16)
+        local_y = world_y - (chunk_y * 16)
+        local_z = world_z - (chunk_z * 16)
+        return chunk.get_water_source(local_x, local_y, local_z)
+
+    def _mark_dirty_with_neighbors(self, chunk_x, chunk_y, chunk_z, local_x, local_y, local_z) -> None:
+        """Mark a chunk and its loaded boundary neighbours dirty."""
+        self.dirty_chunks.add((chunk_x, chunk_y, chunk_z))
+
+        if local_x == 0 and (chunk_x - 1, chunk_y, chunk_z) in self.chunks:
+            self.dirty_chunks.add((chunk_x - 1, chunk_y, chunk_z))
+        elif local_x == 15 and (chunk_x + 1, chunk_y, chunk_z) in self.chunks:
+            self.dirty_chunks.add((chunk_x + 1, chunk_y, chunk_z))
+
+        if local_y == 0 and (chunk_x, chunk_y - 1, chunk_z) in self.chunks:
+            self.dirty_chunks.add((chunk_x, chunk_y - 1, chunk_z))
+        elif local_y == 15 and (chunk_x, chunk_y + 1, chunk_z) in self.chunks:
+            self.dirty_chunks.add((chunk_x, chunk_y + 1, chunk_z))
+
+        if local_z == 0 and (chunk_x, chunk_y, chunk_z - 1) in self.chunks:
+            self.dirty_chunks.add((chunk_x, chunk_y, chunk_z - 1))
+        elif local_z == 15 and (chunk_x, chunk_y, chunk_z + 1) in self.chunks:
+            self.dirty_chunks.add((chunk_x, chunk_y, chunk_z + 1))
+
     def set_block(self, world_x: int, world_y: int, world_z: int, block_type: int) -> None:
         """
         Set the block type at a world coordinate.
-        
+
+        External edits clear the cell's water metadata, are recorded in the
+        external-edit log, and invalidate active water jobs when they change
+        the cell's occupancy or water-relevant passability.
+
         Args:
             world_x: X coordinate in world space
             world_y: Y coordinate in world space
@@ -95,13 +158,75 @@ class World:
         # Convert to chunk and local coordinates
         chunk_x, chunk_y, chunk_z = get_chunk_containing_world_coords(world_x, world_y, world_z)
         local_x, local_y, local_z = world_x - (chunk_x * 16), world_y - (chunk_y * 16), world_z - (chunk_z * 16)
-        
-        # Get chunk and set block data
+
+        # Get chunk and check old block type for occupancy change detection
         chunk = self.get_chunk(chunk_x, chunk_y, chunk_z)
+        old_block = chunk.get_block(local_x, local_y, local_z)
+
+        # An external edit discards any simulation metadata for this cell.
+        chunk.set_water_level(local_x, local_y, local_z, 0)
+        chunk.set_water_source(local_x, local_y, local_z, False)
         chunk.set_block(local_x, local_y, local_z, block_type)
-        
-        # Mark the chunk as dirty (needs mesh regeneration)
-        self.dirty_chunks.add((chunk_x, chunk_y, chunk_z))
+
+        if old_block != block_type:
+            self.changed_blocks.add((world_x, world_y, world_z))
+            water_relevant = (
+                old_block in (BlockType.AIR, BlockType.WATER)
+                or block_type in (BlockType.AIR, BlockType.WATER)
+            )
+            if water_relevant:
+                self.water_edit_version += 1
+
+        self._mark_dirty_with_neighbors(
+            chunk_x, chunk_y, chunk_z, local_x, local_y, local_z
+        )
+
+    def set_water(
+        self,
+        world_x: int,
+        world_y: int,
+        world_z: int,
+        level: int,
+        source: bool = False,
+    ) -> bool:
+        """
+        Set water level/source metadata through the simulation interface.
+
+        Returns True when occupancy changed between AIR and WATER. Never
+        creates a chunk, never writes to the external-edit log, and never
+        invalidates its own simulation job.
+        """
+        if world_y < 0:
+            return False
+
+        chunk_x, chunk_y, chunk_z = get_chunk_containing_world_coords(world_x, world_y, world_z)
+        chunk = self.chunks.get((chunk_x, chunk_y, chunk_z))
+        if chunk is None:
+            return False
+
+        local_x = world_x - (chunk_x * 16)
+        local_y = world_y - (chunk_y * 16)
+        local_z = world_z - (chunk_z * 16)
+
+        old_block = chunk.get_block(local_x, local_y, local_z)
+
+        if level <= 0:
+            changed = old_block == BlockType.WATER
+            if changed:
+                chunk.set_block(local_x, local_y, local_z, BlockType.AIR)
+            chunk.clear_water(local_x, local_y, local_z)
+        else:
+            changed = old_block != BlockType.WATER
+            chunk.set_block(local_x, local_y, local_z, BlockType.WATER)
+            chunk.set_water_level(local_x, local_y, local_z, level)
+            chunk.set_water_source(local_x, local_y, local_z, bool(source))
+
+        if changed:
+            self._mark_dirty_with_neighbors(
+                chunk_x, chunk_y, chunk_z, local_x, local_y, local_z
+            )
+
+        return changed
         
     def get_chunk_coords_containing_world_coords(self, world_x: int, world_y: int, world_z: int) -> tuple[int, int, int]:
         """

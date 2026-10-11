@@ -1,6 +1,9 @@
 ﻿from ursina import Entity, Vec3, color, camera
 from math import floor
 from raycast import raycast
+from block_data import BlockType
+from highlight import BlockHighlight
+from inventory import Inventory
 
 
 class VoxelPlayer(Entity):
@@ -27,6 +30,7 @@ class VoxelPlayer(Entity):
         jump_strength=7.0,
         gravity=20.0,
         mouse_sensitivity=40.0,
+        interaction_range=6.0,
     ):
         if spawn_position is None:
             spawn_position = position
@@ -42,6 +46,19 @@ class VoxelPlayer(Entity):
         )
 
         self.world = world
+
+        # Interaction
+        self.interaction_range = interaction_range
+        self.highlight = BlockHighlight()
+        self.inventory = Inventory(size=27)
+        self.hotbar_index = 0
+
+        # UI
+        from inventory_ui import InventoryUI
+        self.inventory_ui = InventoryUI(self.inventory)
+
+        # Crosshair
+        Entity(parent=camera.ui, model='quad', scale=0.01, color=color.white)
 
         # Interaction state
         self.interaction_state = {
@@ -145,6 +162,19 @@ class VoxelPlayer(Entity):
 
         elif key == "space":
             self.jump()
+
+        elif key == "left mouse down":
+            self.break_block()
+
+        elif key == "right mouse down":
+            self.place_block()
+            
+        elif key in [str(i) for i in range(1, 10)]:
+            self.hotbar_index = int(key) - 1
+            self.inventory_ui.update_selection(self.hotbar_index)
+            
+        elif key == "e":
+            self.inventory_ui.toggle()
 
     # ------------------------------------------------------------------
     # UPDATE
@@ -869,27 +899,126 @@ class VoxelPlayer(Entity):
         # marker was found, treat it as solid.
         return True
 
-    def _update_interaction(self):
-        """Handle player interaction with blocks (e.g., block breaking/placing)."""
-        from ursina import mouse
-        
-        # Check left mouse button press for block interaction
-        if mouse.left_pressed:
-            self.interaction_state['left_button'] = True
-            # Perform raycast to find what was clicked
-            if self.world:
-                direction = self.forward
-                origin = self.position + (0, self.eye_height, 0)
-                hit_result = raycast(origin, direction, self.world)
-                if hit_result:
-                    self.interaction_state['last_interaction_point'] = hit_result['position']
-                    # Store highlighted block for visual feedback
-                    self.interaction_state['highlighted_block'] = hit_result['position']
-        else:
-            self.interaction_state['left_button'] = False
+    def get_interaction_ray(self):
+        """
+        Return the (origin, direction) of the camera interaction ray.
 
-        # Check right mouse button press for block placing
-        if mouse.right_pressed:
-            self.interaction_state['right_button'] = True
+        Origin is the player's eye position and direction is the camera's
+        world forward vector. Using the camera forward (rather than the
+        player's horizontal forward) makes the ray follow the player's
+        look direction, including pitch, as required by the M7 contract.
+        """
+
+        origin = self.position + (0, self.eye_height, 0)
+        direction = camera.forward
+        return origin, direction
+
+    def break_block(self):
+        """
+        Break the first solid block hit by the interaction ray.
+        Also collects the block type into the player's inventory if space allows.
+        """
+
+        if self.world is None:
+            return None
+
+        origin, direction = self.get_interaction_ray()
+        hit = raycast(origin, direction, self.world, self.interaction_range)
+
+        if not hit:
+            return None
+
+        block_x, block_y, block_z = hit['position']
+        block_type = hit['block_type']
+
+        # Atomic collection check
+        if not self.inventory.add_item(block_type, 1):
+            return None # Inventory full
+
+        self.world.set_block(block_x, block_y, block_z, BlockType.AIR)
+        self.world.refresh()
+        return hit['position']
+
+    def _block_aabb_overlaps_player(self, block_x: int, block_y: int, block_z: int) -> bool:
+        """
+        Return True when the 1x1x1 block at (block_x, block_y, block_z)
+        overlaps the player's axis-aligned collision volume.
+        """
+
+        px, py, pz = self.x, self.y, self.z
+        r, h = self.radius, self.height
+
+        block_min_x, block_max_x = block_x, block_x + 1
+        block_min_y, block_max_y = block_y, block_y + 1
+        block_min_z, block_max_z = block_z, block_z + 1
+
+        if px + r <= block_min_x or px - r >= block_max_x:
+            return False
+        if py + h <= block_min_y or py >= block_max_y:
+            return False
+        if pz + r <= block_min_z or pz - r >= block_max_z:
+            return False
+
+        return True
+
+    def place_block(self):
+        """
+        Place a block based on the selected hotbar item at the face-adjacent
+        cell of the raycast hit.
+
+        Safety:
+        - Rejects when there is no hit or no neighbor position.
+        - Rejects when the target cell is not AIR.
+        - Rejects when the target cell would intersect the player's body.
+        - Rejects if hotbar is empty or has 0 quantity.
+
+        On success the world is mutated, item is consumed, and mesh refreshed.
+        Returns the placement position (x, y, z) on success, otherwise None.
+        """
+
+        if self.world is None:
+            return None
+
+        # Inventory check
+        item = self.inventory.get_selected_item(self.hotbar_index)
+        if not item or item.quantity <= 0:
+            return None
+
+        origin, direction = self.get_interaction_ray()
+        hit = raycast(origin, direction, self.world, self.interaction_range)
+
+        if not hit or hit.get("neighbor_pos") is None:
+            return None
+
+        target = hit["neighbor_pos"]
+        tx, ty, tz = target
+
+        if self.world.get_block(tx, ty, tz) != BlockType.AIR:
+            return None
+
+        if self._block_aabb_overlaps_player(tx, ty, tz):
+            return None
+        
+        # Atomic consume
+        if not self.inventory.remove_qty(item.item_type, 1):
+            return None
+        
+        self.world.set_block(tx, ty, tz, item.item_type)
+        self.world.refresh()
+        return target
+
+    def _update_interaction(self):
+        """Handle visual block indication (highlight)."""
+        
+        origin, direction = self.get_interaction_ray()
+        hit = raycast(origin, direction, self.world, self.interaction_range)
+        
+        if hit:
+            # Highlight targeted block
+            pos = hit['position']
+            if self.highlight.highlight_entity is None:
+                self.highlight.create_highlight(pos)
+            else:
+                self.highlight.update_highlight(pos)
         else:
-            self.interaction_state['right_button'] = False
+            self.highlight.remove_highlight()
