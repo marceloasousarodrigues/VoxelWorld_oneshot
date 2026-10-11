@@ -65,13 +65,21 @@ def load_manifest(path) -> dict:
 
 
 def collect_sources(manifest: dict) -> list:
-    """Return the unique non-null source paths, sorted for determinism."""
+    """Return the unique non-null source paths, sorted for determinism.
+
+    Covers both per-face block textures and the non-block ``decorations``
+    (crossed-plane foliage), so every manifest reference is packed. The
+    ``decorations`` section is optional; a missing one is skipped.
+    """
     seen = set()
     for faces in manifest.get("blocks", {}).values():
         for face in FACES:
             rel = faces.get(face)
             if rel:
                 seen.add(rel)
+    for rel in manifest.get("decorations", {}).values():
+        if rel:
+            seen.add(rel)
     return sorted(seen)
 
 

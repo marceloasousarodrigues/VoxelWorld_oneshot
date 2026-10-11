@@ -729,7 +729,7 @@ def test_decoration_textures_exposed():
 
 
 def test_packer_collects_decorations():
-    sources = pt.collect_sources(pt.load_manifest())
+    sources = pt.collect_sources(pt.load_manifest(pt.DEFAULT_MANIFEST))
     assert "voxel_textures/MINETEST_TEXTURES/default_grass_1.png" in sources
     assert "voxel_textures/MINETEST_TEXTURES/default_leaves.png" in sources
 

@@ -53,6 +53,17 @@ def block_face_textures(block_name: str) -> dict:
     return {face: faces.get(face) for face in _FACES}
 
 
+def decoration_textures() -> dict:
+    """Return the decoration name -> source path map from the manifest.
+
+    Decorations are non-block foliage (grass tufts) drawn as crossed planes, so
+    they are not addressed per block face. The manifest's top-level
+    ``decorations`` object is the source of truth; a missing section yields an
+    empty map so callers degrade instead of failing.
+    """
+    return dict(load_manifest().get("decorations", {}))
+
+
 def atlas_assets_available() -> bool:
     """Return whether both generated atlas assets (image and map) exist."""
     return ATLAS_IMAGE_PATH.is_file() and ATLAS_MAP_PATH.is_file()

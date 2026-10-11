@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Authoritative texture manifest (established M9; HD block sources added in M11; Minetest sources used in M12). Maps every BlockType to its per-face source PNGs (top/side/bottom). Paths are relative to the repository root and use forward slashes. A null face means no source texture is available for that face; consumers must skip null entries. Any non-null path that is missing on disk is a hard error for the atlas generator (scripts/pack_textures.py).",
+  "description": "Authoritative texture manifest (established M9; HD block sources added in M11; Minetest sources used in M12; M14 adds the OAK_LOG/OAK_LEAVES blocks and the decorations map for alpha-cutout foliage). Maps every BlockType to its per-face source PNGs (top/side/bottom) and every non-block decoration to the crossed-plane source PNG it renders with. Paths are relative to the repository root and use forward slashes. A null face means no source texture is available for that face; consumers must skip null entries. Any non-null path that is missing on disk is a hard error for the atlas generator (scripts/pack_textures.py).",
   "provenance": {
     "m11_hd_textures": {
       "license": "CC0",
@@ -82,6 +82,13 @@
       "side": null,
       "bottom": null
     }
+  },
+  "decorations": {
+    "grass_tuft_1": "voxel_textures/MINETEST_TEXTURES/default_grass_1.png",
+    "grass_tuft_2": "voxel_textures/MINETEST_TEXTURES/default_grass_2.png",
+    "grass_tuft_3": "voxel_textures/MINETEST_TEXTURES/default_grass_3.png",
+    "grass_tuft_4": "voxel_textures/MINETEST_TEXTURES/default_grass_4.png",
+    "grass_tuft_5": "voxel_textures/MINETEST_TEXTURES/default_grass_5.png"
   },
   "unavailable": {
     "WATER": "No water source texture exists under voxel_textures/blocks/. A texture must be added before WATER can be rendered.",
