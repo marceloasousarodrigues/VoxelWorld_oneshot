@@ -119,7 +119,13 @@ class TerrainGenerator:
         
         # Generate initial terrain based on a simple height map approach
         self._generate_height_map_terrain(world)
-        
+
+        # M14: decorate the generated terrain. Imported lazily because
+        # vegetation imports this module for its terrain predicates.
+        from vegetation import generate_vegetation
+
+        generate_vegetation(world, self.seed)
+
     def _generate_height_map_terrain(self, world: World) -> None:
         """Generate terrain using a height map approach."""
         chunk_size = 16
