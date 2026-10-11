@@ -41,6 +41,15 @@ class Chunk:
             dtype=bool,
         )
 
+        # M14 vegetation: logical decoration layer. 0 = none, 1..5 = grass tuft
+        # variant. Decorations never occupy the block grid, so they cannot affect
+        # collision, raycast, block placement or water passability.
+        self.decorations = np.full(
+            (self.SIZE_X, self.SIZE_Y, self.SIZE_Z),
+            0,
+            dtype=np.int8,
+        )
+
     def get_block(self, local_x: int, local_y: int, local_z: int) -> int:
         return int(self.blocks[local_x, local_y, local_z])
 
@@ -62,6 +71,15 @@ class Chunk:
     def clear_water(self, local_x: int, local_y: int, local_z: int) -> None:
         self.water_levels[local_x, local_y, local_z] = 0
         self.water_sources[local_x, local_y, local_z] = False
+
+    def get_decoration(self, local_x: int, local_y: int, local_z: int) -> int:
+        return int(self.decorations[local_x, local_y, local_z])
+
+    def set_decoration(self, local_x: int, local_y: int, local_z: int, value: int) -> None:
+        self.decorations[local_x, local_y, local_z] = value
+
+    def clear_decoration(self, local_x: int, local_y: int, local_z: int) -> None:
+        self.decorations[local_x, local_y, local_z] = 0
 
     def refresh(self, world=None):
         from chunk_mesh import generate_chunk_mesh_split
