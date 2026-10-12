@@ -8,6 +8,7 @@ Implements source-derived 0-1 BFS water simulation with:
 - Deterministic 0-1 BFS for level computation
 """
 
+import time as _time
 from collections import deque
 from typing import Dict, Tuple, Set, Any
 
@@ -21,6 +22,18 @@ SOURCE_LEVEL = 8
 MAX_HORIZONTAL_SPREAD = 32
 
 DEFAULT_MAX_CELLS_PER_TICK = 65536
+
+# M15: the cell budget alone is not a time bound. A tick now also stops once
+# this much wall-clock time has been spent, leaving the job resumable, so water
+# can never consume a frame that interaction work needs.
+DEFAULT_MAX_MILLISECONDS_PER_TICK = 8.0
+
+
+def _deadline_seconds(max_milliseconds_per_tick):
+    """Convert a millisecond budget to seconds, or ``None`` when unbounded."""
+    if max_milliseconds_per_tick is None or max_milliseconds_per_tick <= 0:
+        return None
+    return max_milliseconds_per_tick / 1000.0
 
 
 def is_water(block_type: int) -> bool:
@@ -204,6 +217,16 @@ class _Job:
         self.solution = {}
         self.budget = 0
         self.water_edit_version_start = 0
+        # M15: the solved region is prepared as per-chunk write batches so the
+        # preparation *and* the publication step can be spread over frames.
+        # ``*_iter`` are live iterators over the solved cells: they are the
+        # cursor for the budgeted preparation pass and never materialise
+        # another copy of the region.
+        self.solution_iter = None
+        self.drain_iter = None
+        self.commit_groups = {}
+        self.commit_plan = []
+        self.commit_cursor = 0
 
     def is_finished(self) -> bool:
         return self.stage == "done"
@@ -217,15 +240,21 @@ class WaterSimulation:
     - pending_seeds: FIFO queue + set of coords awaiting processing
     - active_job: at most one in-progress region job
     - Tick advances job by max_cells_per_tick budget units
-    - Only commits complete regions (no partial updates)
+    - flood and solve resume across ticks; a job only reaches the commit stage
+      once its whole region is solved, so an unsolved plan publishes nothing
+    - the solved region is grouped into per-chunk write batches by a budgeted
+      preparation pass, and published one batch at a time; both resume across
+      ticks, so no single tick pays for the whole region
     - Version-gated commits prevent stale results
     """
     
     def __init__(self, world, max_cells_per_tick: int = DEFAULT_MAX_CELLS_PER_TICK,
-                 max_horizontal_spread: int = MAX_HORIZONTAL_SPREAD):
+                 max_horizontal_spread: int = MAX_HORIZONTAL_SPREAD,
+                 max_milliseconds_per_tick: float | None = DEFAULT_MAX_MILLISECONDS_PER_TICK):
         self.world = world
         self.max_cells_per_tick = max_cells_per_tick
         self.max_horizontal_spread = max_horizontal_spread
+        self.max_milliseconds_per_tick = max_milliseconds_per_tick
         self.pending_seeds: Dict[Tuple[int, int, int], None] = {}  # OrderedDict-like: ordered set
         self.pending_seeds_set = set()
         self.active_job = None
@@ -330,29 +359,53 @@ class WaterSimulation:
         budget = self.max_cells_per_tick
         view = self._make_view()
         changes = 0
+
+        # M15 time budget: stop advancing once this much time has been spent.
+        # The outer loop always runs at least one stage call, and the stage
+        # loops always consume at least one unit, so progress is guaranteed.
+        started = _time.perf_counter()
+        deadline = _deadline_seconds(self.max_milliseconds_per_tick)
+        time_budget = (started, deadline) if deadline is not None else None
         
         while budget > 0 and job is not None:
+            if deadline is not None and _time.perf_counter() - started >= deadline:
+                break
             if job.stage == "flood":
-                budget = self._advance_flood(job, view, budget)
+                budget = self._advance_flood(job, view, budget, time_budget)
             elif job.stage == "solve":
-                budget = self._advance_solve(job, view, budget)
+                budget = self._advance_solve(job, view, budget, time_budget)
+            elif job.stage == "prepare":
+                budget = self._advance_prepare(job, budget, time_budget)
             elif job.stage == "commit":
-                changes = self._commit(job)
-                self.active_job = None
+                # M15: publication is resumable. One tick applies as many chunk
+                # batches as fit in the remaining budget; the plan simply
+                # continues on the next tick, and the job stays pending (and so
+                # keeps `has_pending_work()` true) until every batch is applied.
+                finished, committed = self._advance_commit(job, time_budget)
+                changes += committed
+                if finished:
+                    job.stage = "done"
+                    self.active_job = None
                 break
             else:
                 break
-        
-        # Check if job finished during this tick
-        if job is not None and job.is_finished():
-            changes = self._commit(job)
-            self.active_job = None
-        
+
         return changes
     
-    def _advance_flood(self, job, view, budget: int) -> int:
-        """Advance flood stage. Returns remaining budget."""
+    def _advance_flood(self, job, view, budget: int, time_budget=None) -> int:
+        """Advance flood stage. Returns remaining budget.
+
+        ``time_budget`` is ``(start_time, deadline_seconds)``; the stage stops
+        early once the deadline passes, leaving the rest of the queue for the
+        next tick. At least one unit is always processed.
+        """
+        processed = 0
         while budget > 0 and job.flood_queue:
+            if processed and time_budget is not None:
+                start, deadline = time_budget
+                if _time.perf_counter() - start >= deadline:
+                    break
+            processed += 1
             x, y, z = job.flood_queue.popleft()
             if (x, y, z) in job.visited_flood:
                 continue
@@ -400,9 +453,19 @@ class WaterSimulation:
         
         return budget
     
-    def _advance_solve(self, job, view, budget: int) -> int:
-        """Advance solve stage (0-1 BFS). Returns remaining budget."""
+    def _advance_solve(self, job, view, budget: int, time_budget=None) -> int:
+        """Advance solve stage (0-1 BFS). Returns remaining budget.
+
+        Stops early once ``time_budget``'s deadline passes; the remaining deque
+        is resumed next tick. At least one unit is always processed.
+        """
+        processed = 0
         while budget > 0 and job.solve_deque:
+            if processed and time_budget is not None:
+                start, deadline = time_budget
+                if _time.perf_counter() - start >= deadline:
+                    break
+            processed += 1
             x, y, z = job.solve_deque.popleft()
             current_cost = job.dist[(x, y, z)]
             
@@ -441,7 +504,6 @@ class WaterSimulation:
             budget -= 1
         
         if not job.solve_deque:
-            job.stage = "commit"
             # Build solution from dist. Clamp to a minimum level of 1 so a
             # long horizontal reach never dries out from level exhaustion.
             job.solution = {
@@ -450,33 +512,99 @@ class WaterSimulation:
                 if cost <= job.max_horizontal_spread
             }
             job.drain = job.region - set(job.solution.keys())
+            # M15: grouping the solved cells into per-chunk batches is itself
+            # region-proportional, so it is a budgeted stage of its own. The
+            # live iterators are the cursor; they hold no extra copy.
+            job.stage = "prepare"
+            job.solution_iter = iter(job.solution.items())
+            job.drain_iter = iter(job.drain)
+            job.commit_groups = {}
         
         return budget
-    
-    def _commit(self, job) -> int:
-        """Publish the prepared region in one logical operation.
 
-        Returns the number of occupancy changes. Writes go through
-        ``World.set_water`` so they never enter the external edit log and never
-        invalidate this job. The complete region is applied in a single call
-        before the affected chunk meshes are refreshed, so no partially
-        resolved region is ever exposed to the renderer.
+    def _next_prepared_cell(self, job):
+        """Next ``(x, y, z, level, source)`` from the solved region, or ``None``."""
+        if job.solution_iter is not None:
+            item = next(job.solution_iter, None)
+            if item is not None:
+                (x, y, z), level = item
+                return (x, y, z, level, (x, y, z) in job.sources)
+            job.solution_iter = None
+        if job.drain_iter is not None:
+            cell = next(job.drain_iter, None)
+            if cell is not None:
+                x, y, z = cell
+                return (x, y, z, 0, False)
+            job.drain_iter = None
+        return None
+
+    def _advance_prepare(self, job, budget: int, time_budget=None) -> int:
+        """Group the solved region into per-chunk write batches. Returns budget.
+
+        Region-proportional, so it follows the flood/solve convention: pull
+        solved cells until the tick deadline passes, keep the rest for the next
+        tick. Nothing is published until every cell is grouped, so a partially
+        prepared plan still writes nothing to the world.
+
+        A batch is one chunk's worth of cells, and a batch is applied in a
+        single vectorised step (``World.apply_water_batch``), so publication is
+        atomic *per chunk*: no observer sees a chunk whose water metadata
+        disagrees with its block occupancy. Batch order is the sorted chunk key,
+        so repeated runs publish the identical sequence of intermediate states.
+        """
+        processed = 0
+        while budget > 0:
+            if processed and time_budget is not None:
+                start, deadline = time_budget
+                if _time.perf_counter() - start >= deadline:
+                    break
+            entry = self._next_prepared_cell(job)
+            if entry is None:
+                break
+            processed += 1
+            budget -= 1
+            key = (entry[0] // 16, entry[1] // 16, entry[2] // 16)
+            job.commit_groups.setdefault(key, []).append(entry)
+
+        if job.solution_iter is None and job.drain_iter is None:
+            job.commit_plan = [
+                (key, job.commit_groups[key]) for key in sorted(job.commit_groups)
+            ]
+            job.commit_groups = {}
+            job.commit_cursor = 0
+            job.stage = "commit"
+
+        return budget
+    
+    def _advance_commit(self, job, time_budget=None):
+        """Publish the next chunk batches of a solved region.
+
+        Returns ``(finished, changes)``. Batches are applied until the tick's
+        deadline passes; at least one batch is always applied while the plan is
+        unexhausted, so a commit always makes progress and can never stall.
+
+        Frame cost is therefore bounded by the tick deadline plus one chunk
+        batch (a batch is one chunk's worth of cells applied in bulk). The plan
+        is written through ``World`` so dirty tracking, neighbour invalidation
+        and mesh scheduling stay exactly as they are for a single-cell edit; the
+        mesh rebuild itself is left to the frame loop's bounded ``reconcile``,
+        which is what keeps a committing tick from also paying for geometry.
         """
         world = self.world
         changes = 0
-
-        for (x, y, z), level in job.solution.items():
-            if world.set_water(x, y, z, level, source=((x, y, z) in job.sources)):
-                changes += 1
-
-        for x, y, z in job.drain:
-            if world.set_water(x, y, z, 0):
-                changes += 1
-
-        if changes:
-            world.refresh()
-
-        return changes
+        processed = 0
+        plan = job.commit_plan
+        while job.commit_cursor < len(plan):
+            if processed and time_budget is not None:
+                start, deadline = time_budget
+                if _time.perf_counter() - start >= deadline:
+                    break
+            chunk_key, cells = plan[job.commit_cursor]
+            job.commit_cursor += 1
+            processed += 1
+            changes += world.apply_water_batch(chunk_key, cells)
+        
+        return job.commit_cursor >= len(plan), changes
     
     def has_pending_work(self) -> bool:
         return bool(self.pending_seeds or self.active_job)

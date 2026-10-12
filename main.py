@@ -76,9 +76,19 @@ print(
 
 
 def update():
-    """Advance the water simulation from external edits each frame."""
+    """Rebuild dirty chunk meshes, then advance the water simulation.
+
+    M15: interaction edits land in ``world.dirty_chunks`` and are rebuilt here
+    under a per-frame budget. Water runs afterwards and is skipped when mesh
+    work already consumed the frame's budget, so the player's own edit always
+    wins. A water commit publishes at most the batches that fit in its own
+    budget and only *marks* the affected chunks dirty, so its geometry is
+    rebuilt by a later frame's ``reconcile`` rather than inside the water tick.
+    """
+    world.reconcile()
     water_sim.consume_changes()
-    water_sim.tick()
+    if not world.dirty_chunks:
+        water_sim.tick()
 
 
 app.run()

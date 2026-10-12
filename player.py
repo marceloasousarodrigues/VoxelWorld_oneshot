@@ -936,8 +936,10 @@ class VoxelPlayer(Entity):
         if not self.inventory.add_item(block_type, 1):
             return None # Inventory full
 
+        # Block data is authoritative and changes immediately; the rendered mesh
+        # is rebuilt by the bounded per-frame reconcile (M15), so the interaction
+        # path never blocks on mesh regeneration.
         self.world.set_block(block_x, block_y, block_z, BlockType.AIR)
-        self.world.refresh()
         return hit['position']
 
     def _block_aabb_overlaps_player(self, block_x: int, block_y: int, block_z: int) -> bool:
@@ -1004,8 +1006,8 @@ class VoxelPlayer(Entity):
         if not self.inventory.remove_qty(item.item_type, 1):
             return None
         
+        # See break_block: the mesh update is deferred to the frame reconcile.
         self.world.set_block(tx, ty, tz, item.item_type)
-        self.world.refresh()
         return target
 
     def _update_interaction(self):

@@ -1,0 +1,631 @@
+{
+  "meta": {
+    "tool": "scripts/profile_m15.py",
+    "milestone": "M15 - Performance Profiling & Scalability",
+    "python_version": "3.14.5 (tags/v3.14.5:5607950, May 10 2026, 10:43:50) [MSC v.1944 64 bit (AMD64)]",
+    "ursina_version": "8.3.0",
+    "panda3d_version": "1.10.16",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "scene_mode": "render",
+    "render_error": null,
+    "scene": "TerrainGenerator seed 42 (3x3 chunks), one chunk entity per chunk, VoxelPlayer spawn (8,8,8), seeded WaterSimulation",
+    "vsync": null,
+    "resolution": [
+      1920,
+      1080
+    ]
+  },
+  "mode": "measurement",
+  "frames_budget": 300,
+  "repetitions": 3,
+  "scenarios": {
+    "idle": {
+      "description": "step the attached scene with no edits",
+      "frames": {
+        "samples": 300,
+        "mean_ms": 0.7395896858846148,
+        "p50_ms": 0.6536000873893499,
+        "p95_ms": 0.9931899840012194,
+        "p99_ms": 1.1553474096581338,
+        "min_ms": 0.5852999165654182,
+        "max_ms": 13.436300214380026,
+        "over_16_67": 0,
+        "over_33_33": 0,
+        "over_16_67_pct": 0.0,
+        "over_33_33_pct": 0.0
+      },
+      "frames_spread": {
+        "p50_ms": {
+          "min": 0.641900347545743,
+          "median": 0.6536000873893499,
+          "max": 0.6597500760108232
+        },
+        "p95_ms": {
+          "min": 0.8447948144748807,
+          "median": 0.9931899840012194,
+          "max": 1.0068398667499425
+        },
+        "p99_ms": {
+          "min": 1.0952246095985172,
+          "median": 1.1553474096581338,
+          "max": 1.2863590102642768
+        },
+        "max_ms": {
+          "min": 11.640999931842089,
+          "median": 13.164999894797802,
+          "max": 13.436300214380026
+        },
+        "mean_ms": {
+          "min": 0.7054493250325322,
+          "median": 0.7395896858846148,
+          "max": 0.7460326623792449
+        },
+        "over_16_67": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "over_33_33": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        }
+      },
+      "counts": {
+        "loaded": 9,
+        "visible": 9,
+        "active": 0,
+        "unloaded": null
+      },
+      "pending": {
+        "dirty_chunks": 0,
+        "pending_seeds": 113,
+        "active_job": false
+      }
+    },
+    "break_one": {
+      "description": "one set_block(AIR) + one dirty-set flush per frame",
+      "frames": {
+        "samples": 300,
+        "mean_ms": 58.44053900179764,
+        "p50_ms": 47.73754999041557,
+        "p95_ms": 121.61606487352401,
+        "p99_ms": 127.51908272504807,
+        "min_ms": 44.412899762392044,
+        "max_ms": 129.26390022039413,
+        "over_16_67": 300,
+        "over_33_33": 300,
+        "over_16_67_pct": 100.0,
+        "over_33_33_pct": 100.0
+      },
+      "frames_spread": {
+        "p50_ms": {
+          "min": 47.59490001015365,
+          "median": 47.73754999041557,
+          "max": 48.03139972500503
+        },
+        "p95_ms": {
+          "min": 121.61606487352401,
+          "median": 121.87092991080137,
+          "max": 122.55533998832107
+        },
+        "p99_ms": {
+          "min": 127.18732572160658,
+          "median": 127.51908272504807,
+          "max": 129.92923797108233
+        },
+        "max_ms": {
+          "min": 129.26390022039413,
+          "median": 136.79000036790967,
+          "max": 136.95559976622462
+        },
+        "mean_ms": {
+          "min": 58.35767733088384,
+          "median": 58.44053900179764,
+          "max": 58.903805000397064
+        },
+        "over_16_67": {
+          "min": 300,
+          "median": 300,
+          "max": 300
+        },
+        "over_33_33": {
+          "min": 300,
+          "median": 300,
+          "max": 300
+        }
+      },
+      "counts": {
+        "loaded": 9,
+        "visible": 9,
+        "active": 0,
+        "unloaded": null
+      },
+      "pending": {
+        "dirty_chunks": 0,
+        "pending_seeds": 113,
+        "active_job": false
+      }
+    },
+    "break_rapid": {
+      "description": "4 set_block(AIR) edits batched into one dirty-set flush per frame",
+      "frames": {
+        "samples": 300,
+        "mean_ms": 90.42422200087458,
+        "p50_ms": 75.58729988522828,
+        "p95_ms": 174.5354148093611,
+        "p99_ms": 180.2050039451569,
+        "min_ms": 45.042500365525484,
+        "max_ms": 194.20219957828522,
+        "over_16_67": 300,
+        "over_33_33": 300,
+        "over_16_67_pct": 100.0,
+        "over_33_33_pct": 100.0
+      },
+      "frames_spread": {
+        "p50_ms": {
+          "min": 73.57455021701753,
+          "median": 75.58729988522828,
+          "max": 77.27614999748766
+        },
+        "p95_ms": {
+          "min": 174.5354148093611,
+          "median": 176.01589488331228,
+          "max": 176.8692101817578
+        },
+        "p99_ms": {
+          "min": 180.2050039451569,
+          "median": 181.3090581120923,
+          "max": 183.06860698852688
+        },
+        "max_ms": {
+          "min": 186.38730002567172,
+          "median": 194.20219957828522,
+          "max": 207.58299995213747
+        },
+        "mean_ms": {
+          "min": 90.42422200087458,
+          "median": 91.06097566584747,
+          "max": 91.27310333463053
+        },
+        "over_16_67": {
+          "min": 300,
+          "median": 300,
+          "max": 300
+        },
+        "over_33_33": {
+          "min": 300,
+          "median": 300,
+          "max": 300
+        }
+      },
+      "edits_per_frame": 4,
+      "counts": {
+        "loaded": 9,
+        "visible": 9,
+        "active": 0,
+        "unloaded": null
+      },
+      "pending": {
+        "dirty_chunks": 0,
+        "pending_seeds": 113,
+        "active_job": false
+      }
+    },
+    "break_boundary": {
+      "description": "one +X boundary edit per frame (dirty set amplifies to the loaded neighbour)",
+      "frames": {
+        "samples": 300,
+        "mean_ms": 99.14332134183496,
+        "p50_ms": 93.23989995755255,
+        "p95_ms": 137.4684198293835,
+        "p99_ms": 145.6234900886193,
+        "min_ms": 87.0871003717184,
+        "max_ms": 149.9010999687016,
+        "over_16_67": 300,
+        "over_33_33": 300,
+        "over_16_67_pct": 100.0,
+        "over_33_33_pct": 100.0
+      },
+      "frames_spread": {
+        "p50_ms": {
+          "min": 92.07984991371632,
+          "median": 93.23989995755255,
+          "max": 93.46080012619495
+        },
+        "p95_ms": {
+          "min": 137.02295487746596,
+          "median": 137.4684198293835,
+          "max": 138.90056491363796
+        },
+        "p99_ms": {
+          "min": 145.6234900886193,
+          "median": 148.00332204904407,
+          "max": 148.02503426559267
+        },
+        "max_ms": {
+          "min": 149.9010999687016,
+          "median": 151.43930027261376,
+          "max": 158.16139988601208
+        },
+        "mean_ms": {
+          "min": 98.21179901094486,
+          "median": 99.14332134183496,
+          "max": 99.54424933996052
+        },
+        "over_16_67": {
+          "min": 300,
+          "median": 300,
+          "max": 300
+        },
+        "over_33_33": {
+          "min": 300,
+          "median": 300,
+          "max": 300
+        }
+      },
+      "counts": {
+        "loaded": 9,
+        "visible": 9,
+        "active": 0,
+        "unloaded": null
+      },
+      "pending": {
+        "dirty_chunks": 0,
+        "pending_seeds": 113,
+        "active_job": false
+      }
+    },
+    "place_rapid": {
+      "description": "one set_block(STONE) + one dirty-set flush per frame on broken cells",
+      "frames": {
+        "samples": 300,
+        "mean_ms": 59.64180000592023,
+        "p50_ms": 48.460799967870116,
+        "p95_ms": 124.21520506031814,
+        "p99_ms": 139.37596201896667,
+        "min_ms": 45.45990005135536,
+        "max_ms": 145.48509987071157,
+        "over_16_67": 300,
+        "over_33_33": 300,
+        "over_16_67_pct": 100.0,
+        "over_33_33_pct": 100.0
+      },
+      "frames_spread": {
+        "p50_ms": {
+          "min": 48.11219987459481,
+          "median": 48.460799967870116,
+          "max": 48.4657499473542
+        },
+        "p95_ms": {
+          "min": 122.41050512529911,
+          "median": 124.21520506031814,
+          "max": 124.63490008376539
+        },
+        "p99_ms": {
+          "min": 132.94382471125573,
+          "median": 134.13632973097262,
+          "max": 139.37596201896667
+        },
+        "max_ms": {
+          "min": 140.95039991661906,
+          "median": 145.48509987071157,
+          "max": 146.9017001800239
+        },
+        "mean_ms": {
+          "min": 59.234974019539855,
+          "median": 59.379418675477304,
+          "max": 59.64180000592023
+        },
+        "over_16_67": {
+          "min": 300,
+          "median": 300,
+          "max": 300
+        },
+        "over_33_33": {
+          "min": 300,
+          "median": 300,
+          "max": 300
+        }
+      },
+      "counts": {
+        "loaded": 9,
+        "visible": 9,
+        "active": 0,
+        "unloaded": null
+      },
+      "pending": {
+        "dirty_chunks": 0,
+        "pending_seeds": 113,
+        "active_job": false
+      }
+    },
+    "dirty_reconcile": {
+      "description": "flush a dirty set covering every loaded chunk (unbounded-work probe)",
+      "single_flush_ms": 412.31209971010685,
+      "dirty_count_before": 27,
+      "counts": {
+        "loaded": 9,
+        "visible": 9,
+        "active": 0,
+        "unloaded": null
+      },
+      "pending": {
+        "dirty_chunks": 0,
+        "pending_seeds": 113,
+        "active_job": false
+      }
+    },
+    "water_active": {
+      "description": "water tick() from a freshly seeded lake until the queue drains",
+      "frames": {
+        "samples": 111,
+        "mean_ms": 9.485568456888736,
+        "p50_ms": 9.105099830776453,
+        "p95_ms": 11.386299971491098,
+        "p99_ms": 12.88550011813641,
+        "min_ms": 8.75960011035204,
+        "max_ms": 12.950900010764599,
+        "over_16_67": 0,
+        "over_33_33": 0,
+        "over_16_67_pct": 0.0,
+        "over_33_33_pct": 0.0
+      },
+      "frames_spread": {
+        "p50_ms": {
+          "min": 9.062999859452248,
+          "median": 9.105099830776453,
+          "max": 9.155499748885632
+        },
+        "p95_ms": {
+          "min": 10.788849787786603,
+          "median": 11.044349987059832,
+          "max": 11.386299971491098
+        },
+        "p99_ms": {
+          "min": 12.352169863879682,
+          "median": 12.573600094765428,
+          "max": 12.88550011813641
+        },
+        "max_ms": {
+          "min": 12.716399971395731,
+          "median": 12.950900010764599,
+          "max": 13.455799780786037
+        },
+        "mean_ms": {
+          "min": 9.313306297167196,
+          "median": 9.464302687561727,
+          "max": 9.485568456888736
+        },
+        "over_16_67": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "over_33_33": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        }
+      },
+      "ticks_to_quiescence": 111,
+      "counts": {
+        "loaded": 9,
+        "visible": 9,
+        "active": 0,
+        "unloaded": null
+      },
+      "pending": {
+        "dirty_chunks": 0,
+        "pending_seeds": 0,
+        "active_job": false
+      }
+    },
+    "generate_chunks": {
+      "description": "generate a 5x5 chunk region deterministically (no vegetation)",
+      "total_ms": 43.05730015039444,
+      "per_chunk_ms": 1.7222920060157776,
+      "chunk_count": 25,
+      "counts": {
+        "loaded": 25,
+        "visible": 0,
+        "active": 0,
+        "unloaded": null
+      }
+    },
+    "traverse_generate": {
+      "description": "generate one new chunk per step while moving outwards",
+      "frames": {
+        "samples": 48,
+        "mean_ms": 1.7642666934989393,
+        "p50_ms": 1.6079000197350979,
+        "p95_ms": 2.668645302765071,
+        "p99_ms": 2.907442026771605,
+        "min_ms": 1.5318002551794052,
+        "max_ms": 2.936300355941057,
+        "over_16_67": 0,
+        "over_33_33": 0,
+        "over_16_67_pct": 0.0,
+        "over_33_33_pct": 0.0
+      },
+      "frames_spread": {
+        "p50_ms": {
+          "min": 1.595949986949563,
+          "median": 1.6079000197350979,
+          "max": 1.6165499109774828
+        },
+        "p95_ms": {
+          "min": 1.9541651243343947,
+          "median": 1.9814452389255164,
+          "max": 2.668645302765071
+        },
+        "p99_ms": {
+          "min": 2.1668279264122248,
+          "median": 2.4069499131292105,
+          "max": 2.907442026771605
+        },
+        "max_ms": {
+          "min": 2.2455998696386814,
+          "median": 2.4562999606132507,
+          "max": 2.936300355941057
+        },
+        "mean_ms": {
+          "min": 1.6386583544469129,
+          "median": 1.674097894768541,
+          "max": 1.7642666934989393
+        },
+        "over_16_67": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "over_33_33": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        }
+      },
+      "counts": {
+        "loaded": 49,
+        "visible": 0,
+        "active": 0,
+        "unloaded": null
+      },
+      "memory": {
+        "numpy_bytes": 1404928,
+        "per_chunk_bytes": 28672
+      }
+    },
+    "render_visible": {
+      "description": "step the scene; report visible chunk and geometry counts",
+      "frames": {
+        "samples": 120,
+        "mean_ms": 0.7394491888893148,
+        "p50_ms": 0.665399944409728,
+        "p95_ms": 1.0940049542114139,
+        "p99_ms": 1.5290783112868673,
+        "min_ms": 0.5996003746986389,
+        "max_ms": 3.168799914419651,
+        "over_16_67": 0,
+        "over_33_33": 0,
+        "over_16_67_pct": 0.0,
+        "over_33_33_pct": 0.0
+      },
+      "frames_spread": {
+        "p50_ms": {
+          "min": 0.6460498552769423,
+          "median": 0.665399944409728,
+          "max": 0.6815497763454914
+        },
+        "p95_ms": {
+          "min": 1.0352852987125516,
+          "median": 1.067629735916853,
+          "max": 1.0940049542114139
+        },
+        "p99_ms": {
+          "min": 1.3905506115406754,
+          "median": 1.4610248757526285,
+          "max": 1.5290783112868673
+        },
+        "max_ms": {
+          "min": 3.168799914419651,
+          "median": 3.3636000007390976,
+          "max": 3.4492998383939266
+        },
+        "mean_ms": {
+          "min": 0.7096616590085129,
+          "median": 0.7394491888893148,
+          "max": 0.7524074831356605
+        },
+        "over_16_67": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "over_33_33": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        }
+      },
+      "counts": {
+        "loaded": 9,
+        "visible": 9,
+        "active": 0,
+        "unloaded": null
+      },
+      "memory": {
+        "numpy_bytes": 258048,
+        "per_chunk_bytes": 28672
+      },
+      "visibility": {
+        "visible_chunks": 9,
+        "opaque_chunk_entities": 9
+      }
+    },
+    "mixed_world": {
+      "description": "generated world: one edit + reconcile + water tick per frame",
+      "frames": {
+        "samples": 300,
+        "mean_ms": 68.91661299392581,
+        "p50_ms": 53.55315003544092,
+        "p95_ms": 127.9044047696521,
+        "p99_ms": 243.75868484843522,
+        "min_ms": 42.33879968523979,
+        "max_ms": 249.07079990953207,
+        "over_16_67": 300,
+        "over_33_33": 300,
+        "over_16_67_pct": 100.0,
+        "over_33_33_pct": 100.0
+      },
+      "frames_spread": {
+        "p50_ms": {
+          "min": 53.202500101178885,
+          "median": 53.55315003544092,
+          "max": 54.37129992060363
+        },
+        "p95_ms": {
+          "min": 126.43488005269366,
+          "median": 127.9044047696521,
+          "max": 129.57383014727432
+        },
+        "p99_ms": {
+          "min": 243.75868484843522,
+          "median": 249.42688403651118,
+          "max": 253.3189561450854
+        },
+        "max_ms": {
+          "min": 249.07079990953207,
+          "median": 254.7206999734044,
+          "max": 264.4467996433377
+        },
+        "mean_ms": {
+          "min": 68.5106709987546,
+          "median": 68.91661299392581,
+          "max": 70.27500333730131
+        },
+        "over_16_67": {
+          "min": 300,
+          "median": 300,
+          "max": 300
+        },
+        "over_33_33": {
+          "min": 300,
+          "median": 300,
+          "max": 300
+        }
+      },
+      "counts": {
+        "loaded": 9,
+        "visible": 0,
+        "active": 0,
+        "unloaded": null
+      },
+      "pending": {
+        "dirty_chunks": 0,
+        "pending_seeds": 2,
+        "active_job": false
+      }
+    }
+  }
+}

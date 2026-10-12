@@ -69,14 +69,28 @@ def test_place_block_at_chunk_boundary_refreshes_neighbors():
     player = VoxelPlayer(world, spawn_position=(8, 10, 8))
     player.inventory.add_item(DIRT, 64) # Add DIRT for placement
     player.interaction_range = 6.0
+    # The neighbour chunk (0,0,0) already has a mesh; placing across the seam
+    # must rebuild it too, because the +x face of (15,0,0) becomes occluded.
+    neighbour = world.chunks[(0, 0, 0)]
+    neighbour_before = list(neighbour._mesh_vertices)
+    assert neighbour_before
     # Approach from +x side so neighbor is (16,0,0) across chunk boundary
     player.get_interaction_ray = lambda: ((17.5, 0.5, 0.5), (-1, 0, 0))
     target = player.place_block()
     assert target == (16, 0, 0)
     assert world.get_block(16, 0, 0) == DIRT
-    # Original block untouched, dirty set cleared by refresh
+    # Original block untouched.  M15: the placement no longer refreshes inline;
+    # it marks the edited chunk *and* its loaded boundary neighbour dirty, and
+    # the frame reconcile (or an explicit refresh here) drains the queue.
     assert world.get_block(15, 0, 0) == STONE
+    assert (1, 0, 0) in world.dirty_chunks
+    assert (0, 0, 0) in world.dirty_chunks
+    world.refresh()
     assert not world.dirty_chunks
+    # Both chunks were regenerated: the placed block gained geometry and the
+    # neighbour lost the face that the placement now occludes.
+    assert len(world.chunks[(1, 0, 0)]._mesh_vertices) > 0
+    assert list(world.chunks[(0, 0, 0)]._mesh_vertices) != neighbour_before
 
 
 def test_right_mouse_down_triggers_place():

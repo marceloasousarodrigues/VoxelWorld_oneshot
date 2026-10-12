@@ -70,13 +70,26 @@ def atlas_assets_available() -> bool:
 
 
 def load_atlas_map() -> dict | None:
-    """Load the generated atlas map, or ``None`` when the atlas is unavailable."""
+    """Load the generated atlas map, or ``None`` when the atlas is unavailable.
+
+    The parsed document is cached (M15): ``Chunk.refresh`` used to re-read and
+    re-parse ``atlas_map.json`` on every mesh rebuild. The availability check
+    still runs on every call so a missing atlas is never cached as a negative
+    result, and a later successful load is not poisoned.
+    """
     if not atlas_assets_available():
         return None
+    return _load_atlas_map_cached()
+
+
+@lru_cache(maxsize=1)
+def _load_atlas_map_cached() -> dict:
+    """Read and parse the atlas map once; cleared by ``reset_cache``."""
     with open(ATLAS_MAP_PATH, encoding="utf-8") as handle:
         return json.load(handle)
 
 
 def reset_cache() -> None:
-    """Clear the cached manifest (for test isolation)."""
+    """Clear the cached manifest and atlas map (for test isolation)."""
     load_manifest.cache_clear()
+    _load_atlas_map_cached.cache_clear()

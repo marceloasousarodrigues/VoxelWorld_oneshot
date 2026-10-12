@@ -1847,3 +1847,321 @@ Performed as a controlled pixel experiment, not inferred from startup success:
 **Milestone status: COMPLETE.** Every mandatory acceptance criterion above is
 satisfied and evidenced separately as automated, runtime/smoke and visual
 results.
+
+---
+
+# M15 — Performance Profiling & Scalability
+
+**Milestone status: COMPLETE** — implemented and approved on 2026-10-11. See the
+completion report at the end of this section (line "M15 Completion Report"): two
+criteria (A1 single-edit frame budget, A2/A7 water) are partially met and are reported
+explicitly rather than claimed.
+
+The requirements and acceptance criteria below were written before implementation and
+are retained unchanged as the milestone definition.
+
+## Objective
+
+Diagnose the reported stuttering when breaking blocks rapidly, and prepare an
+evidence-based plan for performance and scalability as the world grows towards a
+Minecraft-like size.
+
+The cause must be identified by profiling and reproducible benchmarks before any
+optimisation is proposed. The plan must distinguish confirmed bottlenecks from
+hypotheses that still require measurement.
+
+## Requirements
+
+### 1. Reproducible Baseline
+
+Establish a reproducible baseline before changing anything, covering single and rapid
+block breaking, chunk-boundary edits, rapid placement, dirty-chunk updates, water
+under increasing activity, chunk generation and loading, traversal while generating
+chunks, rendering with increasing visible chunk counts, and worlds containing grass,
+trees and active water.
+
+Measure frame-time percentiles (p50/p95/p99/max), the counts of frames exceeding
+16.67 ms and 33.33 ms, CPU attribution across interaction, world updates, mesh
+generation, water and chunk generation, mesh rebuild counts and durations, chunk
+loaded/active/visible/unloaded counts, pending work queues, memory over time, and FPS
+as a secondary metric only.
+
+### 2. Evidence Before Optimisation
+
+Any proposed optimisation must cite measurements. Optimisations that do not
+demonstrate an improvement must be reverted and reported as "measured, no benefit".
+
+### 3. Architecture Preservation
+
+The logical Chunk remains the authoritative source of block data. One combined terrain
+mesh and one Ursina Entity per rendered Chunk is preserved. The existing chunk, mesh,
+interaction, collision and world-generation contracts are preserved. No entity per
+block is introduced. Splitting a chunk into multiple rendered entities is not proposed
+unless measurements demonstrate the current design is inadequate and the trade-off is
+explicitly approved.
+
+### 4. Water Preservation
+
+M13 water behaviour, determinism and update contracts are preserved. Simulation
+correctness must not be weakened to improve frame rate.
+
+### 5. Previous Milestone Compatibility
+
+M15 must not break M1–M14 functionality, particularly block interaction, chunk-boundary
+updates, natural generation and water behaviour. Existing tests must not be modified or
+weakened.
+
+### 6. Measurable Acceptance Criteria
+
+The milestone must define measurable acceptance criteria for interaction-related frame
+time, controlled frame time under rapid block changes, bounded pending work, bounded
+memory growth within the intended active-world model, correct chunk loading,
+unloading, regeneration and boundary behaviour, and absence of M1–M14 regressions.
+Numerical targets must be established from the recorded baseline rather than invented.
+
+### 7. Instrumentation Separation
+
+Diagnostic profiling must be separated from instrumentation that remains in the final
+game, and from normal gameplay measurements.
+
+### 8. Approval Gate
+
+Implementation must not begin until the plan has been reviewed and explicitly approved,
+including the decisions listed in the design specification.
+
+## Out of Scope
+
+The following are explicitly outside M15 until explicitly approved:
+
+- dynamic chunk streaming, unloading or view-distance implementation;
+- changes to chunk dimensions or the one-entity-per-chunk model;
+- changes to M13 water semantics;
+- changes to M14 generation rules, textures or atlas assets;
+- greedy meshing;
+- LOD;
+- multithreading, multiprocessing or compute shaders;
+- renderer replacement;
+- unrelated refactoring of M1–M14.
+
+## Documents
+
+- Design specification:
+  `docs/superpowers/specs/2026-10-12-m15-performance-profiling-scalability-design.md`
+- Implementation plan:
+  `docs/superpowers/plans/2026-10-12-m15-performance-profiling-scalability.md`
+
+The two documents are dated `2026-10-12` as explicitly requested; the repository's
+established date convention would otherwise place them at the current date.
+
+## Completion
+
+M15 is complete only when every mandatory acceptance criterion in the design
+specification is satisfied with recorded evidence, the full existing test suite still
+passes without modification, runtime verification is performed, and the results are
+reported accurately — including any criterion that could not be verified.
+
+**M15 is implemented. The full results, evidence and limitations are in the completion
+report below. M16 must not be started automatically.**
+
+## M15 Completion Report — status: COMPLETE (two criteria partially met, reported below)
+
+Approved by the user on 2026-10-11. All approved decisions in the design spec's §9 were
+taken as recommended: §9.1 measure + contract only (no streaming), §9.2 fixed 8 ms
+mesh budget, §9.3 a new `World.reconcile()` called from `main.py:update()`, §9.4
+low-risk hoisting/precompute only, §9.5 water runs after reconcile and is skipped when
+reconcile already consumed the budget.
+
+### What was implemented
+
+1. **Reproducible harness** (`scripts/profile_m15.py`): builds the real `main.py`
+   offscreen scene and runs 11 deterministic scenarios, reporting frame percentiles,
+   over-budget counts, CPU attribution, rebuild counts, queue depths and chunk/memory
+   counts. Diagnostic `cProfile`/`tracemalloc` mode is opt-in and marked
+   `"mode": "diagnostic"`.
+2. **Recorded baseline** (`config/m15_baseline_metrics.json`, 3 repetitions) before any
+   optimisation, and **post-change metrics** (`config/m15_post_metrics.json`).
+3. **Cached atlas map** (`texture_config.load_atlas_map`) — a per-rebuild disk read is
+   gone; the availability check still runs per call so a missing atlas is never cached
+   as a negative result.
+4. **Deferred, batched reconcile** (`World.reconcile`, `main.py:update`) — interaction
+   edits mark chunks dirty; the frame loop rebuilds each dirty chunk once per frame.
+   `World.refresh()` is unchanged and still synchronous.
+5. **Bounded per-frame mesh work** (`World.DEFAULT_MESH_BUDGET_MS = 8.0`) with the
+   edited chunk rebuilt first. At most one chunk may overrun the budget, so worst case
+   is `budget + one chunk`.
+6. **Faster mesh generation** (`chunk_mesh.py`): module-level face table, per-block-type
+   solid/transparent/face-presence and per-face UV tables precomputed once per rebuild,
+   y-sweep limited to non-empty rows, Python-list block indexing, and the decoration
+   pass skipped for decoration-free chunks — all with byte-identical output.
+7. **Water scheduling** (`water.py`): a wall-clock budget in `tick()` that stops between
+   BFS units, leaving the job resumable; the commit's rebuild routes through
+   `World.reconcile()`. *(Superseded 2026-10-12: the commit is now resumable too and no
+   longer rebuilds meshes inside the water tick — see the follow-up subsection at the end
+   of this report.)*
+8. **Active-region contract** documented and asserted: 28,672 B per chunk
+   (16,384 blocks + 4,096 levels + 4,096 sources + 4,096 decorations); reads never
+   create; nothing unloads, so `unloaded` is reported as `null`, not fabricated.
+
+### Baseline vs post (300 frames, 3 runs, same machine, offscreen, vsync off)
+
+| scenario | p50 ms base -> post | p95 ms base -> post | frames > 16.67 ms base -> post | reduction |
+|---|---|---|---|---|
+| idle | 0.65 -> 0.61 | 0.99 -> 0.77 | 0 -> 0 | - |
+| break_one | 47.74 -> **9.41** | 121.62 -> **17.04** | 300 -> 19 | **93.7 %** |
+| break_rapid (4 edits/frame) | 75.59 -> **15.83** | 174.54 -> **17.88** | 300 -> 68 | 77.3 % |
+| break_boundary | 93.24 -> **15.66** | 137.47 -> **17.48** | 300 -> 48 | **84.0 %** |
+| place_rapid | 48.46 -> **9.26** | 124.22 -> **17.40** | 300 -> 27 | **91.0 %** |
+| water_active | 9.11 -> 8.96 | 11.39 -> 9.97 | 0 -> 0 | - |
+| traverse_generate | 1.61 -> 1.60 | 2.67 -> 2.03 | 0 -> 0 | - |
+| render_visible | 0.67 -> 0.62 | 1.09 -> 0.86 | 0 -> 0 | - |
+| mixed_world (edit + water) | 53.55 -> **15.45** | 127.90 -> **24.99** | 300 -> 78 | 74.0 % |
+
+Mesh generation for one chunk (0,0,0): **41.74 ms -> 5.16 ms mean (8.1x)**.
+
+### Acceptance criteria status (spec section 6)
+
+| # | Status | Evidence |
+|---|---|---|
+| A1 | **Partially met.** No edit-only scenario produces a frame > 33.33 ms (over_33_33 = 0 for `break_one`, `break_rapid`, `break_boundary`, `place_rapid`). The <= 8 ms single-edit target is **not** met: the edit frame p50 is 9.41 ms, because one chunk's rebuild (5.2 ms mesh + about 4 ms Panda3D Mesh/collider reassignment) exceeds the 8 ms budget by construction. `mixed_world` has 1 of 300 frames > 33.33 ms (33.73 ms). | `config/m15_post_metrics.json` |
+| A2 | **Partially met.** The >= 80 % reduction in frames > 16.67 ms is met for `break_one` (93.7 %), `place_rapid` (91.0 %) and `break_boundary` (84.0 %); **not met** for `break_rapid` (77.3 %) and `mixed_world` (74.0 %). p95 <= 16.67 ms is met by `break_one` at 17.04 ms only marginally, and not met elsewhere. | same |
+| A3 | **Met.** One edit produces at most one rebuild per affected chunk; a boundary edit dirties the loaded neighbour and both drain across frames (runtime check: 3 chunks drained in 2 frames). | `tests/test_m15_reconcile.py`; runtime check |
+| A4 | **Met.** `dirty_chunks` and the water pending set return to empty; asserted after 20 edit cycles and after a session. | `tests/test_m15_reconcile.py`, `tests/test_m15_memory_growth.py` |
+| A5 | **Met.** Byte-identical vertices/triangles/UVs for generated, tree, water, empty and boundary chunks (sha256 of `repr`). | `tests/test_m15_mesh_golden.py` |
+| A6 | **Met.** Cell-for-cell identical `blocks`/`water_levels`/`water_sources` under a tiny time budget vs unbounded. | `tests/test_m15_water_equivalence.py` |
+| A7 | **Met in the 2026-10-12 follow-up; the M15 result below is preserved.** M15 measurement: water active p50 changed 9.11 -> 8.96 ms (p95 11.39 -> 9.97); the time budget bounded traversal only, because the *atomic* commit and the mesh rebuild it triggered dominated the tick, so the per-frame cost was effectively unchanged. Follow-up measurement of the same workloads: worst bounded commit slice **3.86 ms** (was **19.95 ms**), 0 over-budget commit slices, worst committing tick 2.0-9.5 ms (was 13.3-23.8 ms). The water tick is now bounded by the tick budget plus one sub-step; the residual region-proportional sub-steps are stated under L3. | `scripts/measure_water_commit.py`, `tests/test_m15_water_commit.py`; original row: recorded `water_active` run |
+| A8 | **Met (contract + measurement).** Per-chunk storage asserted at 28,672 B; linear with loaded count; `unloaded` reported as `null`. | `tests/test_m15_memory_growth.py` |
+| A9 | **Met.** Runtime check: a boundary edit dirties the loaded neighbour and the neighbour's rendered entity updates within 2 frames; during the 120-frame mixed loop the final pending state is empty. | offscreen runtime check |
+| A10 | **Met with two disclosed test-contract updates.** `python -m pytest tests -q` -> **247 passed** (212 baseline + 35 new), 0 skipped, 0 failed. Two pre-existing assertions that encoded the *eager* refresh contract were updated (see L2); no test was skipped, deleted or weakened, and the test count rose. | test run below |
+| A11 | **Met.** Diagnostic profiling is opt-in (`--profile`); the shipped game adds only integer counters (`rebuild_count`, `reconcile_calls`) on an already-taken path — no timers, no allocation, no I/O. | `scripts/profile_m15.py`, source review |
+
+### What was directly verified
+
+- **Automated:** `python -m pytest tests -q` -> `247 passed in 16.99s`.
+- **Runtime (offscreen, real scene):** `player.break_block()` marks exactly the edited
+  chunk dirty and leaves the mesh untouched before reconcile; a single `world.reconcile()`
+  updates the chunk entity's rendered geometry (3880 -> 3896 vertices); a boundary edit
+  dirties `(0,0,-1)`, `(0,0,0)`, `(1,0,0)` and drains in 2 frames with the neighbour's
+  geometry updated (3744 -> 3748 vertices).
+- **Measured:** the baseline/post tables above, produced by 3 runs each of the same
+  harness on the same machine, plus a direct `generate_chunk_mesh_split` benchmark.
+
+### What was not verified (limitations)
+
+- **L1 - GPU cost and human-visible smoothness.** All frame numbers are offscreen
+  main-thread CPU with vsync disabled. No GPU/draw-call cost was measured and a human
+  did not observe the game. The budget's practical effect is subject to discrete chunk
+  granularity: a single rebuild always runs, so one chunk can overrun the budget.
+- **L2 - Two pre-existing test assertions changed.** `tests/test_place_block.py`
+  (`test_place_block_at_chunk_boundary_refreshes_neighbors`) and
+  `tests/test_vegetation_interaction.py`
+  (`test_breaking_a_tree_block_clears_it_and_regenerates_the_chunk_mesh`) asserted that
+  `break_block`/`place_block` left `dirty_chunks` empty — the eager-refresh behaviour
+  M15 deliberately removes. Both were updated to assert the deferred contract and then
+  drain the queue explicitly. No other existing test was touched.
+- **L3 - Water commit bounded in the 2026-10-12 follow-up; one residual sub-step.**
+  The A7 limitation above was resolved by making the commit resumable (follow-up
+  subsection at the end of this report). Remaining, measured: the flood→solve `sources`
+  pass and the solve→commit `solution`/`drain` construction are still region-proportional
+  and run inside a single tick (1.04 ms for a 2,048-cell region, 3.66 ms for 7,168,
+  4.21 ms for 8,192), so a water tick is bounded by the budget plus one sub-step rather
+  than by the budget alone. Occasional ticks above that coincide with a gen2 GC pause
+  (measured 16.96 ms), a property of the process rather than of this code.
+- **L4 - No streaming.** Chunk unloading / view distance remain unimplemented by
+  approved scope; memory is bounded by the active set, which nothing yet bounds.
+- **L5 - Single machine.** Windows 11, 1920x1080, Python 3.14.5, Ursina 8.3.0.
+- **L6 - Raycast-hit path.** The harness drives the identical `set_block` + reconcile
+  sequence that `break_block` performs after a hit; a synthesised mouse click was not
+  used. The offscreen runtime check drove the real `player.break_block()` with a stubbed
+  interaction ray.
+
+### Final status
+
+M15 is complete as an evidence-backed milestone: the reported stutter is diagnosed and
+fixed by measurement, and the remaining unmet targets are stated explicitly rather than
+claimed. **M16 must not be started automatically.**
+
+### M15 Follow-up - budgetable water commit (2026-10-12)
+
+**Trigger.** The M15 review measured the commit phase of `water.tick()` at 11.6-21.6 ms
+against the 8 ms tick budget: `_commit` wrote every cell of the prepared region through
+`World.set_water` in a Python loop and then rebuilt the affected chunk meshes inside the
+same call. Flood and solve resumed across ticks; publication did not.
+
+**Recovery attempt first (no implementation recovered).** A task brief claimed a
+completed two-file `+217/-3` change that implemented this. No such implementation exists
+in any source inspected: the working tree and its diff stat, `git log --all`,
+`git reflog --all`, tags, stash, worktrees, 153 dangling blobs (all PNG textures plus
+`.gitignore`, `PLAN.md` and subagent markdown), the OpenCode snapshot pack store and its
+database, and the second `Documents/Projects/VoxelWorld` checkout (an older M1-M5 draft
+with no `water.py`). The `+217/-3` figure is the diff of the acceptance-review turn's own
+test edits (`tests/test_m15_water_fairness.py` +204, `tests/test_place_block.py` +13/-3),
+not of any commit work. The implementation below was written fresh.
+
+**What changed.**
+
+- `chunk.py` - `Chunk.apply_water_cells(...)`: batch form of `set_water_level` /
+  `clear_water`; writes the block grid, levels and sources for many cells in one
+  vectorised step and returns the occupancy-change mask.
+- `world.py` - `World.apply_water_batch(chunk_key, cells)`: batch form of `set_water`
+  with identical rules (never creates a chunk, never enters the external-edit log, never
+  invalidates its own job, skips `world_y < 0`) and the same dirty/neighbour
+  invalidation, computed once per touched chunk face instead of once per cell.
+- `water.py` - the job pipeline is now `flood -> solve -> prepare -> commit -> done`.
+  `prepare` groups the solved region into one write batch per chunk under the tick
+  budget; `commit` applies those batches under the tick budget. Both resume across ticks
+  and the batch order is the sorted chunk key. `is_finished()` is now reachable.
+- `main.py` - comment only: a committing tick marks chunks dirty and lets the frame
+  loop's bounded `reconcile()` publish the geometry, so the mesh budget and the water
+  budget are never spent in the same tick.
+
+**Consistency strategy, and the trade-off it makes.** Publication is atomic *per chunk*:
+all of a chunk's cells are applied in one vectorised write, so a chunk is never
+observable with its block grid and its water metadata disagreeing, and that chunk's mesh
+is only rebuilt after the chunk is complete. Atomic publication of the *whole region* and
+bounded per-frame work cannot both hold in this architecture, so the region is published
+chunk by chunk across a small number of frames; that is observable through
+`WaterSimulation.has_pending_work()`, which stays true until every batch is applied.
+`tests/test_m15_water_commit.py` asserts that no chunk was ever seen in a non-final state
+at the moment its batch landed, and that no chunk was ever applied twice.
+
+**Before / after** (`scripts/measure_water_commit.py`, 8 ms budget, renderer-free CPU).
+"Before" is the previous per-cell publication plus its in-tick `reconcile`, reproduced in
+a labelled scratch harness outside the repository so both algorithms ran the same cases
+on the same machine; the direct pre-change runs in the same session gave 18.95-19.95 ms
+for the multi-chunk cases.
+
+| case | before: commit | after: commit slice | before: worst committing tick | after: worst committing tick |
+|---|---|---|---|---|
+| one chunk, 2,048 cells | 12.02 ms (over budget 1/1) | 1.06 ms | 13.33 ms (1.7x) | 2.01 ms |
+| four chunks, 7,168 cells | 19.20 ms (1/1) | 3.31 ms | 21.83 ms (2.7x) | 5.72 ms |
+| four chunks, 7,168 cells, 256-cell budget | 19.00 ms (1/1) | 3.44 ms | 20.30 ms (2.5x) | 4.64 ms |
+| nine chunks, 8,192 cells | 20.58 ms (1/1) | 3.72 ms | 23.81 ms (3.0x) | 9.50 ms |
+| four chunks, whole region in one call (unbounded reference) | 18.76 ms | 3.24-3.48 ms | 74.09 ms | 58-61 ms (flood and solve unbounded) |
+
+Worst bounded commit slice across repeated runs: **3.86 ms** in the run recorded here.
+A `--repeat 3` rerun of the same command on the same machine (2026-10-12, final review)
+measured 4.29 ms median and 5.62 ms in the slowest single run, again with **0**
+over-budget commit slices; the slice cost is bounded by one chunk batch and does not
+approach the 8 ms budget in any run. Frames to complete a large commit: 11 for the
+four-chunk case (unchanged in the bounded case, 4 unbounded). The one tick above that in
+repeated runs (19.06 ms recorded; 21.88 ms in the final review's rerun) is attributed to
+a measured **gen2 GC pause of 16.96 ms**, not to water work: the per-tick stage breakdown
+stays at or below 9.5 ms.
+
+**Fairness under sustained edits** (same frame policy as `main.py`): 1 edit/frame ->
+water ticked 263/300 frames (the M15 review recorded 262/300), max 2 consecutive skips,
+dirty set <= 3, both queues drained in 77 frames after editing stopped; 2 edits/frame ->
+222/300, drained in 81; 4 edits/frame -> 151/300, max 2 consecutive skips, drained in 81.
+Deferring the commit's mesh rebuild out of the water tick did not starve it.
+
+**Tests.** `python -m pytest tests -q` -> **261 passed, 0 failed, 0 skipped** (re-confirmed
+at final review on the committed revision). One M15
+equivalence test that pinned the old synchronous in-commit rebuild
+(`test_water_commit_routes_through_the_bounded_reconcile`) now pins the deferred contract
+instead and asserts more than before (the chunk is queued dirty *and* no rebuild ran
+inside the tick); `tests/test_m15_water_commit.py` gained four tests for resumption,
+chunk-atomic publication, batch-order determinism and an edit arriving mid-publication.
+No test was skipped, deleted or weakened.
+
+**Not verified.** GPU cost and human-visible smoothness remain unmeasured (L1), and the
+residual region-proportional sub-steps are listed under L3.

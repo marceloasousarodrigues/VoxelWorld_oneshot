@@ -72,6 +72,41 @@ class Chunk:
         self.water_levels[local_x, local_y, local_z] = 0
         self.water_sources[local_x, local_y, local_z] = False
 
+    def apply_water_cells(self, local_x, local_y, local_z, levels, sources):
+        """Apply prepared water writes for many cells in one vectorised step.
+
+        ``local_x``/``local_y``/``local_z`` are parallel index arrays and
+        ``levels``/``sources`` carry the value for each cell. Cells with
+        ``level <= 0`` drain to AIR; cells with ``level > 0`` become WATER at
+        that level. This mirrors ``set_water``/``clear_water`` cell for cell, but
+        writes the whole batch as a handful of array operations, so the block
+        grid and the water metadata of a chunk can never be observed
+        disagreeing with each other.
+
+        Returns the boolean mask of the cells whose *occupancy* changed.
+        """
+        fill = levels > 0
+        drain = ~fill
+
+        # Advanced indexing copies, so this reads the pre-write state.
+        old_blocks = self.blocks[local_x, local_y, local_z]
+        changed = np.where(fill, old_blocks != BlockType.WATER,
+                          old_blocks == BlockType.WATER)
+
+        if fill.any():
+            self.blocks[local_x[fill], local_y[fill], local_z[fill]] = BlockType.WATER
+            self.water_levels[local_x[fill], local_y[fill], local_z[fill]] = np.clip(
+                levels[fill], 0, 8
+            )
+            self.water_sources[local_x[fill], local_y[fill], local_z[fill]] = sources[fill]
+
+        if drain.any():
+            self.blocks[local_x[drain], local_y[drain], local_z[drain]] = BlockType.AIR
+            self.water_levels[local_x[drain], local_y[drain], local_z[drain]] = 0
+            self.water_sources[local_x[drain], local_y[drain], local_z[drain]] = False
+
+        return changed
+
     def get_decoration(self, local_x: int, local_y: int, local_z: int) -> int:
         return int(self.decorations[local_x, local_y, local_z])
 

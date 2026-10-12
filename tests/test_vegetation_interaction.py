@@ -259,8 +259,10 @@ def test_breaking_a_tree_block_clears_it_and_regenerates_the_chunk_mesh():
 
     assert player.break_block() == (2, 0, 0)
     assert world.get_block(2, 0, 0) == BlockType.AIR
-    # break_block refreshes the world, so the edit is consumed by that refresh
-    # and the chunk now meshes to nothing.
+    # M15: break_block defers the mesh rebuild; the chunk is queued and the frame
+    # reconcile consumes it, after which the chunk meshes to nothing.
+    assert (0, 0, 0) in world.dirty_chunks
+    world.refresh()
     assert world.dirty_chunks == set()
     assert len(chunk._mesh_vertices) == 0
 
