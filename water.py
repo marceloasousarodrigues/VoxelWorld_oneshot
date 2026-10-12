@@ -317,17 +317,34 @@ class WaterSimulation:
                 self.enqueue(coord[0]+dx, coord[1]+dy, coord[2]+dz)
         self.world.changed_blocks.clear()
 
+    def seed_chunk_sources(self, chunk) -> int:
+        """Enqueue every permanent water source in one chunk.
+
+        M16 streaming loads chunks one at a time, so a newly loaded chunk's
+        sources must join the simulation without re-seeding the whole world.
+        Returns the number of source cells enqueued.
+        """
+        size_x = chunk.SIZE_X
+        size_y = chunk.SIZE_Y
+        size_z = chunk.SIZE_Z
+        base_x = chunk.chunk_x * size_x
+        base_y = chunk.chunk_y * size_y
+        base_z = chunk.chunk_z * size_z
+        sources = chunk.water_sources
+
+        count = 0
+        for x in range(size_x):
+            for y in range(size_y):
+                for z in range(size_z):
+                    if sources[x, y, z]:
+                        self.enqueue(base_x + x, base_y + y, base_z + z)
+                        count += 1
+        return count
+
     def seed_all_sources(self) -> None:
         """Seed the simulation with all loaded source cells (startup)."""
         for chunk in self.world.chunks.values():
-            for x in range(16):
-                for y in range(16):
-                    for z in range(16):
-                        if chunk.get_water_source(x, y, z):
-                            world_x = chunk.chunk_x * 16 + x
-                            world_y = chunk.chunk_y * 16 + y
-                            world_z = chunk.chunk_z * 16 + z
-                            self.enqueue(world_x, world_y, world_z)
+            self.seed_chunk_sources(chunk)
 
     def tick(self) -> int:
         """

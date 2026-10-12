@@ -43,6 +43,13 @@ class World:
         # External block edits awaiting water re-evaluation (world coordinates)
         self.changed_blocks = set()
 
+        # M16 edit overlay. Player edits are the only non-regenerable chunk
+        # state, so they are recorded here as world-coordinate overrides and
+        # re-applied when a chunk is (re)generated after an unload. Terrain,
+        # lake water and vegetation are regenerated deterministically instead.
+        self.block_overrides = {}
+        self.decoration_overrides = {}
+
         # M15 deferred reconcile state.
         self.mesh_budget_ms = (
             self.DEFAULT_MESH_BUDGET_MS
@@ -224,6 +231,239 @@ class World:
         elif local_z == 15 and (chunk_x, chunk_y, chunk_z + 1) in self.chunks:
             self.dirty_chunks.add((chunk_x, chunk_y, chunk_z + 1))
 
+    def _dirty_loaded_neighbours(self, chunk_x, chunk_y, chunk_z) -> None:
+        """Mark every *loaded* face-neighbour of a chunk for a mesh rebuild.
+
+        The mesher treats an unloaded neighbour as AIR, so a chunk entering or
+        leaving the world changes the boundary faces its neighbours must show.
+        """
+        for dx, dy, dz in (
+            (1, 0, 0),
+            (-1, 0, 0),
+            (0, 1, 0),
+            (0, -1, 0),
+            (0, 0, 1),
+            (0, 0, -1),
+        ):
+            key = (chunk_x + dx, chunk_y + dy, chunk_z + dz)
+            if key in self.chunks:
+                self.dirty_chunks.add(key)
+
+    def apply_overrides(self, chunk) -> None:
+        """Re-apply recorded player edits to a freshly generated chunk.
+
+        Called only from ``load_chunk`` after generation. A block override also
+        clears the cell's water metadata, exactly as ``set_block`` does, so a
+        block placed over regenerated lake water does not come back as water.
+        """
+        if not self.block_overrides and not self.decoration_overrides:
+            return
+
+        base_x = chunk.chunk_x * Chunk.SIZE_X
+        base_y = chunk.chunk_y * Chunk.SIZE_Y
+        base_z = chunk.chunk_z * Chunk.SIZE_Z
+
+        for (world_x, world_y, world_z), block_type in self.block_overrides.items():
+            local_x = world_x - base_x
+            local_y = world_y - base_y
+            local_z = world_z - base_z
+            if (
+                0 <= local_x < Chunk.SIZE_X
+                and 0 <= local_y < Chunk.SIZE_Y
+                and 0 <= local_z < Chunk.SIZE_Z
+            ):
+                chunk.set_block(local_x, local_y, local_z, block_type)
+                chunk.set_water_level(local_x, local_y, local_z, 0)
+                chunk.set_water_source(local_x, local_y, local_z, False)
+
+        for (world_x, world_y, world_z), value in self.decoration_overrides.items():
+            local_x = world_x - base_x
+            local_y = world_y - base_y
+            local_z = world_z - base_z
+            if (
+                0 <= local_x < Chunk.SIZE_X
+                and 0 <= local_y < Chunk.SIZE_Y
+                and 0 <= local_z < Chunk.SIZE_Z
+            ):
+                chunk.set_decoration(local_x, local_y, local_z, value)
+
+    def is_chunk_complete(self, chunk_x: int, chunk_y: int, chunk_z: int, terrain_generator=None) -> bool:
+        """True when the registry already holds a finished chunk at this key.
+
+        A chunk created on demand by ``get_chunk`` is *not* finished: when a
+        generator is available it is populated by a load instead of being used
+        empty (M16 consistency).
+        """
+        existing = self.chunks.get((chunk_x, chunk_y, chunk_z))
+        return existing is not None and (
+            terrain_generator is None or getattr(existing, "generated", False)
+        )
+
+    def begin_chunk_load(
+        self, chunk_x: int, chunk_y: int, chunk_z: int, terrain_generator=None
+    ) -> Chunk:
+        """
+        Stage A of a chunk load: register the chunk and generate its data.
+
+        Terrain blocks, vegetation and the recorded player edits are all applied
+        here, so the chunk's logical content is complete and authoritative the
+        moment this returns: it can be collided with, raycast against and edited
+        immediately. Only its geometry is still empty, and an empty entity
+        already owns the chunk so the one-entity-per-loaded-chunk invariant holds
+        without a gap. ``finish_chunk_load`` fills that entity in on a later
+        frame (M16 stutter fix 3).
+
+        Returns:
+            The registered Chunk (data complete, geometry pending)
+        """
+        key = (chunk_x, chunk_y, chunk_z)
+        # A placeholder created on demand by ``get_chunk`` is not a finished
+        # chunk: when a generator is available it is populated here instead of
+        # being returned empty (M16 consistency).
+        if self.is_chunk_complete(chunk_x, chunk_y, chunk_z, terrain_generator):
+            return self.chunks[key]
+
+        if terrain_generator is not None:
+            chunk = terrain_generator.generate_chunk(
+                self, chunk_x, chunk_y, chunk_z
+            )
+        else:
+            chunk = self.get_chunk(chunk_x, chunk_y, chunk_z)
+
+        # generate_chunk registers through get_chunk; keep that guaranteed even
+        # for a generator that does not.
+        if key not in self.chunks:
+            self.chunks[key] = chunk
+
+        self.apply_overrides(chunk)
+
+        from chunk_entity import create_chunk_entity_placeholder
+        from coordinate_system import chunk_to_world_coords
+
+        create_chunk_entity_placeholder(
+            chunk,
+            chunk_to_world_coords(chunk_x, chunk_y, chunk_z),
+            world=self,
+        )
+        return chunk
+
+    def finish_chunk_load(self, chunk: Chunk) -> Chunk:
+        """
+        Stage B of a chunk load: build the chunk's mesh and re-cull neighbours.
+
+        Fills the entity ``begin_chunk_load`` created, marks the loaded
+        neighbours dirty so they re-cull the faces the new chunk exposes, and
+        bumps the water edit version so a job built on the old solver domain
+        cannot publish (see ``WaterSimulation.tick``'s version gate).
+
+        Returns:
+            The same Chunk, now rendered
+        """
+        from chunk_entity import apply_chunk_mesh
+
+        apply_chunk_mesh(chunk, world=self)
+
+        # Loaded neighbours must re-cull their faces against the new chunk.
+        self._dirty_loaded_neighbours(chunk.chunk_x, chunk.chunk_y, chunk.chunk_z)
+
+        # The water solver's domain changed; a job built on the old domain must
+        # not publish (see WaterSimulation.tick's version gate).
+        self.water_edit_version += 1
+        return chunk
+
+    def load_chunk(
+        self, chunk_x: int, chunk_y: int, chunk_z: int, terrain_generator=None
+    ) -> Chunk:
+        """
+        Bring a chunk into the world, exactly once.
+
+        The chunk is generated (when a generator is supplied), its recorded
+        player edits are re-applied, it is registered in the authoritative
+        ``chunks`` registry, and one rendered entity is created for it. Loading
+        an already-registered, already-generated chunk is a no-op that returns
+        the existing object, which is what guarantees a chunk is never created or
+        rendered twice.
+
+        This is the synchronous, single-frame form. Streaming uses
+        ``begin_chunk_load`` followed by ``finish_chunk_load`` so no single frame
+        carries both halves (M16 stutter fix 3); ``tests/test_m16_staged_load.py``
+        pins the two to the same resulting world state.
+
+        Returns:
+            The registered Chunk
+        """
+        key = (chunk_x, chunk_y, chunk_z)
+        if self.is_chunk_complete(chunk_x, chunk_y, chunk_z, terrain_generator):
+            return self.chunks[key]
+
+        if terrain_generator is not None:
+            chunk = terrain_generator.generate_chunk(
+                self, chunk_x, chunk_y, chunk_z
+            )
+        else:
+            chunk = self.get_chunk(chunk_x, chunk_y, chunk_z)
+
+        # generate_chunk registers through get_chunk; keep that guaranteed even
+        # for a generator that does not.
+        if key not in self.chunks:
+            self.chunks[key] = chunk
+
+        self.apply_overrides(chunk)
+
+        from chunk_entity import create_chunk_entity
+        from coordinate_system import chunk_to_world_coords
+
+        create_chunk_entity(
+            chunk,
+            chunk_to_world_coords(chunk_x, chunk_y, chunk_z),
+            world=self,
+        )
+
+        # Loaded neighbours must re-cull their faces against the new chunk.
+        self._dirty_loaded_neighbours(chunk_x, chunk_y, chunk_z)
+
+        # The water solver's domain changed; a job built on the old domain must
+        # not publish (see WaterSimulation.tick's version gate).
+        self.water_edit_version += 1
+        return chunk
+
+    def unload_chunk(self, chunk_x: int, chunk_y: int, chunk_z: int) -> bool:
+        """
+        Remove a chunk from the world and release its rendered resources.
+
+        The chunk is removed from the authoritative registry and the dirty set,
+        its opaque entity and transparent child are destroyed, and its loaded
+        neighbours are marked dirty so their now-exposed faces are re-rendered.
+        Player edits are preserved by the overlay (``set_block``).
+
+        Returns:
+            True when a chunk was unloaded, False when none was registered
+        """
+        key = (chunk_x, chunk_y, chunk_z)
+        chunk = self.chunks.pop(key, None)
+        if chunk is None:
+            return False
+
+        self.dirty_chunks.discard(key)
+        if self.recent_edit_chunk == key:
+            self.recent_edit_chunk = None
+
+        for attribute in ("entity", "entity_transparent"):
+            entity = getattr(chunk, attribute, None)
+            if entity is None:
+                continue
+            try:
+                from ursina import destroy
+
+                destroy(entity)
+            except Exception:
+                pass
+            setattr(chunk, attribute, None)
+
+        self._dirty_loaded_neighbours(chunk_x, chunk_y, chunk_z)
+        self.water_edit_version += 1
+        return True
+
     def set_block(self, world_x: int, world_y: int, world_z: int, block_type: int) -> None:
         """
         Set the block type at a world coordinate.
@@ -256,8 +496,19 @@ class World:
         # support a plant, the decoration directly above it, so a tuft never
         # floats once its support is removed.
         chunk.clear_decoration(local_x, local_y, local_z)
-        if not is_block_solid(block_type) and local_y + 1 < Chunk.SIZE_Y:
+        above_is_cleared = (
+            not is_block_solid(block_type) and local_y + 1 < Chunk.SIZE_Y
+        )
+        if above_is_cleared:
             chunk.clear_decoration(local_x, local_y + 1, local_z)
+
+        # M16: an external edit is authoritative, non-regenerable state. Record
+        # it in the overlay so it survives an unload/re-entry, mirroring exactly
+        # what this method just wrote to the chunk.
+        self.block_overrides[(world_x, world_y, world_z)] = int(block_type)
+        self.decoration_overrides[(world_x, world_y, world_z)] = 0
+        if above_is_cleared:
+            self.decoration_overrides[(world_x, world_y + 1, world_z)] = 0
 
         if old_block != block_type:
             self.changed_blocks.add((world_x, world_y, world_z))
