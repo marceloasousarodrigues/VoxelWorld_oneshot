@@ -1,0 +1,30 @@
+# VoxelWorld - pinned dependency manifest
+#
+# Supported interpreter: CPython 3.14 (verified on 3.14.5, Windows x64).
+#   - ursina 8.3.0 requires Python >= 3.12
+#   - numpy 2.4.4 requires Python >= 3.11
+#
+# Install everything (runtime + test) with a single command:
+#   python -m venv .venv
+#   python -m pip install -r requirements.txt
+#
+# Run the suite from the repository root; collection is configured by pytest.ini:
+#   python -m pytest -q
+#   python -m pytest tests -q
+#
+# Every pin below is the version installed in the environment that produced the
+# verified M16 checkpoint (`python -m pytest tests -q` -> 334 passed). Do not
+# loosen a pin without re-running the full suite.
+
+# --- runtime: imported by the application modules ---
+numpy==2.4.4
+panda3d==1.10.16
+ursina==8.3.0
+
+# --- test and tooling: imported by tests/ and scripts/ ---
+pytest==9.1.1
+Pillow==12.2.0
+
+# ursina's own transitive requirements are resolved by pip and are not pinned
+# here. The verified environment contained panda3d-gltf 1.3.0, pyperclip 1.11.0,
+# screeninfo 0.8.1 and sswg 4.3.0; this project does not import any of them.

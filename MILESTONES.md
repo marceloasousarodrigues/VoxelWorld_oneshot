@@ -2449,3 +2449,57 @@ version.
 - The per-frame floor also shifted between the before and after sessions in scenarios with
   no loads, meshes or full collections; that shift is attributed to machine state, not to
   these fixes.
+
+---
+
+## M16 Follow-up — Test Infrastructure Hardening (2026-10-13)
+
+**Status: COMPLETE** (root-level `pytest` unblocked, dependencies pinned, CI added).
+
+Not an M17 feature. The M16 checkpoint was verified on a single machine whose dependencies
+were never declared, and a stray non-doctest file in the repository root aborted a bare
+`pytest` run during collection.
+
+### Verified environment
+
+Read from package metadata (`importlib.metadata`), not from `ursina.__version__`: Ursina
+exposes no `__version__` attribute, so the engine version must come from the installed
+distribution. This is the environment in which the 334 M16 tests and the infrastructure
+below were verified, and it is what `requirements.txt` pins.
+
+| Component | Version |
+|---|---|
+| Python | 3.14.5 (CPython, MSC v.1944 64-bit, Windows 11 x64) |
+| Ursina | 8.3.0 |
+| Panda3D | 1.10.16 |
+| NumPy | 2.4.4 |
+| pytest | 9.1.1 |
+| Pillow | 12.2.0 |
+
+The same versions installed from `requirements.txt` in a clean CPython 3.14 virtual
+environment, where both test commands passed; that environment was deleted afterwards.
+
+### Infrastructure added
+
+- `pytest.ini` — clears pytest's implicit `test*.txt` doctest glob, which collected the
+  stray UTF-16 `tests_final_report.txt` report and aborted collection.
+- `requirements.txt` — the pinned manifest above, plus ursina's transitive requirements
+  (`panda3d-gltf` 1.3.0, `pyperclip` 1.11.0, `screeninfo` 0.8.1, `sswg` 4.3.0), which
+  resolve through pip and are not pinned.
+- `tests/test_pytest_collection_health.py` — regression check that `pytest` and
+  `pytest tests` both collect cleanly from the repository root without dropping tests.
+- `.github/workflows/tests.yml` — Windows CI: install the manifest, compile, run the suite.
+
+### Verification
+
+- `python -m pytest -q` -> **344 passed** (334 M16 tests + `test_world.py`'s 8 + 2 new).
+- `python -m pytest tests -q` -> **336 passed**.
+- `python -m compileall -q .` -> exit 0, no output.
+- Collected node-id sets diffed before and after the change: 0 removed, 2 added.
+
+### Limitations (stated, not claimed)
+
+- The CI workflow has **not been executed on GitHub**; only its three commands were run
+  locally on the verified Windows x64 environment.
+- The pins and the suite are verified on CPython 3.14 / Windows x64 only; no other
+  platform or interpreter version was tested.
