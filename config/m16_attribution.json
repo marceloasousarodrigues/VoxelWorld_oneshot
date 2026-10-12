@@ -1,0 +1,929 @@
+{
+  "meta": {
+    "windowed": false,
+    "count": 8,
+    "repeats": 3,
+    "note": "phase timings are unprofiled wall clock and are the magnitudes to trust; the cProfile sections are for attributing those magnitudes to functions and inflate absolute times."
+  },
+  "phases": {
+    "terrain_blocks": {
+      "calls": 24,
+      "median_ms": 1.6177999787032604,
+      "mean_ms": 1.7910583410412073,
+      "p95_ms": 2.385900355875492,
+      "min_ms": 1.5789000317454338,
+      "max_ms": 2.7370001189410686,
+      "total_ms": 42.985400184988976
+    },
+    "vegetation": {
+      "calls": 24,
+      "median_ms": 7.152550155296922,
+      "mean_ms": 7.516212509168933,
+      "p95_ms": 10.015300009399652,
+      "min_ms": 4.191400017589331,
+      "max_ms": 12.186000123620033,
+      "total_ms": 180.3891002200544
+    },
+    "mesh_split": {
+      "calls": 24,
+      "median_ms": 6.088749971240759,
+      "mean_ms": 5.978470765209447,
+      "p95_ms": 7.203000131994486,
+      "min_ms": 3.5712001845240593,
+      "max_ms": 7.347799837589264,
+      "total_ms": 143.4832983650267
+    },
+    "mesh_lists": {
+      "calls": 24,
+      "median_ms": 2.303999848663807,
+      "mean_ms": 2.5285959127359092,
+      "p95_ms": 3.905900288373232,
+      "min_ms": 1.4186999760568142,
+      "max_ms": 3.989200107753277,
+      "total_ms": 60.68630190566182
+    },
+    "transparent_scan": {
+      "calls": 24,
+      "median_ms": 6.201750133186579,
+      "mean_ms": 6.842058307180802,
+      "p95_ms": 10.642199777066708,
+      "min_ms": 6.0132998041808605,
+      "max_ms": 11.530899908393621,
+      "total_ms": 164.20939937233925
+    },
+    "entity_full": {
+      "calls": 24,
+      "median_ms": 16.12195000052452,
+      "mean_ms": 16.866587529269356,
+      "p95_ms": 21.94229979068041,
+      "min_ms": 11.864200234413147,
+      "max_ms": 31.39610029757023,
+      "total_ms": 404.7981007024646
+    },
+    "refresh": {
+      "calls": 24,
+      "median_ms": 9.030550019815564,
+      "mean_ms": 8.867199959543845,
+      "p95_ms": 10.6305000372231,
+      "min_ms": 5.500399973243475,
+      "max_ms": 10.717699769884348,
+      "total_ms": 212.81279902905226
+    }
+  },
+  "highlight": {
+    "create_highlight": {
+      "calls": 40,
+      "median_ms": 2.2032998967915773,
+      "mean_ms": 2.4609175277873874,
+      "p95_ms": 3.5729999653995037,
+      "min_ms": 2.0481999963521957,
+      "max_ms": 3.9593996480107307,
+      "total_ms": 98.4367011114955
+    },
+    "update_highlight": {
+      "calls": 40,
+      "median_ms": 0.008600065484642982,
+      "mean_ms": 0.00977999297901988,
+      "p95_ms": 0.01819990575313568,
+      "min_ms": 0.007799826562404633,
+      "max_ms": 0.0212998129427433,
+      "total_ms": 0.3911997191607952
+    },
+    "remove_highlight": {
+      "calls": 40,
+      "median_ms": 0.05830009467899799,
+      "mean_ms": 0.06734500639140606,
+      "p95_ms": 0.11119991540908813,
+      "min_ms": 0.05179969593882561,
+      "max_ms": 0.21120021119713783,
+      "total_ms": 2.6938002556562424
+    }
+  },
+  "cold_load_wall": {
+    "ms_per_call_median": 25.847974990028888,
+    "ms_per_call_min": 24.384025018662214,
+    "ms_per_call_max": 27.044962451327592,
+    "samples": [
+      25.847974990028888,
+      27.044962451327592,
+      24.384025018662214
+    ],
+    "calls": 24
+  },
+  "cold_load_profile": {
+    "profiled_total_ms": 411.9210997596383,
+    "profiled_ms_per_call": 51.49013746995479,
+    "top_tottime": [
+      {
+        "function": "is_block_transparent",
+        "location": "block_data.py:107",
+        "ncalls": 32768,
+        "tottime_ms": 61.2887,
+        "cumtime_ms": 66.31660000000001,
+        "tottime_per_call_us": 1.8703826904296876
+      },
+      {
+        "function": "_noise",
+        "location": "terrain_generation.py:28",
+        "ncalls": 41070,
+        "tottime_ms": 50.19840000000001,
+        "cumtime_ms": 84.7179,
+        "tottime_per_call_us": 1.222264426588751
+      },
+      {
+        "function": "_add_exposed_faces_to_split",
+        "location": "chunk_mesh.py:384",
+        "ncalls": 13308,
+        "tottime_ms": 43.545,
+        "cumtime_ms": 60.0424,
+        "tottime_per_call_us": 3.272091974752029
+      },
+      {
+        "function": "<built-in method math.sin>",
+        "location": "~:0",
+        "ncalls": 246420,
+        "tottime_ms": 34.5195,
+        "cumtime_ms": 34.5195,
+        "tottime_per_call_us": 0.14008400292184076
+      },
+      {
+        "function": "surface_height",
+        "location": "terrain_generation.py:49",
+        "ncalls": 13690,
+        "tottime_ms": 21.2922,
+        "cumtime_ms": 110.19850000000001,
+        "tottime_per_call_us": 1.5553104455807159
+      },
+      {
+        "function": "hash32",
+        "location": "vegetation.py:69",
+        "ncalls": 22050,
+        "tottime_ms": 18.768900000000002,
+        "cumtime_ms": 34.184200000000004,
+        "tottime_per_call_us": 0.8511972789115647
+      },
+      {
+        "function": "<method 'extend' of 'list' objects>",
+        "location": "~:0",
+        "ncalls": 109527,
+        "tottime_ms": 18.740700000000004,
+        "cumtime_ms": 18.740700000000004,
+        "tottime_per_call_us": 0.17110575474540524
+      },
+      {
+        "function": "_mix64",
+        "location": "vegetation.py:61",
+        "ncalls": 22050,
+        "tottime_ms": 15.415300000000002,
+        "cumtime_ms": 15.415300000000002,
+        "tottime_per_call_us": 0.6991065759637188
+      },
+      {
+        "function": "tree_candidate",
+        "location": "vegetation.py:115",
+        "ncalls": 4889,
+        "tottime_ms": 14.4647,
+        "cumtime_ms": 84.74810000000001,
+        "tottime_per_call_us": 2.9586213949682962
+      },
+      {
+        "function": "create_chunk_entity",
+        "location": "chunk_entity.py:75",
+        "ncalls": 8,
+        "tottime_ms": 13.3326,
+        "cumtime_ms": 202.5157,
+        "tottime_per_call_us": 1666.575
+      },
+      {
+        "function": "_ravel",
+        "location": "mesh.py:79",
+        "ncalls": 24,
+        "tottime_ms": 12.061700000000002,
+        "cumtime_ms": 23.7696,
+        "tottime_per_call_us": 502.5708333333334
+      },
+      {
+        "function": "generate_chunk_terrain",
+        "location": "terrain_generation.py:159",
+        "ncalls": 8,
+        "tottime_ms": 10.948900000000002,
+        "cumtime_ms": 36.6898,
+        "tottime_per_call_us": 1368.6125000000002
+      },
+      {
+        "function": "set_block",
+        "location": "chunk.py:62",
+        "ncalls": 33632,
+        "tottime_ms": 8.828600000000002,
+        "cumtime_ms": 8.828600000000002,
+        "tottime_per_call_us": 0.262505946717412
+      },
+      {
+        "function": "generate_chunk_mesh_split",
+        "location": "chunk_mesh.py:147",
+        "ncalls": 8,
+        "tottime_ms": 8.0099,
+        "cumtime_ms": 75.8819,
+        "tottime_per_call_us": 1001.2375000000001
+      },
+      {
+        "function": "_mesh_from_lists",
+        "location": "chunk_entity.py:57",
+        "ncalls": 8,
+        "tottime_ms": 7.2247,
+        "cumtime_ms": 39.3045,
+        "tottime_per_call_us": 903.0875000000001
+      },
+      {
+        "function": "<method 'get' of 'dict' objects>",
+        "location": "~:0",
+        "ncalls": 36313,
+        "tottime_ms": 5.6311,
+        "cumtime_ms": 5.6311,
+        "tottime_per_call_us": 0.15507118662737862
+      },
+      {
+        "function": "_set_array_data",
+        "location": "mesh.py:88",
+        "ncalls": 24,
+        "tottime_ms": 5.5406,
+        "cumtime_ms": 5.5633,
+        "tottime_per_call_us": 230.85833333333335
+      },
+      {
+        "function": "add",
+        "location": "vegetation.py:216",
+        "ncalls": 4880,
+        "tottime_ms": 4.120100000000001,
+        "cumtime_ms": 45.988600000000005,
+        "tottime_per_call_us": 0.8442827868852459
+      },
+      {
+        "function": "in_lake",
+        "location": "terrain_generation.py:80",
+        "ncalls": 13690,
+        "tottime_ms": 3.8622,
+        "cumtime_ms": 3.8622,
+        "tottime_per_call_us": 0.282118334550767
+      },
+      {
+        "function": "_generate_trees_for_chunk",
+        "location": "vegetation.py:353",
+        "ncalls": 8,
+        "tottime_ms": 3.5544000000000002,
+        "cumtime_ms": 146.6227,
+        "tottime_per_call_us": 444.3
+      },
+      {
+        "function": "<built-in method builtins.len>",
+        "location": "~:0",
+        "ncalls": 27900,
+        "tottime_ms": 3.3752,
+        "cumtime_ms": 3.3752,
+        "tottime_per_call_us": 0.12097491039426524
+      },
+      {
+        "function": "_generate_tufts_for_chunk",
+        "location": "vegetation.py:400",
+        "ncalls": 8,
+        "tottime_ms": 2.9992,
+        "cumtime_ms": 25.654100000000003,
+        "tottime_per_call_us": 374.9
+      },
+      {
+        "function": "tree_blocks",
+        "location": "vegetation.py:190",
+        "ncalls": 83,
+        "tottime_ms": 2.9169,
+        "cumtime_ms": 52.485800000000005,
+        "tottime_per_call_us": 35.14337349397591
+      },
+      {
+        "function": "_add_cross_planes",
+        "location": "chunk_mesh.py:304",
+        "ncalls": 574,
+        "tottime_ms": 2.7617000000000003,
+        "cumtime_ms": 3.9017,
+        "tottime_per_call_us": 4.811324041811847
+      },
+      {
+        "function": "cell_owner",
+        "location": "vegetation.py:249",
+        "ncalls": 4631,
+        "tottime_ms": 2.3616,
+        "cumtime_ms": 84.3912,
+        "tottime_per_call_us": 0.509954653422587
+      },
+      {
+        "function": "tree_owns_cell",
+        "location": "vegetation.py:276",
+        "ncalls": 4631,
+        "tottime_ms": 2.3239,
+        "cumtime_ms": 86.7151,
+        "tottime_per_call_us": 0.5018138630965234
+      },
+      {
+        "function": "get_block",
+        "location": "chunk.py:59",
+        "ncalls": 5651,
+        "tottime_ms": 2.2855000000000003,
+        "cumtime_ms": 2.2855000000000003,
+        "tottime_per_call_us": 0.40444169173597594
+      },
+      {
+        "function": "is_loaded",
+        "location": "world.py:180",
+        "ncalls": 5383,
+        "tottime_ms": 2.2522,
+        "cumtime_ms": 3.3898,
+        "tottime_per_call_us": 0.4183912316552109
+      },
+      {
+        "function": "<built-in method builtins.min>",
+        "location": "~:0",
+        "ncalls": 13690,
+        "tottime_ms": 2.1848,
+        "cumtime_ms": 2.1848,
+        "tottime_per_call_us": 0.159590942293645
+      },
+      {
+        "function": "<built-in method builtins.getattr>",
+        "location": "~:0",
+        "ncalls": 13908,
+        "tottime_ms": 2.1334,
+        "cumtime_ms": 2.1334,
+        "tottime_per_call_us": 0.15339373022720737
+      }
+    ],
+    "top_cumtime": [
+      {
+        "function": "<lambda>",
+        "location": "profile_m16_attribution.py:394",
+        "ncalls": 8,
+        "tottime_ms": 0.019600000000000003,
+        "cumtime_ms": 411.9041,
+        "tottime_per_call_us": 2.45
+      },
+      {
+        "function": "load_chunk",
+        "location": "world.py:290",
+        "ncalls": 8,
+        "tottime_ms": 0.273,
+        "cumtime_ms": 411.88450000000006,
+        "tottime_per_call_us": 34.125
+      },
+      {
+        "function": "generate_chunk",
+        "location": "terrain_generation.py:129",
+        "ncalls": 8,
+        "tottime_ms": 0.0492,
+        "cumtime_ms": 209.04650000000004,
+        "tottime_per_call_us": 6.15
+      },
+      {
+        "function": "create_chunk_entity",
+        "location": "chunk_entity.py:75",
+        "ncalls": 8,
+        "tottime_ms": 13.3326,
+        "cumtime_ms": 202.5157,
+        "tottime_per_call_us": 1666.575
+      },
+      {
+        "function": "generate_vegetation_for_chunk",
+        "location": "vegetation.py:317",
+        "ncalls": 8,
+        "tottime_ms": 0.0307,
+        "cumtime_ms": 172.3075,
+        "tottime_per_call_us": 3.8375
+      },
+      {
+        "function": "_generate_trees_for_chunk",
+        "location": "vegetation.py:353",
+        "ncalls": 8,
+        "tottime_ms": 3.5544000000000002,
+        "cumtime_ms": 146.6227,
+        "tottime_per_call_us": 444.3
+      },
+      {
+        "function": "surface_height",
+        "location": "terrain_generation.py:49",
+        "ncalls": 13690,
+        "tottime_ms": 21.2922,
+        "cumtime_ms": 110.19850000000001,
+        "tottime_per_call_us": 1.5553104455807159
+      },
+      {
+        "function": "tree_owns_cell",
+        "location": "vegetation.py:276",
+        "ncalls": 4631,
+        "tottime_ms": 2.3239,
+        "cumtime_ms": 86.7151,
+        "tottime_per_call_us": 0.5018138630965234
+      },
+      {
+        "function": "tree_candidate",
+        "location": "vegetation.py:115",
+        "ncalls": 4889,
+        "tottime_ms": 14.4647,
+        "cumtime_ms": 84.74810000000001,
+        "tottime_per_call_us": 2.9586213949682962
+      },
+      {
+        "function": "_noise",
+        "location": "terrain_generation.py:28",
+        "ncalls": 41070,
+        "tottime_ms": 50.19840000000001,
+        "cumtime_ms": 84.7179,
+        "tottime_per_call_us": 1.222264426588751
+      },
+      {
+        "function": "cell_owner",
+        "location": "vegetation.py:249",
+        "ncalls": 4631,
+        "tottime_ms": 2.3616,
+        "cumtime_ms": 84.3912,
+        "tottime_per_call_us": 0.509954653422587
+      },
+      {
+        "function": "generate_chunk_mesh_split",
+        "location": "chunk_mesh.py:147",
+        "ncalls": 8,
+        "tottime_ms": 8.0099,
+        "cumtime_ms": 75.8819,
+        "tottime_per_call_us": 1001.2375000000001
+      },
+      {
+        "function": "is_block_transparent",
+        "location": "block_data.py:107",
+        "ncalls": 32768,
+        "tottime_ms": 61.2887,
+        "cumtime_ms": 66.31660000000001,
+        "tottime_per_call_us": 1.8703826904296876
+      },
+      {
+        "function": "_add_exposed_faces_to_split",
+        "location": "chunk_mesh.py:384",
+        "ncalls": 13308,
+        "tottime_ms": 43.545,
+        "cumtime_ms": 60.0424,
+        "tottime_per_call_us": 3.272091974752029
+      },
+      {
+        "function": "tree_blocks",
+        "location": "vegetation.py:190",
+        "ncalls": 83,
+        "tottime_ms": 2.9169,
+        "cumtime_ms": 52.485800000000005,
+        "tottime_per_call_us": 35.14337349397591
+      },
+      {
+        "function": "add",
+        "location": "vegetation.py:216",
+        "ncalls": 4880,
+        "tottime_ms": 4.120100000000001,
+        "cumtime_ms": 45.988600000000005,
+        "tottime_per_call_us": 0.8442827868852459
+      },
+      {
+        "function": "_mesh_from_lists",
+        "location": "chunk_entity.py:57",
+        "ncalls": 8,
+        "tottime_ms": 7.2247,
+        "cumtime_ms": 39.3045,
+        "tottime_per_call_us": 903.0875000000001
+      },
+      {
+        "function": "generate_chunk_terrain",
+        "location": "terrain_generation.py:159",
+        "ncalls": 8,
+        "tottime_ms": 10.948900000000002,
+        "cumtime_ms": 36.6898,
+        "tottime_per_call_us": 1368.6125000000002
+      },
+      {
+        "function": "<built-in method math.sin>",
+        "location": "~:0",
+        "ncalls": 246420,
+        "tottime_ms": 34.5195,
+        "cumtime_ms": 34.5195,
+        "tottime_per_call_us": 0.14008400292184076
+      },
+      {
+        "function": "hash32",
+        "location": "vegetation.py:69",
+        "ncalls": 22050,
+        "tottime_ms": 18.768900000000002,
+        "cumtime_ms": 34.184200000000004,
+        "tottime_per_call_us": 0.8511972789115647
+      }
+    ]
+  },
+  "mesh_rebuild_profile": {
+    "profiled_total_ms": 116.75840010866523,
+    "profiled_ms_per_call": 14.594800013583153,
+    "top_tottime": [
+      {
+        "function": "_add_exposed_faces_to_split",
+        "location": "chunk_mesh.py:384",
+        "ncalls": 14266,
+        "tottime_ms": 43.395900000000005,
+        "cumtime_ms": 61.48740000000001,
+        "tottime_per_call_us": 3.041910836954998
+      },
+      {
+        "function": "<method 'extend' of 'list' objects>",
+        "location": "~:0",
+        "ncalls": 102135,
+        "tottime_ms": 16.594,
+        "cumtime_ms": 16.594,
+        "tottime_per_call_us": 0.1624712390463602
+      },
+      {
+        "function": "_ravel",
+        "location": "mesh.py:79",
+        "ncalls": 36,
+        "tottime_ms": 10.995600000000001,
+        "cumtime_ms": 21.6386,
+        "tottime_per_call_us": 305.43333333333334
+      },
+      {
+        "function": "generate_chunk_mesh_split",
+        "location": "chunk_mesh.py:147",
+        "ncalls": 8,
+        "tottime_ms": 7.779800000000001,
+        "cumtime_ms": 77.30730000000001,
+        "tottime_per_call_us": 972.4750000000001
+      },
+      {
+        "function": "refresh",
+        "location": "chunk.py:125",
+        "ncalls": 8,
+        "tottime_ms": 6.1002,
+        "cumtime_ms": 116.58500000000001,
+        "tottime_per_call_us": 762.525
+      },
+      {
+        "function": "_set_array_data",
+        "location": "mesh.py:88",
+        "ncalls": 36,
+        "tottime_ms": 5.3660000000000005,
+        "cumtime_ms": 5.3923,
+        "tottime_per_call_us": 149.05555555555554
+      },
+      {
+        "function": "<built-in method builtins.len>",
+        "location": "~:0",
+        "ncalls": 29780,
+        "tottime_ms": 3.6892,
+        "cumtime_ms": 3.6892,
+        "tottime_per_call_us": 0.12388179986568168
+      },
+      {
+        "function": "is_loaded",
+        "location": "world.py:180",
+        "ncalls": 5555,
+        "tottime_ms": 2.3331000000000004,
+        "cumtime_ms": 3.3437,
+        "tottime_per_call_us": 0.42000000000000004
+      },
+      {
+        "function": "get_block",
+        "location": "world.py:155",
+        "ncalls": 2387,
+        "tottime_ms": 2.2632,
+        "cumtime_ms": 4.050300000000001,
+        "tottime_per_call_us": 0.9481357352325094
+      },
+      {
+        "function": "_add_cross_planes",
+        "location": "chunk_mesh.py:304",
+        "ncalls": 552,
+        "tottime_ms": 2.2431,
+        "cumtime_ms": 3.3302,
+        "tottime_per_call_us": 4.063586956521739
+      },
+      {
+        "function": "<built-in method builtins.getattr>",
+        "location": "~:0",
+        "ncalls": 14506,
+        "tottime_ms": 2.1111000000000004,
+        "cumtime_ms": 2.1145,
+        "tottime_per_call_us": 0.1455328829449883
+      },
+      {
+        "function": "model_setter",
+        "location": "entity.py:213",
+        "ncalls": 16,
+        "tottime_ms": 1.7235000000000003,
+        "cumtime_ms": 2.5753,
+        "tottime_per_call_us": 107.71875000000001
+      },
+      {
+        "function": "get_chunk_containing_world_coords",
+        "location": "coordinate_system.py:10",
+        "ncalls": 7942,
+        "tottime_ms": 1.4274,
+        "cumtime_ms": 1.4274,
+        "tottime_per_call_us": 0.1797280282044825
+      },
+      {
+        "function": "<built-in method nt._path_isfile>",
+        "location": "~:0",
+        "ncalls": 16,
+        "tottime_ms": 1.1181,
+        "cumtime_ms": 1.1433,
+        "tottime_per_call_us": 69.88125000000001
+      },
+      {
+        "function": "generate",
+        "location": "mesh.py:101",
+        "ncalls": 12,
+        "tottime_ms": 1.0544,
+        "cumtime_ms": 29.1686,
+        "tottime_per_call_us": 87.86666666666667
+      },
+      {
+        "function": "get_block",
+        "location": "chunk.py:59",
+        "ncalls": 2387,
+        "tottime_ms": 0.9490000000000001,
+        "cumtime_ms": 0.9490000000000001,
+        "tottime_per_call_us": 0.3975701717637202
+      },
+      {
+        "function": "<method 'get' of 'dict' objects>",
+        "location": "~:0",
+        "ncalls": 5195,
+        "tottime_ms": 0.8289000000000001,
+        "cumtime_ms": 0.8289000000000001,
+        "tottime_per_call_us": 0.1595572666025024
+      },
+      {
+        "function": "_get_face_uvs_optional",
+        "location": "chunk_mesh.py:482",
+        "ncalls": 384,
+        "tottime_ms": 0.5869,
+        "cumtime_ms": 1.3962,
+        "tottime_per_call_us": 1.5283854166666666
+      },
+      {
+        "function": "__init__",
+        "location": "mesh.py:53",
+        "ncalls": 12,
+        "tottime_ms": 0.5295,
+        "cumtime_ms": 29.8834,
+        "tottime_per_call_us": 44.125
+      },
+      {
+        "function": "<method 'reduce' of 'numpy.ufunc' objects>",
+        "location": "~:0",
+        "ncalls": 24,
+        "tottime_ms": 0.47650000000000003,
+        "cumtime_ms": 0.47650000000000003,
+        "tottime_per_call_us": 19.854166666666668
+      },
+      {
+        "function": "<method 'tolist' of 'numpy.ndarray' objects>",
+        "location": "~:0",
+        "ncalls": 16,
+        "tottime_ms": 0.46440000000000003,
+        "cumtime_ms": 0.46440000000000003,
+        "tottime_per_call_us": 29.025000000000002
+      },
+      {
+        "function": "_active_y_range",
+        "location": "chunk_mesh.py:119",
+        "ncalls": 16,
+        "tottime_ms": 0.4464,
+        "cumtime_ms": 0.8441000000000001,
+        "tottime_per_call_us": 27.900000000000002
+      },
+      {
+        "function": "get_block_face_textures",
+        "location": "block_data.py:98",
+        "ncalls": 384,
+        "tottime_ms": 0.2855,
+        "cumtime_ms": 0.44720000000000004,
+        "tottime_per_call_us": 0.7434895833333334
+      },
+      {
+        "function": "<method 'unstash' of 'panda3d.core.NodePath' objects>",
+        "location": "~:0",
+        "ncalls": 12,
+        "tottime_ms": 0.28190000000000004,
+        "cumtime_ms": 0.28190000000000004,
+        "tottime_per_call_us": 23.49166666666667
+      },
+      {
+        "function": "<method 'addPrimitive' of 'panda3d.core.Geom' objects>",
+        "location": "~:0",
+        "ncalls": 12,
+        "tottime_ms": 0.24230000000000002,
+        "cumtime_ms": 0.24230000000000002,
+        "tottime_per_call_us": 20.191666666666666
+      },
+      {
+        "function": "_flip_v",
+        "location": "chunk_mesh.py:515",
+        "ncalls": 1776,
+        "tottime_ms": 0.192,
+        "cumtime_ms": 0.192,
+        "tottime_per_call_us": 0.10810810810810811
+      },
+      {
+        "function": "<method 'modify_array' of 'panda3d.core.GeomVertexData' objects>",
+        "location": "~:0",
+        "ncalls": 24,
+        "tottime_ms": 0.17300000000000001,
+        "cumtime_ms": 0.17300000000000001,
+        "tottime_per_call_us": 7.208333333333333
+      },
+      {
+        "function": "<lambda>",
+        "location": "profile_m16_attribution.py:401",
+        "ncalls": 8,
+        "tottime_ms": 0.15880000000000002,
+        "cumtime_ms": 116.74380000000001,
+        "tottime_per_call_us": 19.85
+      },
+      {
+        "function": "<built-in method builtins.isinstance>",
+        "location": "~:0",
+        "ncalls": 684,
+        "tottime_ms": 0.1583,
+        "cumtime_ms": 0.2519,
+        "tottime_per_call_us": 0.2314327485380117
+      },
+      {
+        "function": "<genexpr>",
+        "location": "chunk_mesh.py:268",
+        "ncalls": 448,
+        "tottime_ms": 0.1557,
+        "cumtime_ms": 1.5519,
+        "tottime_per_call_us": 0.34754464285714287
+      }
+    ],
+    "top_cumtime": [
+      {
+        "function": "<lambda>",
+        "location": "profile_m16_attribution.py:401",
+        "ncalls": 8,
+        "tottime_ms": 0.15880000000000002,
+        "cumtime_ms": 116.74380000000001,
+        "tottime_per_call_us": 19.85
+      },
+      {
+        "function": "refresh",
+        "location": "chunk.py:125",
+        "ncalls": 8,
+        "tottime_ms": 6.1002,
+        "cumtime_ms": 116.58500000000001,
+        "tottime_per_call_us": 762.525
+      },
+      {
+        "function": "generate_chunk_mesh_split",
+        "location": "chunk_mesh.py:147",
+        "ncalls": 8,
+        "tottime_ms": 7.779800000000001,
+        "cumtime_ms": 77.30730000000001,
+        "tottime_per_call_us": 972.4750000000001
+      },
+      {
+        "function": "_add_exposed_faces_to_split",
+        "location": "chunk_mesh.py:384",
+        "ncalls": 14266,
+        "tottime_ms": 43.395900000000005,
+        "cumtime_ms": 61.48740000000001,
+        "tottime_per_call_us": 3.041910836954998
+      },
+      {
+        "function": "__init__",
+        "location": "mesh.py:53",
+        "ncalls": 12,
+        "tottime_ms": 0.5295,
+        "cumtime_ms": 29.8834,
+        "tottime_per_call_us": 44.125
+      },
+      {
+        "function": "generate",
+        "location": "mesh.py:101",
+        "ncalls": 12,
+        "tottime_ms": 1.0544,
+        "cumtime_ms": 29.1686,
+        "tottime_per_call_us": 87.86666666666667
+      },
+      {
+        "function": "_ravel",
+        "location": "mesh.py:79",
+        "ncalls": 36,
+        "tottime_ms": 10.995600000000001,
+        "cumtime_ms": 21.6386,
+        "tottime_per_call_us": 305.43333333333334
+      },
+      {
+        "function": "<method 'extend' of 'list' objects>",
+        "location": "~:0",
+        "ncalls": 102135,
+        "tottime_ms": 16.594,
+        "cumtime_ms": 16.594,
+        "tottime_per_call_us": 0.1624712390463602
+      },
+      {
+        "function": "_set_array_data",
+        "location": "mesh.py:88",
+        "ncalls": 36,
+        "tottime_ms": 5.3660000000000005,
+        "cumtime_ms": 5.3923,
+        "tottime_per_call_us": 149.05555555555554
+      },
+      {
+        "function": "get_block",
+        "location": "world.py:155",
+        "ncalls": 2387,
+        "tottime_ms": 2.2632,
+        "cumtime_ms": 4.050300000000001,
+        "tottime_per_call_us": 0.9481357352325094
+      },
+      {
+        "function": "<built-in method builtins.len>",
+        "location": "~:0",
+        "ncalls": 29780,
+        "tottime_ms": 3.6892,
+        "cumtime_ms": 3.6892,
+        "tottime_per_call_us": 0.12388179986568168
+      },
+      {
+        "function": "is_loaded",
+        "location": "world.py:180",
+        "ncalls": 5555,
+        "tottime_ms": 2.3331000000000004,
+        "cumtime_ms": 3.3437,
+        "tottime_per_call_us": 0.42000000000000004
+      },
+      {
+        "function": "_add_cross_planes",
+        "location": "chunk_mesh.py:304",
+        "ncalls": 552,
+        "tottime_ms": 2.2431,
+        "cumtime_ms": 3.3302,
+        "tottime_per_call_us": 4.063586956521739
+      },
+      {
+        "function": "model_setter",
+        "location": "entity.py:213",
+        "ncalls": 16,
+        "tottime_ms": 1.7235000000000003,
+        "cumtime_ms": 2.5753,
+        "tottime_per_call_us": 107.71875000000001
+      },
+      {
+        "function": "<built-in method builtins.getattr>",
+        "location": "~:0",
+        "ncalls": 14506,
+        "tottime_ms": 2.1111000000000004,
+        "cumtime_ms": 2.1145,
+        "tottime_per_call_us": 0.1455328829449883
+      },
+      {
+        "function": "_build_face_uv_table",
+        "location": "chunk_mesh.py:265",
+        "ncalls": 8,
+        "tottime_ms": 0.1506,
+        "cumtime_ms": 1.7025000000000001,
+        "tottime_per_call_us": 18.825
+      },
+      {
+        "function": "<genexpr>",
+        "location": "chunk_mesh.py:268",
+        "ncalls": 448,
+        "tottime_ms": 0.1557,
+        "cumtime_ms": 1.5519,
+        "tottime_per_call_us": 0.34754464285714287
+      },
+      {
+        "function": "get_chunk_containing_world_coords",
+        "location": "coordinate_system.py:10",
+        "ncalls": 7942,
+        "tottime_ms": 1.4274,
+        "cumtime_ms": 1.4274,
+        "tottime_per_call_us": 0.1797280282044825
+      },
+      {
+        "function": "_get_face_uvs_optional",
+        "location": "chunk_mesh.py:482",
+        "ncalls": 384,
+        "tottime_ms": 0.5869,
+        "cumtime_ms": 1.3962,
+        "tottime_per_call_us": 1.5283854166666666
+      },
+      {
+        "function": "_load_default_atlas_map",
+        "location": "chunk_mesh.py:511",
+        "ncalls": 8,
+        "tottime_ms": 0.0082,
+        "cumtime_ms": 1.2159,
+        "tottime_per_call_us": 1.0250000000000001
+      }
+    ]
+  }
+}

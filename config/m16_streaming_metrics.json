@@ -1,0 +1,104 @@
+{
+  "meta": {
+    "milestone": "M16",
+    "scene": "TerrainGenerator seed 42 (3x3), one entity per chunk, VoxelPlayer at (8, 8, 8), streamed with config/world_config.json",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.5",
+    "ursina": "unknown",
+    "panda3d": "1.10.16",
+    "numpy": "2.4.4",
+    "scene_mode": "render",
+    "render_error": null,
+    "startup_entity_count": 9,
+    "streaming_distance": 3,
+    "retention_distance": 5,
+    "max_loads_per_frame": 1,
+    "max_unloads_per_frame": 4
+  },
+  "limitations": [
+    "Offscreen/headless CPU timing only; no GPU cost or draw-call attribution.",
+    "The agent environment cannot inspect rendered pixels, so no on-screen visual confirmation is claimed.",
+    "One chunk's generation + combined-mesh build is the irreducible streaming unit and can exceed a frame budget; only the load COUNT is bounded per frame."
+  ],
+  "idle_frames_ms": {
+    "frames": 60,
+    "p50": 7.517700083553791,
+    "p95": 8.148330193944275,
+    "p99": 8.24062311090529,
+    "max": 8.27029999345541,
+    "mean": 6.620213335069518,
+    "over_16_67": 0,
+    "over_33_33": 0
+  },
+  "explore_positive_frames_ms": {
+    "frames": 128,
+    "p50": 15.910850139334798,
+    "p95": 44.02277010958642,
+    "p99": 46.3625878142193,
+    "max": 46.85059981420636,
+    "mean": 21.700296118069673,
+    "over_16_67": 60,
+    "over_33_33": 41
+  },
+  "explore_negative_frames_ms": {
+    "frames": 144,
+    "p50": 33.36320002563298,
+    "p95": 44.356725015677505,
+    "p99": 47.67060686368494,
+    "max": 52.03620018437505,
+    "mean": 27.07995485009936,
+    "over_16_67": 95,
+    "over_33_33": 72
+  },
+  "active_set": {
+    "position": [
+      -72.0,
+      8.0,
+      -72.0
+    ],
+    "player_chunk": [
+      -5,
+      -5
+    ],
+    "desired": 49,
+    "retained": 121,
+    "loaded": 75,
+    "contains_desired": true,
+    "within_retention": true,
+    "all_ground_layer": true
+  },
+  "reentry": {
+    "performed": true,
+    "cell": [
+      -80,
+      9,
+      -80
+    ],
+    "chunk": [
+      -5,
+      -5
+    ],
+    "chunk_unloaded": true,
+    "chunk_present_again": true,
+    "edit_restored": true
+  },
+  "entity_audit": {
+    "loaded_chunks": 75,
+    "unique_chunk_keys": 75,
+    "rendered_registry": 75,
+    "rendered_subset_of_loaded": true,
+    "entities_with_geometry": 75,
+    "unique_entities": 75,
+    "no_duplicate_entities": true,
+    "rendered_missing_entities": []
+  },
+  "overlay": {
+    "block_overrides": 1,
+    "decoration_overrides": 2
+  },
+  "memory": {
+    "numpy_bytes": 2150400,
+    "numpy_bytes_per_chunk": 28672,
+    "loaded_chunks": 75
+  }
+}
