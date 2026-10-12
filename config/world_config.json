@@ -1,0 +1,6 @@
+{
+  "streaming_distance": 3,
+  "retention_distance": 5,
+  "max_chunk_loads_per_frame": 1,
+  "max_chunk_unloads_per_frame": 4
+}

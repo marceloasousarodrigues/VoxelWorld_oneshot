@@ -126,58 +126,115 @@ class TerrainGenerator:
 
         generate_vegetation(world, self.seed)
 
+    def generate_chunk(
+        self, world: World, chunk_x: int, chunk_y: int, chunk_z: int
+    ) -> Chunk:
+        """
+        Generate one chunk's terrain and (on the ground layer) its vegetation.
+
+        This is the per-chunk entry point M16 streaming uses. It performs exactly
+        the deterministic work ``generate_world`` does for the same coordinates,
+        so a streamed chunk is byte-identical to one produced by whole-world
+        generation.
+
+        Args:
+            world: World object to populate
+            chunk_x: X chunk coordinate
+            chunk_y: Y chunk coordinate
+            chunk_z: Z chunk coordinate
+
+        Returns:
+            The populated Chunk (registered in the world)
+        """
+        chunk = self.generate_chunk_terrain(world, chunk_x, chunk_y, chunk_z)
+
+        # Vegetation is deterministic and chunk-local, so it can be generated
+        # for a chunk without any neighbouring chunk existing. Imported lazily
+        # because vegetation imports this module for its terrain predicates.
+        from vegetation import generate_vegetation_for_chunk
+
+        generate_vegetation_for_chunk(chunk, self.seed)
+        return chunk
+
+    def generate_chunk_terrain(
+        self, world: World, chunk_x: int, chunk_y: int, chunk_z: int
+    ) -> Chunk:
+        """
+        Generate one chunk's terrain blocks (no vegetation).
+
+        Extracted from the previous whole-world loop so the output is unchanged;
+        ``chunk_y`` values other than ``0`` hold no terrain.
+
+        Args:
+            world: World object to populate
+            chunk_x: X chunk coordinate
+            chunk_y: Y chunk coordinate
+            chunk_z: Z chunk coordinate
+
+        Returns:
+            The populated Chunk (registered in the world)
+        """
+        chunk_size = 16
+        chunk = world.get_chunk(chunk_x, chunk_y, chunk_z)
+
+        if chunk_y != 0:
+            # Other layers hold no terrain, so an empty chunk is complete.
+            chunk.generated = True
+            return chunk
+
+        # For each block in chunk
+        for x in range(chunk_size):
+            for z in range(chunk_size):
+                # Calculate world coordinates for this block
+                global_x = chunk_x * chunk_size + x
+                global_z = chunk_z * chunk_size + z
+
+                # Simple height map function that creates a relatively flat terrain with some hills
+                height = surface_height(self.seed, global_x, global_z)
+
+                in_lake_here = in_lake(global_x, global_z)
+
+                # Generate blocks based on height and position
+                for y in range(chunk_size):
+                    if in_lake_here:
+                        if y > LAKE_LEVEL:
+                            chunk.set_block(x, y, z, BlockType.AIR)
+                        elif LAKE_FLOOR <= y <= LAKE_LEVEL:
+                            chunk.set_block(x, y, z, BlockType.WATER)
+                            chunk.set_water_level(x, y, z, 8)
+                            # Only the top lake layer holds permanent
+                            # sources; lower cells are derived water.
+                            chunk.set_water_source(
+                                x, y, z, y == LAKE_LEVEL
+                            )
+                        else:
+                            if y > height:
+                                chunk.set_block(x, y, z, BlockType.AIR)
+                            elif y == height:
+                                chunk.set_block(x, y, z, BlockType.GRASS)
+                            elif y > height - 4:
+                                chunk.set_block(x, y, z, BlockType.DIRT)
+                            else:
+                                chunk.set_block(x, y, z, BlockType.STONE)
+                    else:
+                        if y > height:
+                            chunk.set_block(x, y, z, BlockType.AIR)
+                        elif y == height:
+                            chunk.set_block(x, y, z, BlockType.GRASS)
+                        elif y > height - 4:
+                            chunk.set_block(x, y, z, BlockType.DIRT)
+                        else:
+                            chunk.set_block(x, y, z, BlockType.STONE)
+
+        chunk.generated = True
+        return chunk
+
     def _generate_height_map_terrain(self, world: World) -> None:
         """Generate terrain using a height map approach."""
-        chunk_size = 16
-
         # Define a few sample chunks to generate terrain in
         for chunk_x in range(-1, 2):
             for chunk_z in range(-1, 2):
-                chunk = world.get_chunk(chunk_x, 0, chunk_z)
-
-                # For each block in chunk
-                for x in range(chunk_size):
-                    for z in range(chunk_size):
-                        # Calculate world coordinates for this block
-                        global_x = chunk_x * chunk_size + x
-                        global_z = chunk_z * chunk_size + z
-
-                        # Simple height map function that creates a relatively flat terrain with some hills
-                        height = surface_height(self.seed, global_x, global_z)
-
-                        in_lake_here = in_lake(global_x, global_z)
-
-                        # Generate blocks based on height and position
-                        for y in range(chunk_size):
-                            if in_lake_here:
-                                if y > LAKE_LEVEL:
-                                    chunk.set_block(x, y, z, BlockType.AIR)
-                                elif LAKE_FLOOR <= y <= LAKE_LEVEL:
-                                    chunk.set_block(x, y, z, BlockType.WATER)
-                                    chunk.set_water_level(x, y, z, 8)
-                                    # Only the top lake layer holds permanent
-                                    # sources; lower cells are derived water.
-                                    chunk.set_water_source(
-                                        x, y, z, y == LAKE_LEVEL
-                                    )
-                                else:
-                                    if y > height:
-                                        chunk.set_block(x, y, z, BlockType.AIR)
-                                    elif y == height:
-                                        chunk.set_block(x, y, z, BlockType.GRASS)
-                                    elif y > height - 4:
-                                        chunk.set_block(x, y, z, BlockType.DIRT)
-                                    else:
-                                        chunk.set_block(x, y, z, BlockType.STONE)
-                            else:
-                                if y > height:
-                                    chunk.set_block(x, y, z, BlockType.AIR)
-                                elif y == height:
-                                    chunk.set_block(x, y, z, BlockType.GRASS)
-                                elif y > height - 4:
-                                    chunk.set_block(x, y, z, BlockType.DIRT)
-                                else:
-                                    chunk.set_block(x, y, z, BlockType.STONE)
+                self.generate_chunk_terrain(world, chunk_x, 0, chunk_z)
     
     def _simple_terrain_height(self, x: int, z: int) -> int:
         """
