@@ -2165,3 +2165,287 @@ No test was skipped, deleted or weakened.
 
 **Not verified.** GPU cost and human-visible smoothness remain unmeasured (L1), and the
 residual region-proportional sub-steps are listed under L3.
+
+
+## M16 — Chunk Streaming & World Management
+
+### Goal
+
+Implement dynamic chunk loading and unloading around the player to support exploration of larger worlds while controlling CPU usage, rendering workload, and memory consumption.
+
+The system must integrate with the existing `World`, `Chunk`, terrain generation, water simulation, mesh generation, and player systems without breaking established architecture invariants.
+
+### Scope
+
+- **Chunk streaming**
+  - Track the player's current chunk coordinates.
+  - Determine which chunks should be loaded based on a configurable horizontal render/streaming distance.
+  - Load required chunks as the player moves through the world.
+  - Unload chunks that fall outside the configured retention distance.
+  - Avoid unnecessary work when the player remains within the same chunk.
+
+- **World management**
+  - Keep the logical world registry authoritative.
+  - Prevent duplicate chunks and duplicate rendered entities.
+  - Separate logical chunk existence from rendered chunk entity lifecycle where necessary.
+  - Preserve existing world-coordinate conversion and negative-coordinate behavior.
+  - Ensure chunk creation, registration, removal, and lookup remain consistent.
+
+- **Generation and rendering integration**
+  - Reuse the existing terrain generation and mesh generation pipelines.
+  - Avoid generating or rebuilding chunks that are already valid.
+  - Process streaming work incrementally to prevent large synchronous operations during player movement.
+  - Prioritize chunks near the player over distant chunks.
+  - Correctly handle chunk boundaries and neighboring chunk dependencies.
+
+- **State preservation**
+  - Define explicitly which chunk state is persistent and which state can be regenerated.
+  - Ensure unloading does not silently lose player modifications or other authoritative world state.
+  - Preserve water simulation correctness when chunks enter or leave the active world.
+  - Ensure pending generation, mesh, or water work cannot publish stale results for unloaded or replaced chunks.
+
+- **Configuration**
+  - Centralize streaming distance and per-frame work limits in the existing configuration system.
+  - Avoid hard-coded streaming settings throughout the implementation.
+
+### Architecture invariants
+
+1. The logical `Chunk` remains authoritative for its block data and world state.
+2. Each rendered chunk has at most one corresponding Ursina entity.
+3. A chunk must not be registered or generated twice for the same coordinates.
+4. Chunk-local and world-coordinate calculations must work correctly for negative coordinates.
+5. Loading and unloading must not leave stale entities, mesh references, or invalid world-registry entries.
+6. Existing player interactions, terrain generation, vegetation, and water behavior must remain correct.
+7. Streaming work must make incremental progress and eventually converge to the desired loaded-chunk set.
+
+### Tests
+
+- Deterministic tests for the desired loaded-chunk set at different player positions.
+- Movement across positive and negative chunk boundaries.
+- No duplicate chunks or rendered entities during repeated movement.
+- Correct loading and unloading at the streaming-distance boundary.
+- Unloaded chunks are removed from the appropriate registries and have their rendered resources released.
+- Re-entering an unloaded area restores the correct terrain and preserves authoritative modifications.
+- Neighboring chunks remain correct when loaded or unloaded.
+- Pending work for unloaded chunks cannot create stale entities or overwrite newer state.
+- Water sources, propagation, and pending simulation work behave correctly across chunk lifecycle changes.
+- Streaming work respects configured per-frame limits, with tests proving progress and eventual completion.
+- Regression tests for existing chunk, mesh, player, vegetation, and water behavior.
+
+### Runtime verification
+
+- Move the player across multiple chunk boundaries in both directions.
+- Verify that chunks load ahead of the player and distant chunks unload.
+- Verify correct behavior at negative coordinates and world boundaries.
+- Confirm that rendered entity count remains consistent with the active loaded set.
+- Confirm that revisiting an area restores the expected world state.
+- Check for visible gaps, stale meshes, duplicate entities, or interaction failures.
+- Measure frame-time spikes and memory behavior during sustained exploration.
+
+### Non-goals
+
+- Multiplayer or networked chunk streaming.
+- Procedural terrain redesign.
+- Changes to the established block or water simulation rules unless required for lifecycle correctness.
+- Persistent world save/load files unless explicitly added to the approved design.
+- Unrelated rendering, texture, inventory, or gameplay features.
+
+### Acceptance criteria
+
+- [x] Chunk loading and unloading operate correctly as the player moves.
+- [x] The active chunk set follows the configured streaming and retention distances.
+- [x] No duplicate chunks, entities, or stale rendered resources remain after repeated transitions.
+- [x] Existing terrain, player modifications, and water state follow the documented persistence policy.
+- [x] Pending asynchronous or incremental work cannot corrupt unloaded or newly recreated chunks.
+- [x] Per-frame streaming work is bounded by the implemented scheduling policy, with any unavoidable unbounded operations explicitly documented.
+- [x] All new tests and the complete existing test suite pass.
+- [x] Runtime exploration confirms correct behavior across positive and negative chunk boundaries.
+- [x] CPU, frame-time, and memory measurements are recorded, with GPU and visual limitations clearly identified.
+- [x] Architecture and milestone documentation are updated to reflect the implemented behavior.
+
+### Dependencies
+
+- M1–M6: Coordinate utilities, block data, mesh generation, world management, terrain generation, and player/collision.
+- M7: Block interaction and dirty-chunk refresh.
+- M10–M12: Texture configuration and asset pipeline.
+- M13: Water behavior and simulation.
+- M14: Natural generation and vegetation.
+- M15: Performance profiling, incremental work scheduling, and budgetable water commits.
+
+### Completion requirements
+
+M16 is complete only after implementation, focused tests, full regression tests, runtime verification, and performance measurements have been reviewed.
+
+Do not introduce assumptions about persistence, chunk lifecycle, or water behavior without documenting the relevant design decisions before implementation.
+
+## M16 Completion Report — status: COMPLETE (offscreen CPU verification; no on-screen visual check)
+
+Design decisions approved by the user on 2026-10-12 (the two pivotal ones):
+
+1. **Chunk lifecycle & persistence — discard + regenerate with an in-memory edit
+   overlay.** Unload releases the rendered entity *and* removes the logical chunk;
+   re-entry regenerates terrain and vegetation deterministically and re-applies a
+   sparse in-memory overlay of player edits. Bounded memory, no save/load file.
+2. **Streaming defaults — stream 3 / retain 5 / 1 load + 4 unload per frame.**
+   Tunable via `config/world_config.json`.
+
+### Files changed
+
+- `config/world_config.json` (new) — centralized streaming settings.
+- `world_config.py` (new) — loader/validator, defaults, `reset_cache`.
+- `chunk_streaming.py` (new) — `ChunkStreamer` (policy + scheduling).
+- `terrain_generation.py` — extracted `generate_chunk_terrain`; added
+  `generate_chunk`; `generate_world` output unchanged (golden-tested).
+- `chunk.py` — added a `generated` provenance flag so streaming can tell a
+  finished chunk from a placeholder created on demand by `get_chunk`.
+- `world.py` — edit overlay (`block_overrides`/`decoration_overrides`),
+  `load_chunk`, `unload_chunk`, `apply_overrides`; `set_block` records overrides.
+- `water.py` — `seed_chunk_sources`; `seed_all_sources` reuses it.
+- `main.py` — constructs the streamer and streams inside `update()`.
+- `tests/` — 9 new M16 test modules (41 tests); no existing test modified.
+- `docs/superpowers/specs/2026-10-12-m16-chunk-streaming-world-management-design.md`
+  and `docs/superpowers/plans/2026-10-12-m16-chunk-streaming-world-management.md`.
+- `scripts/measure_m16_streaming.py` (new) — runtime/measurement harness;
+  `config/m16_streaming_metrics.json` (new) — recorded results.
+
+### Design summary
+
+- `World` owns lifecycle; `ChunkStreamer` owns policy. Streaming is horizontal
+  (`chunk_y == 0`) with a Chebyshev desired radius and a larger retention radius.
+- Load is idempotent and creates one entity; unload destroys both entities and
+  re-dirties loaded neighbours (the mesher treats an unloaded neighbour as AIR).
+- **Persistence policy:** terrain, lake water and vegetation are regenerable
+  (deterministic); player block edits and cleared decorations are authoritative
+  and persist in the overlay; water spread is derived and re-solves from sources.
+- Load **and** unload bump `water_edit_version`, so a water job built on the old
+  domain is discarded and re-queued rather than publishing stale results.
+- `ChunkStreamer.rendered` is a complete rendered registry: it adopts chunks that
+  entered the world outside the streamer (the initial region), so one entity per
+  loaded chunk is provable at any time.
+
+### Automated tests
+
+Command: `python -m pytest tests -q` → **302 passed** (baseline was 261; +41 M16
+assertions). Nothing skipped, weakened or deleted; no existing test touched.
+New coverage: config; per-chunk generation equals whole-world generation; load/
+unload lifecycle (including populating a placeholder created on demand);
+neighbour dirtying; overlay persistence (block, cleared tuft, block-over-lake-
+water, regenerated-terrain identity); desired/retained sets with negative
+coordinates; budget, nearest-first order and convergence; water seeding and
+version invalidation; and the real player physics walking past the initial
+region while streaming.
+
+### Runtime verification (`scripts/measure_m16_streaming.py`)
+
+The real `main.py` scene was built offscreen (Ursina `window_type="offscreen"`
+scene mode = `render`, no `render_error`), 9 startup chunk entities, and driven
+through the exact `main.py:update` sequence while walking across positive and
+negative chunk boundaries.
+
+| Phase | frames | p50 | p95 | p99 | max | >16.67 | >33.33 |
+|---|---|---|---|---|---|---|---|
+| Stationary after convergence | 60 | 7.52 ms | 8.15 | 8.24 | 8.27 | 0 | 0 |
+| Explore +X/+Z | 128 | 15.91 ms | 44.02 | 46.36 | 46.85 | 60 | 41 |
+| Explore back across origin to −X/−Z | 144 | 33.36 ms | 44.36 | 47.67 | 52.04 | 95 | 72 |
+
+- **Active set** at `(-72, 8, -72)` (player chunk `(-5, -5)`): desired 49,
+  retained 121, loaded 75 → `contains_desired: True`, `within_retention: True`,
+  all loaded chunks on the ground layer.
+- **Re-entry:** chunk `(-5, 0, -5)` was edited (cell `(-80, 9, -80)` → AIR), walked
+  far enough to unload (`chunk_unloaded: True`), then re-entered
+  (`chunk_present_again: True`, `edit_restored: True`).
+- **No duplicates:** 75 loaded / 75 unique keys / 75 unique entities /
+  `no_duplicate_entities: True` / `rendered_subset_of_loaded: True` / no rendered
+  key missing an entity.
+- **Memory:** 2,150,400 B = **28,672 B/chunk × 75 chunks ≈ 2.05 MiB**, bounded by
+  the retention radius; overlay held 1 block override + 2 decoration overrides.
+
+### Limitations (stated, not claimed)
+
+- **On-screen visual verification was not possible**: the agent environment
+  cannot display or inspect rendered pixels, so no visual confirmation of gaps,
+  seams or mesh correctness is claimed. The offscreen scene built all entities
+  without error and the numeric audits pass.
+- All timing is **main-thread CPU** from an offscreen context; **no GPU or
+  draw-call cost was measured**.
+- **One chunk's generation + combined-mesh build is the irreducible streaming
+  unit** (measured max ≈45–51 ms). Only the load *count* per frame is bounded; a
+  chunk-load frame therefore exceeds the 16.67/33.33 ms budget by design, as the
+  explore rows show. Splitting that work requires a renderer change, which is an
+  M16 non-goal.
+- A neighbour's re-culled boundary face is rebuilt by the *next* frame's bounded
+  `reconcile`; after an unload this can briefly expose a missing face at the far
+  streaming edge (behind the player). Bounded by the reconcile budget, not
+  measured visually.
+- The stationary phase's ~7 ms/frame is water settling after streaming seeded
+  newly loaded chunks' sources (0 frames over 16.67 ms), not user input.
+
+**M17 must not be started automatically.**
+
+---
+
+## M16 Follow-up — Gameplay Stutter Diagnosis & Fixes (2026-10-12)
+
+**Status: COMPLETE** (all four measured causes fixed and re-measured; 334 tests pass).
+
+Not an M17 feature. M16 shipped with correct streaming but measurable stutter during
+gameplay; this follow-up investigated it before changing anything, then fixed only what
+the measurements justified.
+
+### Diagnosis (measurement-only phase)
+
+Full report: `docs/superpowers/specs/2026-10-12-m16-gameplay-stutter-diagnosis.md`.
+New instruments: `scripts/profile_m16_stutter.py` (real window, per-frame components, GC
+monitor) and `scripts/profile_m16_attribution.py` (unprofiled phase timings + cProfile
+shares). The four measured causes, in impact order:
+
+1. **Full (generation-2) cyclic GC collections: 60–105 ms, intermittent.** Every run with
+   a gen-2 collection exceeded 78 ms; no run without one exceeded 55.67 ms; with the
+   collector disabled nothing exceeded 54.31 ms.
+2. **A chunk-load frame was 25.9 ms + ~14 ms of neighbour remeshes ≈ 37–56 ms** — on
+   *every* boundary crossing. Bounded loads-per-frame, unbounded work per chunk.
+3. **An O(4096) Python-level transparency scan** inside `create_chunk_entity`: 6.2 ms of
+   the load, 4096 numpy scalar reads per chunk.
+4. **`BlockHighlight` churn:** 2.203 ms median per create/remove event, rebuilding 13
+   entities, ~11 events per 240 rotating frames.
+
+Refuted by measurement (not causes here): water job restarts (≈0.3 ms/load, 0 pending
+frames), chunk unload (≈0.15 ms each), `apply_overrides` (within 0.2 ms of noise at the
+current sparse edit count).
+
+### Fixes and verified effect
+
+Full report: `docs/superpowers/specs/2026-10-12-m16-stutter-fixes-report.md`.
+
+| Fix | Verified effect |
+|---|---|
+| `gc_tuning.py`: freeze the startup graph once (collector never disabled) | Worst full-collection pause 85–113 ms → 15–56 ms; `cross_boundary` gen-2 GC total 101–104 ms → 21.8–25.8 ms |
+| `Chunk.has_transparent_block()` (vectorised) | Scan 4.33 ms → 0.028 ms per chunk; `create_chunk_entity` 16.12 → 7.62 ms |
+| Staged chunk load (`begin_chunk_load` / `finish_chunk_load`) | Streamer work per load frame 26–36 ms → 9–15 ms (one stage per frame) |
+| `BlockHighlight` entity reuse | `create_highlight` 2.203 ms → 0.004 ms (p95 3.573 → 0.012) |
+
+End-to-end, across the three movement scenarios: frames over 33.33 ms **203 → 0**, over
+50 ms **21 → 0**; worst observed frame **136.43 → 32.43 ms**.
+
+### Tests
+
+302 → **334 passing, 0 failing**, nothing skipped or weakened. 32 new tests across
+`tests/test_m16_gc_tuning.py`, `tests/test_m16_transparency_scan.py`,
+`tests/test_m16_highlight_reuse.py`, `tests/test_m16_staged_load.py`. The staged-load
+equivalence tests compare the streamed path against `World.load_chunk` on real uploaded
+geometry, block arrays, water metadata, decorations, dirty sets and the water edit
+version.
+
+### Limitations (stated, not claimed)
+
+- **No on-screen visual verification** (no rendered-pixel inspection available). The
+  staged placeholder entity is invisible for at most one frame, and geometry is compared
+  numerically against the synchronous path, but the appearance was not seen.
+- The worst load frame is **≈29–31 ms**, not sub-budget: `reconcile`'s neighbour remesh
+  (7.64 ms per chunk, 1–2 chunks) still lands in the same frame as a streamer stage.
+  Bounding it further was not taken without a visual check.
+- One **unexplained 66.64 ms frame** with `render_ms = 66.58` and no GC, load or mesh work.
+- **GPU/draw-call cost was not measured** (async GPU, vsync off).
+- The per-frame floor also shifted between the before and after sessions in scenarios with
+  no loads, meshes or full collections; that shift is attributed to machine state, not to
+  these fixes.

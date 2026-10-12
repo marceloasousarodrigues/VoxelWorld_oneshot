@@ -225,3 +225,69 @@ The following invariants should be preserved:
 8. Rendering must not become the authoritative representation of world state.
 9. One rendered Chunk corresponds to one rendered Ursina Entity unless explicitly changed by a future architectural milestone.
 10. The application entry point remains minimal.
+11. The set of loaded Chunks is a bounded active region around the player: Chunks
+    within the configured streaming distance are loaded, and Chunks beyond the
+    configured retention distance are unloaded. Loading and unloading never leave
+    duplicate Chunks, duplicate entities, or stale rendered resources.
+
+---
+
+## 13. Chunk Lifecycle & Streaming (M16)
+
+VoxelWorld streams Chunks around the player so exploration is not limited to a
+fixed pre-generated region.
+
+Two responsibilities are separated:
+
+- **Policy** — `ChunkStreamer` (`chunk_streaming.py`) computes the desired and
+  retained Chunk sets from the player's position, schedules loads nearest-first
+  and unloads farthest-first, and bounds the work performed per frame.
+- **Lifecycle** — `World.load_chunk` / `World.unload_chunk` keep the logical
+  `chunks` registry authoritative and consistent, create or release the rendered
+  entity for a Chunk, re-dirty loaded neighbours whose boundary faces changed,
+  and invalidate stale water work.
+
+### Staged loading (M16 stutter fix)
+
+A streamed load is split across two frames so no single frame carries both the
+data and the mesh work:
+
+- **Stage A** (`World.begin_chunk_load`): registers the Chunk, generates terrain
+  and vegetation, replays the player-edit overlay, and creates the Chunk's entity
+  and transparent child **with no geometry**. The logical Chunk is complete and
+  authoritative as soon as this returns — collidable, raycastable and editable —
+  and the one-entity-per-loaded-Chunk invariant holds from this moment on.
+- **Stage B** (`World.finish_chunk_load`): builds the mesh into that existing
+  entity, re-dirties the loaded neighbours whose boundary faces changed, and
+  bumps the water edit version.
+
+A streamer frame performs one *kind* of load work, never both. `World.load_chunk`
+remains the synchronous single-frame form and is behaviourally unchanged;
+`tests/test_m16_staged_load.py` pins the two paths to the same resulting world
+state. **A loaded Chunk's data may therefore be authoritative one frame before its
+geometry exists — only rendering lags, never collision, raycasts or edits.**
+
+Streaming is horizontal: only the ground layer (`chunk_y == 0`) carries terrain,
+water and vegetation. The desired set is a Chebyshev radius of Chunks around the
+player's Chunk; retention is a larger radius that provides hysteresis.
+
+Settings are centralized in `config/world_config.json` and exposed through
+`world_config.py`; no streaming distance or per-frame limit is hard-coded.
+
+### Persistence policy
+
+Chunk state is classified explicitly:
+
+- **Regenerable** (recomputed deterministically from `(seed, coordinates)`): base
+  terrain, lake water, and vegetation. Regenerating a Chunk reproduces it
+  byte-for-byte.
+- **Authoritative** (kept in an in-memory overlay in `World`): player block edits
+  and decorations cleared by an edit. These survive an unload/re-entry.
+- **Derived** (re-solved from sources after re-entry): water spread.
+- **Transient**: dirty sets, pending edits, water job state, and rendered
+  entities.
+
+Unloading a Chunk therefore removes it from the registry and releases its
+rendered resources without losing player modifications. Persistent on-disk
+save/load of the world is **not** part of this architecture; it would be a
+separate milestone.
