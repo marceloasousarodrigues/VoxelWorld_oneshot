@@ -5,6 +5,8 @@ Defines block types and their properties.
 
 from enum import IntEnum
 
+import numpy as np
+
 from texture_config import block_face_textures
 
 
@@ -106,6 +108,34 @@ def get_block_face_textures(block_type: int) -> dict:
 
 def is_block_transparent(block_type: int) -> bool:
     return BLOCK_PROPERTIES[block_type].get('is_transparent', False)
+
+
+# Block types that belong to the transparent render pass. Exposed as a tuple so a
+# whole chunk can be tested in one vectorised operation instead of 4096 scalar
+# reads (M16 stutter fix: the per-cell scan cost 4.33 ms of a 26 ms chunk load).
+TRANSPARENT_BLOCK_TYPES = tuple(
+    int(block_type)
+    for block_type, properties in BLOCK_PROPERTIES.items()
+    if properties.get('is_transparent', False)
+)
+
+
+def has_transparent_block(blocks) -> bool:
+    """True when a block array contains at least one transparent-pass block.
+
+    Equivalent to scanning every cell with ``is_block_transparent`` (the tests
+    pin that equivalence against the previous triple loop), but one vectorised
+    comparison for the whole array instead of one numpy scalar read per cell.
+    Unknown or out-of-range block values simply compare unequal, so no indexing
+    hazard is introduced.
+
+    Args:
+        blocks: The chunk's ``(SIZE_X, SIZE_Y, SIZE_Z)`` block array
+
+    Returns:
+        Whether any cell holds a transparent block
+    """
+    return bool(np.isin(blocks, TRANSPARENT_BLOCK_TYPES).any())
 
 
 def get_block_texture(block_type: int) -> str:

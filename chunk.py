@@ -6,7 +6,7 @@ Handles storage and management of a 16x16x16 block volume.
 
 import numpy as np
 
-from block_data import BlockType
+from block_data import BlockType, has_transparent_block
 
 
 class Chunk:
@@ -22,6 +22,12 @@ class Chunk:
         self.chunk_z = chunk_z
         self.entity = None
         self.entity_transparent = None
+
+        # M16: whether terrain generation has populated this chunk. A chunk made
+        # on demand by ``World.get_chunk`` is a placeholder until
+        # ``TerrainGenerator.generate_chunk_terrain`` runs, so streaming knows to
+        # populate it rather than treat it as a finished chunk.
+        self.generated = False
 
         self.blocks = np.full(
             (self.SIZE_X, self.SIZE_Y, self.SIZE_Z),
@@ -49,6 +55,16 @@ class Chunk:
             0,
             dtype=np.int8,
         )
+
+    def has_transparent_block(self) -> bool:
+        """True when any cell in this chunk holds a transparent-pass block.
+
+        The entity factory uses this to decide whether a chunk with no geometry
+        still needs a (disabled) transparent child slot. This is deliberately a
+        vectorised whole-array test: the per-cell scan it replaces cost 4.33 ms
+        of a 26 ms chunk load (M16 stutter fix 2).
+        """
+        return has_transparent_block(self.blocks)
 
     def get_block(self, local_x: int, local_y: int, local_z: int) -> int:
         return int(self.blocks[local_x, local_y, local_z])
