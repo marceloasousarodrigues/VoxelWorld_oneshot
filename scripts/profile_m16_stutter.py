@@ -743,9 +743,17 @@ def main(argv=None) -> int:
     return 0
 
 
-def _version(module_name):
+def _version(distribution):
+    """Version of an installed distribution, read from package metadata.
+
+    Ursina exposes no ``__version__`` attribute, so an attribute lookup recorded
+    "unavailable" for it even though it was installed; ``importlib.metadata``
+    reports the installed distribution version without importing the package.
+    """
     try:
-        return getattr(__import__(module_name), "__version__", "unavailable")
+        from importlib.metadata import version
+
+        return version(distribution)
     except Exception:
         return "unavailable"
 
