@@ -13,6 +13,8 @@ extends SceneTree
 var _game: Node
 var _failures: Array[String] = []
 var _passes := 0
+const CreatureScript = preload("res://scripts/game/passive_creature.gd")
+const CreatureModel = preload("res://scripts/core/passive_creatures.gd")
 
 
 func _initialize() -> void:
@@ -44,6 +46,10 @@ func _main() -> void:
 
 	var player = _game.player
 	_check(player.is_physics_processing(), "the player's physics process is enabled in play")
+	for i in range(75):
+		await process_frame
+	_check(_game.creature_nodes.size() <= 6, "live passive population remains capped")
+	_check(_game.creature_nodes.size() > 0, "a passive boar spawns in valid nearby terrain")
 
 	# Exercise the game-owned death signal path and activate the actual button
 	# signal (headless does not synthesize a visible mouse click).
@@ -81,6 +87,29 @@ func _main() -> void:
 	var feet_fraction: float = landed.y - floorf(landed.y)
 	_check(feet_fraction < 0.2 or feet_fraction > 0.8,
 		"the player rests on a block boundary, not sunk into the terrain (fraction %.3f)" % feet_fraction)
+	# Exercise the creature damage/death/drop path through the real scene node and
+	# game inventory integration (three separate player attacks, one drop).
+	var creature_state := {"id": 9001, "species": "boar", "position": landed + Vector3(0.0, 0.0, -0.8),
+		"health": 3, "alive": true, "wander": Vector3.ZERO, "key": "integration-boar"}
+	var test_creature = CreatureScript.new()
+	test_creature.configure(creature_state, _game.world)
+	_game.creature_root.add_child(test_creature)
+	test_creature.killed.connect(_game._on_creature_killed)
+	var drops_before: int = _game.inventory.count_of(CreatureModel.DROP_ID)
+	player.flying = true
+	player.teleport_to(landed)
+	player.look_yaw(0.0)
+	player.look_pitch(-70.0)
+	for i in range(2):
+		await physics_frame
+	_check(player._creature_in_front() == test_creature, "LMB targeting prioritizes the closer passive creature")
+	_check(player.break_target() and int(test_creature.state.health) == 2,
+		"first player interaction damages a living passive creature")
+	player.break_target()
+	_check(player.break_target() and not bool(test_creature.state.alive), "lethal player interaction kills the creature")
+	await process_frame
+	_check(_game.inventory.count_of(CreatureModel.DROP_ID) == drops_before + 1,
+		"one creature death adds exactly one useful item to inventory")
 
 	# Forward movement.
 	var before: Vector3 = player.global_position

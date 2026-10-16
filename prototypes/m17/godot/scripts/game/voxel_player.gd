@@ -17,6 +17,7 @@ signal fly_changed(enabled: bool)
 ## fell.  The player never decides what that costs; the game layer applies the
 ## survival rule.
 signal landed(fall_distance: float)
+signal creature_attacked(creature: Node3D)
 
 const REACH := 6.0
 const BODY_HEIGHT := 1.8
@@ -305,6 +306,10 @@ func target() -> Dictionary:
 # --- interaction ---------------------------------------------------------
 
 func break_target() -> bool:
+	var creature_hit := _creature_in_front()
+	if creature_hit != null:
+		creature_attacked.emit(creature_hit)
+		return true
 	var hit := target()
 	if not hit.get("hit", false):
 		interaction_failed.emit("No block in reach")
@@ -320,6 +325,26 @@ func break_target() -> bool:
 	block_broken.emit(cell, block_id, BlockDB.drop_of(block_id))
 	_update_target()
 	return true
+
+
+## Passive creature attacks share LMB with mining; the nearer physical target wins.
+func _creature_in_front() -> Node3D:
+	if camera == null:
+		return null
+	var query := PhysicsRayQueryParameters3D.create(camera.global_position,
+		camera.global_position - camera.global_basis.z * reach, 2)
+	query.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return null
+	var body: Object = hit.get("collider")
+	if body is Node3D and body.is_in_group("passive_creature"):
+		var block_distance := reach
+		if _hit.get("hit", false):
+			block_distance = float(_hit.get("distance", reach))
+		if camera.global_position.distance_to(hit.position) < block_distance:
+			return body as Node3D
+	return null
 
 
 func place_selected() -> bool:

@@ -34,6 +34,12 @@ var crafting: CraftingPanel
 var death_screen: DeathScreen
 var saves: SaveManager
 var health: Health
+var creature_model
+var creature_nodes: Dictionary = {}
+var creature_root: Node3D
+var _creature_spawn_timer := 0.0
+const CreatureNode = preload("res://scripts/game/passive_creature.gd")
+const CreatureModel = preload("res://scripts/core/passive_creatures.gd")
 
 ## Seconds of breath left; drained while the player's head is under water.
 var breath := Survival.MAX_BREATH
@@ -69,6 +75,7 @@ var _options := {
 	"hide_hud": false,
 	"fly": false,
 	"open_crafting": false,
+	"creature_feedback_capture": false,
 	"sun_angle": Vector2(-48.0, -132.0),
 	"shots": [],
 	"quit_after": 0.0,
@@ -252,6 +259,7 @@ func _build_nodes() -> void:
 	player.interaction_failed.connect(_on_interaction_failed)
 	player.fly_changed.connect(_on_fly_changed)
 	player.landed.connect(_on_landed)
+	player.creature_attacked.connect(_on_creature_attacked)
 
 
 func _build_ui() -> void:
@@ -358,6 +366,8 @@ func _parse_arguments() -> void:
 				_options["straight_to_game"] = true
 			"--open-crafting":
 				_options["open_crafting"] = true
+			"--creature-feedback-capture":
+				_options["creature_feedback_capture"] = true
 			"--hide-hud":
 				_options["hide_hud"] = true
 			"--fly":
@@ -443,6 +453,14 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	_last_damage_source = ""
 
 	world = VoxelWorld.new(seed_value)
+	creature_model = CreatureModel.new(seed_value)
+	creature_nodes.clear()
+	_creature_spawn_timer = 0.0
+	if is_instance_valid(creature_root):
+		creature_root.queue_free()
+	creature_root = Node3D.new()
+	creature_root.name = "PassiveCreatures"
+	add_child(creature_root)
 	fluid = FluidSim.new(world)
 	fluid.max_cells_per_tick = int(_options["fluid_cells_per_tick"])
 	fluid.max_milliseconds_per_tick = float(_options["fluid_budget_ms"])
@@ -575,6 +593,53 @@ func _enter_play(area_ready: bool) -> void:
 	])
 	_apply_health_option()
 	_apply_hurt_option()
+	if bool(_options["creature_feedback_capture"]):
+		_spawn_creature_feedback_capture()
+
+
+## Reproducible capture aid: place one legal boar in front of the player and
+## show the same hurt feedback produced by a real player attack.
+func _spawn_creature_feedback_capture() -> void:
+	for creature: Node in creature_nodes.values():
+		if is_instance_valid(creature):
+			creature.queue_free()
+	creature_nodes.clear()
+	creature_model.states.clear()
+	var chosen := Vector3i.ZERO
+	var found := false
+	var offsets := [0, -1, 1, -2, 2, -3, 3, -4, 4]
+	for distance in range(4, 9):
+		for offset: int in offsets:
+			var x := floori(player.global_position.x) + offset
+			var z := floori(player.global_position.z) - distance
+			var height := world.generator.height_at(x, z)
+			var foot := Vector3i(x, height + 1, z)
+			var head := foot + Vector3i(0, 1, 0)
+			if height <= WorldGen.SEA_LEVEL or not world.is_loaded(foot) or not world.is_loaded(head):
+				continue
+			if world.get_block(foot) == BlockDB.AIR and world.get_block(head) == BlockDB.AIR:
+				chosen = foot
+				found = true
+				break
+		if found:
+			break
+	if not found:
+		return
+	var creature_state := {"id": 900001, "species": "boar", "key": "capture-boar",
+		"position": Vector3(chosen) + Vector3(0.5, 0.0, 0.5), "health": CreatureModel.HIT_POINTS,
+		"alive": true, "wander": Vector3.ZERO}
+	creature_model.states["capture-boar"] = creature_state.duplicate(true)
+	var creature = CreatureNode.new()
+	creature.configure(creature_state, world)
+	creature_root.add_child(creature)
+	creature.set_physics_process(false)
+	creature.rotation.y = PI
+	creature_nodes[str(creature_state.key)] = creature
+	creature.killed.connect(_on_creature_killed)
+	player.look_yaw(0.0)
+	player.look_pitch(-12.0)
+	_on_creature_attacked(creature)
+	hud.flash("Boar hurt (%d/%d)" % [CreatureModel.HIT_POINTS - 1, CreatureModel.HIT_POINTS], 30.0)
 
 
 ## `--health=N` sets the starting health by dealing the difference, so a lethal
@@ -624,6 +689,10 @@ func _resume() -> void:
 func _return_to_title() -> void:
 	_save_now()
 	streamer.clear()
+	if is_instance_valid(creature_root):
+		creature_root.queue_free()
+		creature_root = null
+	creature_nodes.clear()
 	player.teleport_to(Vector3(8.5, 120.0, 8.5))
 	player.can_interact = false
 	player.set_physics_process(false)
@@ -670,6 +739,7 @@ func _process(delta: float) -> void:
 			if fluid != null:
 				fluid.tick()
 			_update_survival(delta)
+			_update_creatures(delta)
 			_update_status()
 			if not bool(_options["capture"]) and _autosave_timer >= AUTOSAVE_SECONDS:
 				_autosave_timer = 0.0
@@ -923,6 +993,53 @@ func _on_block_broken(world_position: Vector3i, block_id: int, drop: int) -> voi
 func _on_block_placed(world_position: Vector3i, block_id: int) -> void:
 	inventory.take_from_slot(inventory.selected)
 	hud.flash("Placed %s at (%d, %d, %d)" % [BlockDB.name_of(block_id), world_position.x, world_position.y, world_position.z], 1.4)
+
+
+func _update_creatures(delta: float) -> void:
+	if creature_model == null or creature_root == null:
+		return
+	_creature_spawn_timer -= delta
+	if _creature_spawn_timer <= 0.0:
+		_creature_spawn_timer = 1.0
+		var focus := Vector3i(floori(player.global_position.x), 0, floori(player.global_position.z))
+		var remaining: int = CreatureModel.CAP - creature_nodes.size()
+		if remaining > 0:
+			for state: Dictionary in creature_model.spawn_candidates(focus, world, remaining):
+				var creature = CreatureNode.new()
+				creature.configure(state, world)
+				creature_root.add_child(creature)
+				creature_nodes[str(state.key)] = creature
+				creature.killed.connect(_on_creature_killed)
+	for key: Variant in creature_nodes.keys():
+		var living: Node = creature_nodes[key]
+		if is_instance_valid(living) and bool(living.state.get("alive", false)):
+			var updated: Dictionary = creature_model.states.get(str(key), {}).duplicate(true)
+			updated["position"] = living.global_position
+			creature_model.states[str(key)] = updated
+	var player_flat := Vector3(player.global_position.x, 0.0, player.global_position.z)
+	for key: Variant in creature_model.prune(player_flat, 4):
+		var creature: Node = creature_nodes.get(str(key))
+		if creature != null:
+			creature_nodes.erase(str(key))
+			creature.queue_free()
+
+
+func _on_creature_attacked(creature) -> void:
+	if not is_instance_valid(creature) or not creature.is_in_group("passive_creature"):
+		return
+	var drops: int = creature.apply_hit(1)
+	if drops <= 0:
+		hud.flash("Boar hurt (%d/%d)" % [int(creature.state.health), CreatureModel.HIT_POINTS], 1.0)
+
+
+func _on_creature_killed(creature, drop_count: int = 1) -> void:
+	var leftover: int = inventory.add(CreatureModel.DROP_ID, drop_count)
+	var key := str(creature.state.get("key", ""))
+	creature_model.states.erase(key)
+	creature_nodes.erase(key)
+	creature.queue_free()
+	hud.flash("Boar down  +%d Oak Log%s" % [drop_count - leftover, "" if leftover == 0 else " (inventory full)"], 2.0)
+	hud.refresh()
 
 
 func _on_target_changed(hit: Dictionary) -> void:

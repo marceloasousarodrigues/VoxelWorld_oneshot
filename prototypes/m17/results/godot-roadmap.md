@@ -27,7 +27,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (552 assertions, verified 2026-10-16) + runtime integration harness (29 assertions, verified 2026-10-16) + headless determinism fingerprint
+- [x] Automated test suite (587 assertions, verified 2026-10-16) + runtime integration harness (35 assertions, verified 2026-10-16) + headless determinism fingerprint
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
 - [x] Visual quality pass: lighting/fog retuned and re-inspected; sand is bright and near-tree
       shadows are dark (both plausible, not fixed)
@@ -57,10 +57,21 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Day/night cycle (sun angle, sky, ambient and fog follow a clock) — `day_night.gd`,
       tested, `day-noon.png` / `day-dusk.png` / `day-night.png` inspected;
       `--time=` / `--time-rate=` drive it, saved with the world (save VERSION 2)
-- [ ] Passive creatures (spawn rules, wandering AI, drops)
+- [x] One passive boar species (bounded deterministic nearby spawn, unique per-column
+      identity, cap 6, 54-block despawn range, bounded pruning, voxel-aware wandering,
+      primitive animated silhouette, player damage and one Oak Log drop; unit + runtime
+      integration verified 2026-10-16). Ground is taken from the **live world voxels**
+      (`supports_standing` / `wander_destination` in `core/passive_creatures.gd`), not the
+      procedural generator, so mining the ground block removes the spawn/move site
+      (reviewer defect fixed 2026-10-16 with new unit assertions)
 - [ ] Hostile creatures (targeting, melee, spawning in the dark)
 - [ ] Combat, damage exchange and loot
-- [ ] Spawning and despawning rules tied to the player's surroundings
+- [x] Passive creature spawning/despawning tied to the player's surroundings (38-block
+      spawn search, 54-block retention, streamed loaded-cell checks, deterministic IDs,
+      live-world ground/headroom so player edits are respected)
+- [x] Creature save policy documented: transient living animals are re-seeded from the
+      world seed and current player neighborhood on load; dead-creature drops are placed
+      directly in the existing persistent inventory. Save format remains VERSION 3.
 - [ ] Weather or environmental variation
 - [ ] Exploration incentives: caves, ores and landmarks are generated but unrewarded
       (no ore→tool progression yet)
@@ -103,3 +114,10 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Save format versioning: VERSION 3 accepts versions 1..3 (adds health and breath;
       v1/v2 fields remain optional); unknown versions are still quarantined
 - [x] Remove temporary diagnostics (`M17_OPTIONS`, `_probe_surface.gd`)
+- [x] Passive creatures decided ground from the procedural generator (`height_at` /
+      `_surface_block`) instead of the live world, so a mined ground block still looked
+      like valid floor and a boar could spawn/wander over a hole. Fixed with the node-free
+      `supports_standing` / `wander_destination` helpers in `core/passive_creatures.gd`
+      (loaded + solid + non-liquid ground; loaded-air foot/head) used by both
+      `spawn_candidates` and `game/passive_creature.gd::_physics_process`; regression
+      assertions added to `test_creatures.gd` (reviewer defect, 2026-10-16)

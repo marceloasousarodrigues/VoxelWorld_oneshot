@@ -495,3 +495,150 @@ the missing-breath sentinel. Tests cover invalid values/quarantine/no mutation a
 set-health death exactly once. Latest direct reruns: unit `M17_TESTS_PASS 552 assertions`
 exit 0; integration `M17_INTEGRATION_PASS 29 assertions` exit 0; both stderr 0 bytes.
 **Savepoint**: `5e04d03` — "M17 Godot: health, survival feedback, death and respawn".
+
+## M17 Phase C increment: passive creatures (2026-10-16)
+
+Implemented one modest passive-creature gameplay loop in the Godot project. This was a
+working-tree increment only: the orchestrator owns commits; no files were staged or
+committed. Existing unrelated dirty files were preserved.
+
+**Implementation**
+
+- Added `scripts/core/passive_creatures.gd`, a node-free boar state model with seed-based
+  spawn candidate ordering, stable IDs, 3 HP, 1.2-unit/s bounded wander steps, one-use
+  Oak Log drop rules, and bounded pruning. Spawn selection is capped at 6, searches no
+  farther than 38 blocks, uses only loaded chunks, rejects ocean/water and occupied foot
+  or head cells, and avoids duplicate world columns. Living creatures outside 54 blocks
+  are despawned; at most 4 model entries are pruned per game frame.
+- Added `scripts/game/passive_creature.gd`: a small stylized boar built from primitive
+  meshes, with a capsule collider, voxel-surface-following wander targets, water/solid-cell
+  avoidance, subtle bob animation, health and damage response. The game owns its bounded
+  scene population (one node per creature, never per voxel).
+- `game.gd` schedules spawns once per second and updates the model from moving positions.
+  Existing left-click block break is unchanged unless a passive creature is hit first by
+  the physics ray and is closer than the voxel DDA block hit. Each click removes one HP;
+  three hits kill this species and its one Oak Log enters the existing inventory once.
+  Full inventory keeps the kill and reports the uncollected item in HUD feedback.
+- Creature states are deliberately transient, not saved in VERSION 4. Saves preserve the
+  world seed, player state and inventory; on load, living animals are regenerated from the
+  seeded terrain/player neighborhood with a fresh bounded population. This avoids saving
+  short-lived wander offsets; the successful death item is credited directly to the
+  already-persisted inventory. Save VERSION 3 and v1-v3 compatibility are unchanged.
+- Added a `--creature-feedback-capture` diagnostic option to position one legal animal in
+  front of the player, apply one hit and hold the usual hurt message for screenshot
+  inspection. This is capture-only; normal play uses the regular attack path.
+- Added `test_creatures.gd` and integration coverage for deterministic spawn state, cap,
+  radius, valid solid land/headroom, damage/death/drop-once, bounded wander/prune,
+  population cap and real player-ray attack plus inventory pickup.
+
+**Validation actually performed (Windows, Godot 4.7.2 stable Mono; RTX 3080)**
+
+- TDD RED: before `PassiveCreatures` existed, suite failed compiling the new creature test
+  with the expected undeclared-model error. A subsequent execution caught test fixture
+  chunks loaded at y=0 while land cells were in chunk y=4; corrected the fixture.
+- Unit command (redirected `Start-Process`):
+  `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd`;
+  final exit 0, `M17_TESTS_PASS 579 assertions`, stderr 0 bytes.
+- Integration command (redirected `Start-Process`):
+  `--headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game`;
+  exit 0, `M17_INTEGRATION_PASS 35 assertions`, stderr 0 bytes. Includes live capped spawn,
+  ray target prioritization, three attacks, and exactly one inventory item.
+- Windowed capture command:
+  `--path prototypes/m17/godot -- --capture --capture-name=passive-creature.png
+  --creature-feedback-capture --settle=14 --time-rate=0`; exit 0, stderr 0 bytes,
+  `results/godot/passive-creature.png` (1280x720) inspected. Image shows the primitive
+  boar in the forest, health/hotbar HUD, and centered `Boar hurt (2/3)` feedback. Capture
+  summary: seed 17017, world hash 441363152919021799, 392 loaded/meshed chunks, 166074
+  faces, generation 2857 ms / mesh build 2209 ms for the whole streamed region; FPS sample
+  60. These environment-specific capture values are not a creature-only
+  benchmark; no long-exploration performance claim is made.
+
+**Limitations / not implemented**: hostile mobs, broad combat, animal products beyond the
+Oak Log utility drop, saved creature health/positions, and multiple species remain out of
+scope. Creatures use primitive geometry and grid-column movement rather than navmesh. Manual
+physical mouse attack was not performed; the windowed capture verified rendered appearance
+and feedback, while automated integration exercised the real player ray-target/break path.
+
+Pending savepoint: latest prior savepoint remains `5e04d03`; orchestrator must review the
+diff and create the next savepoint after integration.
+
+## M17 Phase C follow-up: passive creatures use live ground (2026-10-16, reviewer fix)
+
+The reviewer passed the passive-creature increment except for one concrete defect and
+required exactly that defect to be fixed (working-tree only; the orchestrator owns
+commits, so nothing was staged or committed).
+
+**Defect (as reported and confirmed in source)**
+
+`scripts/core/passive_creatures.gd::spawn_candidates` and
+`scripts/game/passive_creature.gd::_physics_process` decided "is there ground here?" from
+the **procedural generator** (`world.generator.height_at(...)` and
+`world.generator._surface_block(...)`), not from the live voxel world. When the player
+mined the ground block, the generator still reported a solid surface there, so a creature
+could spawn or wander over the resulting hole -- violating the milestone requirement to
+"use valid ground and do not step into air".
+
+**Fix (smallest change)**
+
+- `scripts/core/passive_creatures.gd`: new node-free helper
+  `supports_standing(world, x, z, height)` -- true only when the **live** world has the
+  ground cell `Vector3i(x, height, z)` loaded and `BlockDB.is_solid(block)` and
+  `not BlockDB.is_liquid(block)`, and the foot `(x, height+1, z)` and head
+  `(x, height+2, z)` cells are loaded air. New pure method
+  `wander_destination(world, position, target, delta)` returns the next world position for
+  one `wander_step`, or the unchanged `position` when the destination column has no live
+  supported ground. `spawn_candidates` keeps its height/sea-level guard and now rejects a
+  column unless `supports_standing(...)` is true, so player edits (not just generated base
+  terrain) are respected.
+- `scripts/game/passive_creature.gd::_physics_process`: the node no longer reads the
+  generator surface at all; it delegates the move to
+  `MODEL.new(world.world_seed).wander_destination(world, global_position, _wander_target, delta)`
+  and only advances when the returned destination differs. Deterministic IDs, the cap,
+  spawn radius, despawn range, damage/drop semantics and the transient save policy are
+  unchanged.
+
+**TDD**
+
+Tests were written first and watched to fail (`test-driven-development`):
+
+- RED: with the tests in place but the fix absent, the suite exited **1** with
+  `M17_ASSERT_FAIL a mined ground column is not chosen as a spawn candidate` plus
+  `M17_TEST_FAILURE passive creatures follow live ground: the module reached its end (a
+  script error aborted it)` (the not-yet-existing helper call). This is the exact defect:
+  `spawn_candidates` still selected the column after its ground block was mined.
+- GREEN: after the fix, the unit suite exits **0** (see below).
+
+New assertions in `scripts/tests/test_creatures.gd` (8 added): the accepted candidate
+stands on solid generated land; its ground block can be mined; a mined ground column is
+**not** chosen as a spawn candidate; valid ground still yields spawn candidates after an
+edit; a mined column no longer `supports_standing`; a wander step over a mined hole is
+refused (unchanged position); restored ground supports standing again; a wander step over
+valid ground still advances. The creature fixture now also loads the `y=3` chunk rows so
+the ground cells under candidates are loaded and can be edited.
+
+**Verification actually run (Windows, Godot 4.7.2 stable Mono)**
+
+- Unit: `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd`
+  (redirected `Start-Process`); exit **0**, `M17_TESTS_PASS 587 assertions`,
+  stderr **0 bytes**. (Baseline before this follow-up was 579; the 8 new assertions are the
+  only change.)
+- Integration: `--headless --path prototypes/m17/godot --script
+  res://scripts/tests/run_integration.gd -- --straight-to-game`; exit **0**,
+  `M17_INTEGRATION_PASS 35 assertions`, stderr **0 bytes**. The integration run exercises
+  the real creature node (spawn, physics wander, ray attack, kill/drop) with no script
+  errors.
+
+**Not changed / not fixed here**
+
+- Pre-existing green horizontal striping is visible in the pre-increment
+  `results/godot/fix-spawn.png` (written 11:05, before the creature increment at 15:57).
+  It is therefore **not** caused by this increment and is not being fixed here.
+- The capture-only diagnostic `--creature-feedback-capture` (`game.gd`) still picks its
+  display column from the generator height; it is not gameplay spawning, the placed animal
+  has physics disabled and never wanders, so it is out of scope for this defect and was
+  left unchanged.
+- A human interactive play-through of mining ground under a live creature was not
+  performed; the rule is covered by the unit tests above plus the passing runtime
+  integration.
+
+No commit was created; the orchestrator reviews the diff and creates the savepoint.
