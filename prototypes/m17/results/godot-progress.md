@@ -301,12 +301,12 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 ## 9. Resume
 
 Read this file and `godot-roadmap.md`, then run the tests and the smoke command from
-§5 to confirm the baseline still holds (`552` unit + `29` integration assertions;
+§5 to confirm the baseline still holds (`587` unit + `35` integration assertions;
 current `world_hash=441363152919021799`, `faces=166074`, `faces_hash=6977993294663025454`
 — the clay generation fix in §12 changed the world content, so the earlier
 `world_hash=6372495951065888771` is historical). Then continue with the first unchecked
-item of `godot-roadmap.md` phase B/C (crafting and health/death/respawn are implemented;
-next planned increment is living-world creatures and their spawn/combat loop).
+item of `godot-roadmap.md` phase B/C (crafting, health/death/respawn and passive creatures
+are implemented; next planned increment is hostile creatures + combat exchange + loot).
 
 **Stabilization is done for the three user-reported items**: the WASD movement failure,
 the rendering defects and the water concern all traced to the inverted-winding bug now
@@ -341,6 +341,7 @@ the listed evidence had been inspected. Nothing in the working tree was discarde
 | `23a8919` | Persistence regression test `test_persistence.gd` (SaveManager write/read/apply, validation, quarantine) added to the runner | 383 unit assertions exit 0, 0 bytes stderr; the test round-trips blocks/fluid/player/inventory/clock, refuses a wrong-seed save, loads a version-1 save, and quarantines bad saves without losing them |
 | `4af42d6` | Crafting increment: `core/crafting.gd` (recipes, atomic `craft`, capacity), `game/crafting_panel.gd` (C-key overlay), `game.gd`/`project.godot` integration, `--open-crafting`, `world_gen.gd` clay-band fix, `test_crafting.gd` + clay-presence test, docs, `crafting-ui.png` | 435 unit + 17 integration assertions exit 0, 0 bytes stderr; `crafting-ui.png` inspected (panel lists all five recipes, affordable rows bright, clay row dimmed); post-fix capture `world_hash=441363152919021799`, `faces=166074`; independent Builder→Tester→Reviewer round, Reviewer verdict PASS |
 | `5e04d03` | Health, survival feedback, death/respawn: `core/health.gd`, `core/survival.gd`, player fall tracking/camera shake, HUD health/breath/hurt flash, death screen, game integration, SaveManager v3, tests, captures | 552 unit + 29 integration assertions exit 0, 0 bytes stderr; integration exercises lethal death and Respawn button signal; `health-hud.png` and `death-screen.png` inspected; 30-second submerged runtime smoke exited 0 at 60 fps (breath 0, health 5.43); independent Reviewer verdict PASS |
+| `b993af4` | Passive creatures: `core/passive_creatures.gd` (node-free model, live-ground checks), `game/passive_creature.gd` (primitive boar), bounded spawner + LMB creature attack/drop in `game.gd`/`voxel_player.gd`, `test_creatures.gd` + integration, `tools/hud_probe.py`, `passive-creature.png` | 587 unit + 35 integration assertions exit 0, 0 bytes stderr; integration drives real spawn/wander/ray-attack/kill/drop; `passive-creature.png` inspected (boar + "Boar hurt (2/3)"); Reviewer initially FAIL on generator-vs-live ground, fixed with `supports_standing`/`wander_destination` + 8 asserting tests, then PASS |
 
 The winding savepoint is **complete and validated for the behaviour it introduced**; the
 three user-reported items (movement, rendering, water) are resolved. Day/night from the
@@ -362,12 +363,10 @@ Baseline re-measured at the start of this run (unchanged): unit suite
 Planned increments (Phase B/C of the mission §8), each Builder → Tester → Reviewer, each
 ending in a Git savepoint and a roadmap/progress update:
 
-1. **Crafting** — recipe data model + deterministic rules + tests + a functional crafting
-   interface (Phase B: `[ ] Crafting recipes`, `[ ] Crafting interface`).
-2. **Health & damage** — player health, fall damage, drowning, HUD hearts, death + respawn,
-   saved with the world (Phase B: health/damage, feedback, death/respawn).
-3. **Living world** — passive and hostile creatures, voxel-aware AI, spawn/despawn rules,
-   combat and loot (Phase C).
+1. **Crafting** — done, `4af42d6` (`[x]` recipes + `[x]` interface).
+2. **Health & damage** — done, `5e04d03` (health/damage/feedback/death/respawn).
+3. **Living world** — passive creatures done, `b993af4`; hostile creatures, combat exchange
+   and loot are the next increment (Phase C).
 
 Each increment must keep the existing suites green, add new automated tests, and produce a
 runtime capture that is *inspected* (not merely generated) before the increment is called
@@ -559,8 +558,8 @@ scope. Creatures use primitive geometry and grid-column movement rather than nav
 physical mouse attack was not performed; the windowed capture verified rendered appearance
 and feedback, while automated integration exercised the real player ray-target/break path.
 
-Pending savepoint: latest prior savepoint remains `5e04d03`; orchestrator must review the
-diff and create the next savepoint after integration.
+Savepoint: `b993af4` — "M17 Godot: passive creatures (spawning, wander, attack drops)";
+the prior savepoint was `5e04d03`.
 
 ## M17 Phase C follow-up: passive creatures use live ground (2026-10-16, reviewer fix)
 
@@ -641,4 +640,4 @@ the ground cells under candidates are loaded and can be edited.
   performed; the rule is covered by the unit tests above plus the passing runtime
   integration.
 
-No commit was created; the orchestrator reviews the diff and creates the savepoint.
+This follow-up is included in savepoint `b993af4` (independently re-reviewed: PASS).
