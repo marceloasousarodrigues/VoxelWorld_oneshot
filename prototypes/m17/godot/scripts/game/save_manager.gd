@@ -14,7 +14,9 @@ extends RefCounted
 ## and reported, so a broken save can never destroy a working session.
 
 const FORMAT := "voxelworld.godot.save"
-const VERSION := 1
+## 1: block/fluid edits, player, inventory.  2: adds the day/night clock.  Version
+## 1 saves still load: every newer field is optional and falls back to a default.
+const VERSION := 2
 const DEFAULT_DIRECTORY := "user://saves"
 const DEFAULT_NAME := "world.json"
 
@@ -40,7 +42,7 @@ func ensure_directory() -> bool:
 	return true
 
 
-func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory) -> Dictionary:
+func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null) -> Dictionary:
 	var block_edits: Array = []
 	for position: Vector3i in world.edits:
 		block_edits.append([position.x, position.y, position.z, int(world.edits[position])])
@@ -75,16 +77,17 @@ func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory)
 		},
 		"player": player_state,
 		"inventory": inventory.to_dictionary() if inventory != null else {},
+		"clock": clock.to_dictionary() if clock != null else {},
 		"blocks": block_edits,
 		"fluid": fluid_edits,
 	}
 
 
-func write(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory) -> bool:
+func write(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null) -> bool:
 	last_error = ""
 	if not ensure_directory():
 		return false
-	var payload := to_dictionary(world, player, inventory)
+	var payload := to_dictionary(world, player, inventory, clock)
 	var path := save_path()
 	var temporary := path + ".tmp"
 	var file := FileAccess.open(temporary, FileAccess.WRITE)
@@ -142,7 +145,7 @@ func read() -> Dictionary:
 
 
 ## Applies a validated save to the live world and player.  Returns a summary.
-func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: Inventory) -> Dictionary:
+func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null) -> Dictionary:
 	var data: Dictionary = save["data"]
 	if int(data["seed"]) != world.world_seed:
 		return {"ok": false, "error": "save belongs to seed %d, the world is seed %d" % [int(data["seed"]), world.world_seed]}
@@ -157,6 +160,8 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 		if int(row[4]) == 1:
 			fluid_sources[position] = true
 	world.load_edits(block_edits, fluid_edits, fluid_sources)
+	if clock != null and data.has("clock"):
+		clock.from_dictionary(data["clock"] as Dictionary)
 	if inventory != null and data.has("inventory") and not (data["inventory"] as Dictionary).is_empty():
 		inventory.from_dictionary(data["inventory"])
 	if player != null and not (data["player"] as Dictionary).is_empty():
@@ -196,10 +201,15 @@ func _sanitise(data: Dictionary) -> Variant:
 	if typeof(inventory_state) != TYPE_DICTIONARY:
 		last_error = "inventory is not an object"
 		return null
+	var clock_state: Variant = data.get("clock", {})
+	if typeof(clock_state) != TYPE_DICTIONARY:
+		last_error = "the clock is not an object"
+		return null
 	return {
 		"seed": seed_value,
 		"player": player_state,
 		"inventory": inventory_state,
+		"clock": clock_state,
 		"blocks": rows,
 		"fluid": fluid,
 		"version": int(data.get("version", 0)),

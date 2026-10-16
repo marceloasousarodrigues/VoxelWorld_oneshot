@@ -31,6 +31,10 @@ var saves: SaveManager
 
 var sun: DirectionalLight3D
 var environment_node: WorldEnvironment
+var environment: Environment
+var sky_material: ProceduralSkyMaterial
+
+var clock: DayNight
 
 var _options := {
 	"render_radius": 4,
@@ -44,6 +48,8 @@ var _options := {
 	"shadow_distance": 96.0,
 	"shadows": true,
 	"fog_density": 0.0008,
+	"time_of_day": 0.28,
+	"time_rate": 1.0,
 	"capture": false,
 	"capture_name": "godot-game-slice.png",
 	"capture_settle": 12.0,
@@ -58,6 +64,12 @@ var _options := {
 	"quit_after": 0.0,
 	"quit_after_settle": false,
 }
+
+## Set when `--time-rate=` appears on the command line, so the capture harness
+## only freezes the clock when the caller did not ask for a specific rate.
+var _time_rate_given := false
+## Set when `--sun=` pins the light direction; otherwise the clock drives it.
+var _sun_angle_locked := false
 
 var _loading_seconds := 0.0
 var _play_seconds := 0.0
@@ -77,6 +89,11 @@ var _stream_report_printed := false
 
 func _ready() -> void:
 	_parse_arguments()
+	if bool(_options["capture"]) and not _time_rate_given:
+		# A capture is evidence: freeze the clock at the requested time of day
+		# unless the caller explicitly asked for a running clock.
+		_options["time_rate"] = 0.0
+	clock = DayNight.new(float(_options["time_of_day"]), _cycle_length())
 	library = TextureLibrary.new()
 	if not library.load_all():
 		push_error("VoxelWorld: block textures could not be loaded")
@@ -95,27 +112,34 @@ func _ready() -> void:
 		_show_title()
 
 
+func _cycle_length() -> float:
+	var rate := float(_options["time_rate"])
+	if rate <= 0.0:
+		return 0.0
+	return DayNight.DAY_LENGTH_SECONDS / rate
+
+
 func _build_environment() -> void:
 	environment_node = WorldEnvironment.new()
 	environment_node.name = "Environment"
-	var environment := Environment.new()
+	environment = Environment.new()
 	environment.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
-	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color("2f7cc4")
-	sky_material.sky_horizon_color = Color("cfe3e8")
+	sky_material = ProceduralSkyMaterial.new()
+	sky_material.sky_top_color = clock.sky_top_color()
+	sky_material.sky_horizon_color = clock.sky_horizon_color()
 	sky_material.sky_curve = 0.12
-	sky_material.ground_bottom_color = Color("7f97a6")
-	sky_material.ground_horizon_color = Color("c6d7dd")
+	sky_material.ground_bottom_color = clock.ground_bottom_color()
+	sky_material.ground_horizon_color = clock.ground_horizon_color()
 	sky_material.ground_curve = 0.05
 	sky_material.sun_angle_max = 12.0
 	sky_material.sun_curve = 0.08
 	sky.sky_material = sky_material
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	environment.ambient_light_color = Color("8fb6d6")
-	environment.ambient_light_sky_contribution = 1.0
-	environment.ambient_light_energy = 1.45
+	environment.ambient_light_color = clock.ambient_color()
+	environment.ambient_light_sky_contribution = clock.ambient_sky_contribution()
+	environment.ambient_light_energy = clock.ambient_energy()
 	environment.background_energy_multiplier = 0.95
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	environment.tonemap_white = 1.6
@@ -124,7 +148,7 @@ func _build_environment() -> void:
 	environment.adjustment_contrast = 1.02
 	environment.adjustment_brightness = 1.02
 	environment.fog_enabled = true
-	environment.fog_light_color = Color("c3dae0")
+	environment.fog_light_color = clock.fog_color()
 	# A gentle exponential haze: enough to soften the edge of the loaded world
 	# without washing out the landscape. `--fog=0` disables it for comparison
 	# captures; `--fog=<density>` retunes it.
@@ -142,8 +166,8 @@ func _build_environment() -> void:
 	sun = DirectionalLight3D.new()
 	sun.name = "Sun"
 	_set_sun_angles(float(_options["sun_angle"].x), float(_options["sun_angle"].y))
-	sun.light_color = Color("fff4e2")
-	sun.light_energy = 1.22
+	sun.light_color = clock.sun_color()
+	sun.light_energy = clock.sun_energy()
 	sun.shadow_enabled = bool(_options["shadows"])
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	sun.directional_shadow_max_distance = float(_options["shadow_distance"])
@@ -151,6 +175,31 @@ func _build_environment() -> void:
 	sun.shadow_normal_bias = 1.0
 	sun.light_angular_distance = 1.2
 	add_child(sun)
+
+
+## Pushes the clock's lighting into the live environment.  Called every frame in
+## the playing state; the values are pure functions of the time of day, so a
+## frozen clock produces a byte-identical frame.
+func _update_sky() -> void:
+	if clock == null or sun == null:
+		return
+	var angles := clock.sun_angles()
+	if not _sun_angle_locked:
+		_set_sun_angles(angles.x, angles.y)
+	sun.light_color = clock.sun_color()
+	sun.light_energy = clock.sun_energy()
+	environment.ambient_light_energy = clock.ambient_energy()
+	environment.ambient_light_color = clock.ambient_color()
+	environment.ambient_light_sky_contribution = clock.ambient_sky_contribution()
+	environment.fog_light_color = clock.fog_color()
+	if sky_material != null:
+		sky_material.sky_top_color = clock.sky_top_color()
+		sky_material.sky_horizon_color = clock.sky_horizon_color()
+		sky_material.ground_bottom_color = clock.ground_bottom_color()
+		sky_material.ground_horizon_color = clock.ground_horizon_color()
+	var water := materials.water_material()
+	if water != null:
+		water.set_shader_parameter("water_tint", clock.water_tint())
 
 
 func _set_sun_angles(pitch: float, yaw: float) -> void:
@@ -247,6 +296,12 @@ func _parse_arguments() -> void:
 				var sun_angles := value.split(",")
 				if sun_angles.size() == 2:
 					_options["sun_angle"] = Vector2(sun_angles[0].to_float(), sun_angles[1].to_float())
+					_sun_angle_locked = true
+			"--time":
+				_options["time_of_day"] = fposmod(value.to_float(), 1.0)
+			"--time-rate":
+				_options["time_rate"] = maxf(0.0, value.to_float())
+				_time_rate_given = true
 			"--shots":
 				_options["shots"] = _parse_shots(value)
 			"--straight-to-game":
@@ -311,6 +366,8 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	_play_seconds = 0.0
 	_autosave_timer = 0.0
 	_stream_report_printed = false
+	clock = DayNight.new(float(_options["time_of_day"]), _cycle_length())
+	_update_sky()
 
 	world = VoxelWorld.new(seed_value)
 	fluid = FluidSim.new(world)
@@ -338,7 +395,7 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	streamer.focus_at(player.global_position)
 
 	if save != null:
-		var applied: Dictionary = saves.apply(save, world, player, inventory)
+		var applied: Dictionary = saves.apply(save, world, player, inventory, clock)
 		if not applied["ok"]:
 			hud.flash("Save rejected: %s" % applied["error"], 6.0)
 		else:
@@ -480,6 +537,8 @@ func _process(delta: float) -> void:
 		State.PLAYING:
 			_play_seconds += delta
 			_autosave_timer += delta
+			clock.advance(delta)
+			_update_sky()
 			if fluid != null:
 				fluid.tick()
 			_update_status()
@@ -505,11 +564,12 @@ func _update_status() -> void:
 		target_text = "Target: %s (%d, %d, %d)" % [
 			BlockDB.name_of(int(target["block_id"])), block_cell.x, block_cell.y, block_cell.z,
 		]
-	hud.set_debug("%s\nXYZ %.1f / %.1f / %.1f   %s   %s\nchunks %d/%d queued %d  ·  fluid queue %d  ·  %d fps%s" % [
+	hud.set_debug("%s\nXYZ %.1f / %.1f / %.1f   %s   %s   %s %s\nchunks %d/%d queued %d  ·  fluid queue %d  ·  %d fps%s" % [
 		target_text,
 		eye.x, eye.y, eye.z,
 		_center_biome_name(),
 		"flying" if player.flying else ("submerged" if player.is_submerged() else "walking"),
+		clock.clock_text(), clock.phase_name(),
 		streamer.loaded_count(), streamer.wanted_count(), streamer.queued_count(),
 		fluid.pending_count() if fluid != null else 0,
 		int(round(_last_fps)),
@@ -585,7 +645,7 @@ func _on_fly_changed(enabled: bool) -> void:
 # =========================================================================
 
 func _save_now() -> void:
-	var written := saves.write(world, player, inventory)
+	var written := saves.write(world, player, inventory, clock)
 	if written:
 		hud.flash("Saved %d block edits to %s" % [world.edits.size(), ProjectSettings.globalize_path(saves.save_path())], 4.0)
 		print("M17_GAME_SAVED path=%s block_edits=%d fluid_edits=%d" % [
@@ -597,7 +657,7 @@ func _save_now() -> void:
 
 
 func _save_silently(reason: String) -> void:
-	if saves.write(world, player, inventory):
+	if saves.write(world, player, inventory, clock):
 		print("M17_GAME_AUTOSAVE reason=%s block_edits=%d" % [reason, world.edits.size()])
 	else:
 		push_error("M17_GAME_AUTOSAVE_FAILED %s" % saves.last_error)
@@ -608,7 +668,7 @@ func _reload_now() -> void:
 	if not result["ok"]:
 		hud.flash("Load failed: %s" % result["error"], 5.0)
 		return
-	var applied: Dictionary = saves.apply(result["data"], world, player, inventory)
+	var applied: Dictionary = saves.apply(result["data"], world, player, inventory, clock)
 	if not applied["ok"]:
 		hud.flash("Load failed: %s" % applied["error"], 5.0)
 		return
@@ -704,6 +764,9 @@ func _smoke_summary() -> void:
 		"fps": _last_fps,
 		"streaming": streamer.report() if streamer != null else {},
 		"world_hash": world.fingerprint() if world != null else -1,
+		"clock": clock.to_dictionary() if clock != null else {},
+		"clock_text": clock.clock_text() if clock != null else "",
+		"phase": clock.phase_name() if clock != null else "",
 		"fluid": fluid.stats() if fluid != null else {},
 		"mesher": mesher.stats,
 		"edits": world.edits.size() if world != null else -1,

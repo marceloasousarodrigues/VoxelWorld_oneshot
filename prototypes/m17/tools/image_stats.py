@@ -38,7 +38,11 @@ def describe(path: Path, grid: tuple[int, int] = (6, 4)) -> None:
 
     # Crushed shadows / blown highlights, as a share of the frame.
     # 1/255-step luminance histogram is enough at this fidelity.
-    pixels = list(image.resize((width // 4, height // 4), Image.BOX).getdata())
+    small = image.resize((width // 4, height // 4), Image.BOX)
+    # Pillow >= 12 deprecates `getdata` in favour of `get_flattened_data`.
+    pixels = list(
+        small.get_flattened_data() if hasattr(small, "get_flattened_data") else small.getdata()
+    )
     total = len(pixels)
     black = sum(1 for p in pixels if max(p) <= 24)
     white = sum(1 for p in pixels if min(p) >= 235)
