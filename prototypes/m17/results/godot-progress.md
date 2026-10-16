@@ -1,8 +1,12 @@
 # M17 Godot — Progress and Resume Point
 
-Last updated: 2026-10-16 (autonomous Godot development session).
+Last updated: 2026-10-16 (autonomous Godot development session, second checkpoint).
 Mission: `prototypes/m17/GODOT_MISSION.md`.
 Roadmap: `prototypes/m17/results/godot-roadmap.md`.
+
+**Savepoints**: `fd9f7d2` — “M17 Godot: day/night cycle (clock-driven sun, sky, ambient,
+fog and water)” (current). Previous: `e029c68` — “M17 Godot: playable voxel game,
+streaming, water, persistence, tests and docs”. Full log in §10.
 
 ---
 
@@ -36,6 +40,7 @@ Verified means: observed in a run of the real project, not merely written.
 | Main menu / pause / play loop | verified | menu is the boot scene; `--straight-to-game` skips it |
 | HUD, hotbar, item counts | verified | visible in `diag-shore.png`, `godot-game-tour-*.png` |
 | Textures, lighting, sky, fog | verified | inspected captures (see §6) |
+| Day/night cycle | verified | 338-assertion suite + `day-noon.png` / `day-dusk.png` / `day-night.png` inspected |
 
 ## 4. Files and architecture
 
@@ -45,6 +50,9 @@ Godot project root: `prototypes/m17/godot/`.
 **Engine layer** (`scripts/core/`, no scene-tree knowledge):
 
 - `chunk_data.gd` — 16³ voxel storage, chunk/world coordinate conversion (floor semantics).
+- `day_night.gd` — `DayNight` clock: time of day, sun angles/energy, ambient colour and
+  energy, sky/ground/fog colours and the water tint as pure functions of the time;
+  `--time=` / `--time-rate=` control it and it is saved with the world.
 - `block_db.gd` — 34 block definitions in packed arrays (layer, solid, opaque, cull, liquid, hardness, drop, face texture keys).
 - `world_gen.gd` — deterministic generation: continent/height field, biomes, caves, ores, trees, decoration, `SEA_LEVEL = 62`, `WORLD_HEIGHT = 128`.
 - `voxel_world.gd` — authoritative voxel store, edit overlay, `block_changed` signal, `fingerprint()`.
@@ -100,16 +108,19 @@ Note for shell scripting: launching the Godot GUI executable through a PowerShel
 pipe can hang; use `Start-Process -Wait -RedirectStandardOutput` instead (that is
 what the capture commands above were run with). Auxiliary CLI flags used for
 inspection: `--fly`, `--player-at=x,y,z`, `--look=yaw,pitch`, `--render-distance=N`,
-`--no-shadows`, `--fog=<density>` (`0` disables fog).
+`--no-shadows`, `--fog=<density>` (`0` disables fog), `--settle=<seconds>`,
+`--capture-name=<file>`, `--time=0..1` (0 sunrise, 0.25 noon, 0.5 sunset, 0.75 midnight)
+and `--time-rate=<day-length-seconds>` (`0` freezes the clock).
 
 ## 6. Tests and visual verification performed
 
 **Automated (headless)**
 
-- `M17_TESTS_PASS 271 assertions`, exit code 0, 0 bytes of stderr.
+- `M17_TESTS_PASS 338 assertions`, exit code 0, 0 bytes of stderr.
 - Modules: coordinates, chunk data/indexing, block DB, generation, mesher (incl. a
   stale-padding regression), raycast, edits/persistence, fluid, fixture contract,
-  textures, streaming determinism, view/clear teardown.
+  textures, day/night clock (wrap semantics, lighting curves, continuity, determinism,
+  clock text, save round-trip), streaming determinism, view/clear teardown.
 
 **Runtime**
 
@@ -130,6 +141,21 @@ inspection: `--fly`, `--player-at=x,y,z`, `--look=yaw,pitch`, `--render-distance
 | `results/godot/light-aerial.png`, `fogtest-*.png`, `light-aerial-nofog.png` | fog tuning series (table below) |
 | `results/godot/diag-aerial.png`, `diag-shore.png`, `diag-water.png` | earlier HUD/tour captures from the previous session |
 | `results/godot/godot-game-tour-0..3.png` | HUD, hotbar, targeting, tooltips |
+| `results/godot/day-noon.png` (`--time=0.25`) | 12:00 Day — bright, washed-out-free daylight, HUD clock reads `12:00 Day` |
+| `results/godot/day-dusk.png` (`--time=0.53`) | 18:43 Dusk — already deep twilight: dark blue sky, land lit only by the fill light |
+| `results/godot/day-night.png` (`--time=0.75`) | 00:00 Night — moonlit blue-grey terrain, no pale horizon band, water dark blue |
+
+Night capture means, from `tools/image_stats.py` (whole frame, spawn vantage):
+
+| time | mean RGB | crushed (max channel ≤ 24) |
+| --- | --- | --- |
+| 0.25 noon | 100 121 118 | 0.0 % |
+| 0.53 dusk | 13 22 30 | 42.1 % |
+| 0.75 night | 11 19 27 | 48.2 % |
+
+Both night values are dark but readable in the inspected image; the `dusk` sample at
+0.53 is past the point where the twilight curve has already fallen (daylight ≈ 0.03),
+so a true mid-twilight capture (`--time=0.50`) is still outstanding.
 
 Lighting/fog work done in this session, with measurements from
 `tools/image_stats.py` (mean RGB of the whole frame, aerial vantage):
@@ -143,8 +169,12 @@ Lighting/fog work done in this session, with measurements from
 | fog 0.0006 | 93 111 113 | `fogtest-0.0006.png` |
 | fog 0 (no fog) | 74 91 91 | `light-aerial-nofog.png` |
 
-Final settings: exponential fog `0.0008`, SSAO radius 0.5 / intensity 0.85, sun 1.22,
-ambient sky contribution 1.0 at energy 1.45 — see `results/godot/look-*.png`.
+Final settings: exponential fog `0.0008`, SSAO radius 0.5 / intensity 0.85, sun energy
+1.22 at noon — see `results/godot/look-*.png`. Ambient is sky-sourced during the day
+(`ambient_light_sky_contribution = 1.0`), but the night sky is almost black, so the clock
+fades the sky term down to 0.15 at night and mixes in `DayNight.NIGHT_AMBIENT`
+(`#33436b`) — without that, night rendered as pitch black (mean RGB 6/8/15, 74 % of pixels
+crushed); with it, night is mean 11/19/27 and readable in `day-night.png`.
 
 Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 (identical capture with `--no-shadows` removed them): not a rendering defect.
@@ -156,7 +186,7 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 - First fill: `generation_ms_total≈2 810 ms`, `mesh_ms_total≈2 190 ms`
   (fill 341 / emit 1 792 / assemble 55), `worst_mesh_ms≈15.6`, `queued=0`.
 - Render radius 6 (565 chunks, 232 260 faces): still 60 fps in the capture run.
-- Headless smoke run (no rendering) reports 145 fps — not a rendering measurement.
+- Headless smoke run (no rendering) reports ~119 fps — not a rendering measurement.
 
 ## 8. Known defects, limitations, blockers
 
@@ -172,12 +202,24 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 - A second agent was editing the same project files during the session (it added
   `fixture_adapter.gd` and rewrote `main.gd`/`capture.gd`); re-run the tests after
   any unexpected file change.
+- **Reported by the user, not yet reproduced by the developer**: WASD movement failure
+  (movement does not respond as expected), plus further rendering and water defects. The
+  movement claim has *not* been reproduced in this session and no fix has been attempted;
+  the captures inspected here show the camera in scripted/`--fly` positions, which does not
+  exercise the keyboard path. These are the first items of the next (stabilization) task.
+- A true mid-twilight capture (`--time=0.50`) has not been taken; only the noon and night
+  endpoints of the lighting curve have been inspected visually (both are covered by tests).
 
 ## 9. Resume
 
 Read this file and `godot-roadmap.md`, then run the tests and the smoke command from
-§5 to confirm the baseline still holds (`271 assertions`, `world_hash=6372495951065888771`).
+§5 to confirm the baseline still holds (`338 assertions`, `world_hash=6372495951065888771`).
 Then continue with the first unchecked item of `godot-roadmap.md` phase B/C.
+
+**Next task (stabilization, not new features)**: reproduce and fix the user-reported WASD
+movement failure (`voxel_player.gd` — check that input reaches the controller outside of
+`--capture`/`--fly` mode and that `_physics_process` applies it), then the rendering and
+water defects. Do not start new roadmap items before the movement failure is understood.
 
 Baseline sanity command set (copy/paste):
 
@@ -187,3 +229,17 @@ $godot = 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64
 & $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd | Select-Object -Last 1
 & $godot --headless --path prototypes/m17/godot -- --straight-to-game --quit-after=30 | Select-String M17_GAME_SUMMARY
 ```
+
+## 10. Savepoint log
+
+Every entry is a commit on `main` that was made only after the automated suite passed and
+the listed evidence had been inspected. Nothing in the working tree was discarded.
+
+| Commit | Content | Evidence at the time |
+| --- | --- | --- |
+| `e029c68` | Playable voxel game: generation, streaming, meshing, water, edits/persistence, HUD/hotbar, main + pause menu, capture harness, test suite, docs, assets | 271 assertions exit 0; deterministic `world_hash=6372495951065888771`; `look-*.png`, `diag-*.png` inspected |
+| `fd9f7d2` | Day/night cycle: `core/day_night.gd`, clock-driven sun/sky/ambient/fog/water, `--time=` / `--time-rate=`, save `VERSION 2`, new test module, image-stats Pillow fix | 338 assertions exit 0, 0 bytes stderr; `day-noon.png` / `day-dusk.png` / `day-night.png` captured and inspected; post-commit smoke run still reports `world_hash=6372495951065888771` |
+
+The day/night savepoint is **complete and validated for the behaviour it introduced**.
+Unfinished work is listed in §8 and in the resume section §9; it is *not* part of this
+savepoint.
