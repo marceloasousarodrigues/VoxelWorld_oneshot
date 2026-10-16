@@ -18,6 +18,7 @@ const MODULES := [
 	"res://scripts/tests/test_mesh_winding.gd",
 	"res://scripts/tests/test_fixture_contract.gd",
 	"res://scripts/tests/test_edits.gd",
+	"res://scripts/tests/test_persistence.gd",
 	"res://scripts/tests/test_raycast.gd",
 	"res://scripts/tests/test_fluid.gd",
 	"res://scripts/tests/test_day_night.gd",
