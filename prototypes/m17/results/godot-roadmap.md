@@ -27,7 +27,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (383 assertions) + runtime integration harness (17 assertions) + headless determinism fingerprint
+- [x] Automated test suite (435 assertions) + runtime integration harness (17 assertions) + headless determinism fingerprint
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
 - [x] Visual quality pass: lighting/fog retuned and re-inspected; sand is bright and near-tree
       shadows are dark (both plausible, not fixed)

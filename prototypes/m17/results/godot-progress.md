@@ -320,6 +320,7 @@ the listed evidence had been inspected. Nothing in the working tree was discarde
 | `fd9f7d2` | Day/night cycle: `core/day_night.gd`, clock-driven sun/sky/ambient/fog/water, `--time=` / `--time-rate=`, save `VERSION 2`, new test module, image-stats Pillow fix | 338 assertions exit 0, 0 bytes stderr; `day-noon.png` / `day-dusk.png` / `day-night.png` captured and inspected; post-commit smoke run still reports `world_hash=6372495951065888771` |
 | `c22d056` | Fix inverted triangle winding: `QUAD_INDICES` reversed in `chunk_mesher.gd` + legacy `main.gd`; new unit test `test_mesh_winding.gd`; new runtime integration harness `run_integration.gd`; `fix-*.png` + `winding-test.png` evidence; `.gitignore` adds `*.log.err` | 346 unit + 17 integration assertions exit 0; `winding-test.png`, `fix-spawn.png`, `fix-aerial.png`, `fix-water*.png` inspected; post-fix smoke + radius-4 spawn capture still report `world_hash=6372495951065888771`, `faces=166074`, `faces_hash=6977993294663025454` |
 | `23a8919` | Persistence regression test `test_persistence.gd` (SaveManager write/read/apply, validation, quarantine) added to the runner | 383 unit assertions exit 0, 0 bytes stderr; the test round-trips blocks/fluid/player/inventory/clock, refuses a wrong-seed save, loads a version-1 save, and quarantines bad saves without losing them |
+| `4af42d6` | Crafting increment: `core/crafting.gd` (recipes, atomic `craft`, capacity), `game/crafting_panel.gd` (C-key overlay), `game.gd`/`project.godot` integration, `--open-crafting`, `world_gen.gd` clay-band fix, `test_crafting.gd` + clay-presence test, docs, `crafting-ui.png` | 435 unit + 17 integration assertions exit 0, 0 bytes stderr; `crafting-ui.png` inspected (panel lists all five recipes, affordable rows bright, clay row dimmed); post-fix capture `world_hash=441363152919021799`, `faces=166074`; independent Builder→Tester→Reviewer round, Reviewer verdict PASS |
 
 The winding savepoint is **complete and validated for the behaviour it introduced**; the
 three user-reported items (movement, rendering, water) are resolved. Day/night from the
@@ -417,4 +418,5 @@ world-generation repair required to make one recipe reachable.
   `6372495951065888771`); `faces=166074` and `faces_hash=6977993294663025454` are unchanged,
   because clay swaps one opaque subsurface block for another and so adds no visible faces.
 
-**Savepoint**: pending — the orchestrator commits this increment.
+**Savepoint**: `4af42d6` — "M17 Godot: crafting recipes, interface, tests and the clay
+generation fix".
