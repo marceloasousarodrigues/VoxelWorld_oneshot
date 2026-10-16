@@ -13,11 +13,21 @@ signal block_placed(world_position: Vector3i, block_id: int)
 signal target_changed(hit: Dictionary)
 signal interaction_failed(reason: String)
 signal fly_changed(enabled: bool)
+## Emitted when the body touches down after being airborne, with the distance it
+## fell.  The player never decides what that costs; the game layer applies the
+## survival rule.
+signal landed(fall_distance: float)
 
 const REACH := 6.0
 const BODY_HEIGHT := 1.8
 const BODY_RADIUS := 0.34
 const EYE_HEIGHT := 1.62
+
+## Camera shake: a bounded, decaying, *deterministic* oscillation (not a random
+## one) so a capture with a shake still reproduces frame for frame.
+const SHAKE_DURATION := 0.35
+const SHAKE_MAX := 0.30
+const SHAKE_FREQUENCY := 46.0
 
 @export var move_speed := 5.4
 @export var sprint_multiplier := 1.8
@@ -41,6 +51,16 @@ var _break_cooldown := 0.0
 var _place_cooldown := 0.0
 var _hit: Dictionary = {"hit": false}
 var _last_reported_key := ""
+## Fall tracking: the highest point of the current airborne arc, and whether the
+## body is currently airborne.  A teleport resets both so a jump-cut never
+## registers as a fall.
+var _airborne := false
+var _air_peak_y := 0.0
+## Current camera-shake state.
+var _shake_strength := 0.0
+var _shake_time := 0.0
+var _shake_phase := 0.0
+var _shake_offset := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -123,6 +143,9 @@ func spawn_on_column(world_x: int, world_z: int, search_top: int = 110) -> void:
 func teleport_to(world_position: Vector3) -> void:
 	global_position = world_position
 	velocity = Vector3.ZERO
+	# A teleport is not a fall: restart the arc from wherever we now are.
+	_airborne = false
+	_air_peak_y = world_position.y
 
 
 func look_yaw(degrees: float) -> void:
@@ -154,6 +177,7 @@ func look_basis() -> Basis:
 func _process(delta: float) -> void:
 	_break_cooldown = maxf(0.0, _break_cooldown - delta)
 	_place_cooldown = maxf(0.0, _place_cooldown - delta)
+	_update_shake(delta)
 	_update_target()
 	if not can_interact or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		return
@@ -192,6 +216,26 @@ func _physics_process(delta: float) -> void:
 		else:
 			velocity.y -= gravity * delta
 	move_and_slide()
+	_update_fall()
+
+
+## Tracks the peak of the current airborne arc and reports how far the body fell
+## when it touches down.  Flying and teleporting are not falls.
+func _update_fall() -> void:
+	if flying:
+		_airborne = false
+		_air_peak_y = global_position.y
+		return
+	if is_on_floor():
+		if _airborne:
+			landed.emit(maxf(0.0, _air_peak_y - global_position.y))
+			_airborne = false
+		_air_peak_y = global_position.y
+		return
+	if not _airborne:
+		_airborne = true
+		_air_peak_y = global_position.y
+	_air_peak_y = maxf(_air_peak_y, global_position.y)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -205,6 +249,34 @@ func toggle_fly() -> void:
 	flying = not flying
 	velocity = Vector3.ZERO
 	fly_changed.emit(flying)
+
+
+# --- camera shake --------------------------------------------------------
+
+## Adds a bounded, decaying camera shake.  Repeated calls take the strongest
+## request instead of stacking, and the offset is always restored to zero.
+func shake(strength: float, duration: float = SHAKE_DURATION) -> void:
+	_shake_strength = clampf(maxf(_shake_strength, strength), 0.0, SHAKE_MAX)
+	_shake_time = maxf(_shake_time, duration)
+
+
+func _update_shake(delta: float) -> void:
+	if _shake_time <= 0.0:
+		if _shake_offset != Vector3.ZERO:
+			_shake_offset = Vector3.ZERO
+			_apply_shake()
+		return
+	_shake_time = maxf(0.0, _shake_time - delta)
+	_shake_phase += delta * SHAKE_FREQUENCY
+	var decay := clampf(_shake_time / SHAKE_DURATION, 0.0, 1.0)
+	var strength := _shake_strength * decay
+	_shake_offset = Vector3(sin(_shake_phase) * strength, cos(_shake_phase * 1.7) * strength, 0.0)
+	_apply_shake()
+
+
+func _apply_shake() -> void:
+	if camera != null:
+		camera.position = Vector3(_shake_offset.x, EYE_HEIGHT + _shake_offset.y, 0.0)
 
 
 # --- targeting -----------------------------------------------------------

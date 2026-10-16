@@ -9,11 +9,14 @@ extends Node3D
 ## It never builds voxel geometry itself: `ChunkStreamer` owns meshes and
 ## `VoxelWorld` owns voxel data.
 
-enum State { MENU, LOADING, PLAYING, PAUSED }
+enum State { MENU, LOADING, PLAYING, PAUSED, DEAD }
 
 const RESULTS_DIR := "res://../results/godot"
 const CONFIG_PATH := "user://settings.json"
 const AUTOSAVE_SECONDS := 120.0
+## After any damage the player is briefly immune to further *impact* damage, so a
+## single landing or hit cannot apply twice in consecutive frames.
+const IFRAME_SECONDS := 0.5
 
 var state := State.MENU
 
@@ -28,7 +31,12 @@ var inventory: Inventory
 var hud: GameHUD
 var menu: MainMenu
 var crafting: CraftingPanel
+var death_screen: DeathScreen
 var saves: SaveManager
+var health: Health
+
+## Seconds of breath left; drained while the player's head is under water.
+var breath := Survival.MAX_BREATH
 
 var sun: DirectionalLight3D
 var environment_node: WorldEnvironment
@@ -65,6 +73,9 @@ var _options := {
 	"shots": [],
 	"quit_after": 0.0,
 	"quit_after_settle": false,
+	"health": -1.0,
+	"hurt": -1.0,
+	"submerge": false,
 }
 
 ## Set when `--time-rate=` appears on the command line, so the capture harness
@@ -72,6 +83,12 @@ var _options := {
 var _time_rate_given := false
 ## Set when `--sun=` pins the light direction; otherwise the clock drives it.
 var _sun_angle_locked := false
+
+## Health bookkeeping owned by the game layer: the invulnerability window and how
+## long it has been since the last hit (which drives natural regeneration).
+var _invulnerable := 0.0
+var _seconds_since_damage := 0.0
+var _last_damage_source := ""
 
 var _loading_seconds := 0.0
 var _play_seconds := 0.0
@@ -103,6 +120,7 @@ func _ready() -> void:
 	mesher = ChunkMesher.new(library, materials)
 	inventory = Inventory.new()
 	saves = SaveManager.new()
+	health = Health.new()
 
 	_build_environment()
 	_build_nodes()
@@ -233,6 +251,7 @@ func _build_nodes() -> void:
 	player.target_changed.connect(_on_target_changed)
 	player.interaction_failed.connect(_on_interaction_failed)
 	player.fly_changed.connect(_on_fly_changed)
+	player.landed.connect(_on_landed)
 
 
 func _build_ui() -> void:
@@ -264,6 +283,22 @@ func _build_ui() -> void:
 	crafting_layer.add_child(crafting)
 	crafting.setup(inventory)
 	crafting.crafted.connect(_on_crafted)
+
+	# The death screen sits above the HUD and the crafting panel but below the
+	# menu (20), and owns the screen while the player is dead.
+	var death_layer := CanvasLayer.new()
+	death_layer.name = "DeathLayer"
+	death_layer.layer = 18
+	add_child(death_layer)
+	death_screen = DeathScreen.new()
+	death_screen.name = "DeathScreen"
+	death_layer.add_child(death_screen)
+	death_screen.respawn_requested.connect(_respawn)
+
+	health.changed.connect(_on_health_changed)
+	health.damaged.connect(_on_health_damaged)
+	health.died.connect(_on_health_died)
+	_on_health_changed()
 
 
 # =========================================================================
@@ -333,6 +368,16 @@ func _parse_arguments() -> void:
 				_options["fog_density"] = maxf(0.0, value.to_float())
 			"--quit-after":
 				_options["quit_after"] = value.to_float()
+			"--health":
+				_options["health"] = value.to_float()
+			"--hurt":
+				_options["hurt"] = maxf(0.0, value.to_float())
+			"--submerge":
+				# Inspection aid: put the camera under water so drowning and the
+				# breath readout can be captured.  It implies `--fly` so the body
+				# stays put instead of sinking to the sea floor.
+				_options["submerge"] = true
+				_options["fly"] = true
 
 
 func _parse_vector(value: String) -> Vector3:
@@ -370,6 +415,8 @@ func _show_title() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if crafting != null and crafting.is_open():
 		crafting.close()
+	if death_screen != null and death_screen.is_open():
+		death_screen.hide_death()
 	menu.set_title_callback(_return_to_title)
 	var has_save := FileAccess.file_exists(saves.save_path())
 	var note := "Saves are written to %s" % ProjectSettings.globalize_path(saves.directory)
@@ -389,6 +436,11 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	_stream_report_printed = false
 	clock = DayNight.new(float(_options["time_of_day"]), _cycle_length())
 	_update_sky()
+	health.revive()
+	breath = Survival.MAX_BREATH
+	_invulnerable = 0.0
+	_seconds_since_damage = 0.0
+	_last_damage_source = ""
 
 	world = VoxelWorld.new(seed_value)
 	fluid = FluidSim.new(world)
@@ -416,10 +468,12 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	streamer.focus_at(player.global_position)
 
 	if save != null:
-		var applied: Dictionary = saves.apply(save, world, player, inventory, clock)
+		var applied: Dictionary = saves.apply(save, world, player, inventory, clock, health)
 		if not applied["ok"]:
 			hud.flash("Save rejected: %s" % applied["error"], 6.0)
 		else:
+			if float(applied["breath"]) >= 0.0:
+				breath = float(applied["breath"])
 			streamer.focus_at(player.global_position)
 			hud.flash("Loaded %d block edits and %d fluid changes" % [int(applied["block_edits"]), int(applied["fluid_edits"])], 5.0)
 	_apply_override_position()
@@ -435,10 +489,36 @@ func _apply_override_position() -> void:
 	var override: Vector3 = _options["player_at"]
 	if override.is_finite():
 		player.teleport_to(override)
+	if bool(_options["submerge"]):
+		player.teleport_to(_find_submersion_spot())
+		player.flying = true
 	var look: Vector2 = _options["look"]
 	if look.is_finite():
 		player.look_yaw(look.x)
 		player.look_pitch(look.y)
+
+
+## Inspection aid for `--submerge`: the deepest ocean column within a bounded
+## search around the origin.  Deterministic for a given seed.
+func _find_submersion_spot() -> Vector3:
+	var generator: WorldGen = world.generator
+	var best := Vector2i(8, 8)
+	var best_height := 1 << 30
+	for x in range(-64, 65):
+		for z in range(-64, 65):
+			var height := generator.height_at(x, z)
+			if height >= WorldGen.SEA_LEVEL - 2:
+				continue
+			if generator.biome_at(x, z) != WorldGen.Biome.OCEAN:
+				continue
+			if height < best_height:
+				best_height = height
+				best = Vector2i(x, z)
+	if best_height == (1 << 30):
+		# No ocean nearby: float just below sea level in a known water column.
+		return Vector3(8.5, float(WorldGen.SEA_LEVEL) - 4.0, 8.5)
+	# Feet two blocks above the sea floor: the eye sits well under the surface.
+	return Vector3(best.x + 0.5, float(best_height) + 2.0, best.y + 0.5)
 
 
 ## Picks a pleasant spawn: a land column near the origin that is above sea level.
@@ -493,6 +573,29 @@ func _enter_play(area_ready: bool) -> void:
 	print("M17_GAME_READY seed=%d player=%s chunks=%d views=%d meshed=%d" % [
 		world.world_seed, player.global_position, streamer.loaded_count(), streamer.view_count(), int(streamer.stats["meshed"]),
 	])
+	_apply_health_option()
+	_apply_hurt_option()
+
+
+## `--health=N` sets the starting health by dealing the difference, so a lethal
+## value reaches the same death path as any other damage.
+func _apply_health_option() -> void:
+	var target := float(_options["health"])
+	if target < 0.0:
+		return
+	var clamped := clampf(target, 0.0, health.max_health)
+	if clamped < health.health:
+		_damage(health.health - clamped, "startup")
+	elif clamped > health.health:
+		health.heal(clamped - health.health)
+
+
+## `--hurt=N` applies one burst of damage as play starts; a value at or above the
+## player's health reaches the death screen.
+func _apply_hurt_option() -> void:
+	var amount := float(_options["hurt"])
+	if amount > 0.0:
+		_damage(amount, "startup")
 
 
 func _pause() -> void:
@@ -551,7 +654,7 @@ func _process(delta: float) -> void:
 		_fps_accumulator = 0.0
 
 	var quit_after := float(_options["quit_after"])
-	if quit_after > 0.0 and _total_seconds >= quit_after and state in [State.PLAYING, State.LOADING]:
+	if quit_after > 0.0 and _total_seconds >= quit_after and state in [State.PLAYING, State.LOADING, State.DEAD]:
 		_smoke_summary()
 		get_tree().quit()
 		return
@@ -566,14 +669,129 @@ func _process(delta: float) -> void:
 			_update_sky()
 			if fluid != null:
 				fluid.tick()
+			_update_survival(delta)
 			_update_status()
-			if bool(_options["capture"]):
-				_update_capture(delta)
-			elif _autosave_timer >= AUTOSAVE_SECONDS:
+			if not bool(_options["capture"]) and _autosave_timer >= AUTOSAVE_SECONDS:
 				_autosave_timer = 0.0
 				_save_silently("autosave")
 		_:
 			pass
+	# The capture harness also has to run on the death screen, so it is driven
+	# from every "world is up" state rather than from the playing branch.
+	if bool(_options["capture"]) and state in [State.PLAYING, State.DEAD]:
+		_update_capture(delta)
+
+
+## Per-frame survival: drowning while submerged, natural regeneration otherwise,
+## and the breath readout.  Falls are event-driven (`player.landed`).
+func _update_survival(delta: float) -> void:
+	if health == null:
+		return
+	_invulnerable = maxf(0.0, _invulnerable - delta)
+	_seconds_since_damage += delta
+	var submerged := player.is_submerged()
+	var step: Dictionary = Survival.breath_step(breath, Survival.MAX_BREATH, submerged, delta)
+	breath = step["breath"]
+	if float(step["damage"]) > 0.0:
+		_damage(float(step["damage"]), "drowning")
+	var regen: Dictionary = Survival.regen_step(health.health, health.max_health, _seconds_since_damage, delta)
+	if float(regen["healed"]) > 0.0:
+		health.heal(float(regen["healed"]))
+	hud.set_breath(breath, Survival.MAX_BREATH, submerged or breath < Survival.MAX_BREATH - 0.001)
+
+
+# =========================================================================
+# Health and death
+# =========================================================================
+
+## Applies damage and returns what was applied.  All damage flashes the screen;
+## the caller decides whether it is an *impact* (which also shakes).
+func _damage(amount: float, source: String) -> float:
+	if health == null or health.is_dead():
+		return 0.0
+	var applied := health.apply_damage(amount, source)
+	if applied <= 0.0:
+		return 0.0
+	_seconds_since_damage = 0.0
+	if hud != null:
+		hud.hurt_flash()
+	return applied
+
+
+## Damage from a discrete impact (a fall, later a hit).  The invulnerability
+## window stops one impact from being applied twice in a row.
+func _apply_impact_damage(amount: float, source: String) -> float:
+	if _invulnerable > 0.0:
+		return 0.0
+	var applied := _damage(amount, source)
+	if applied > 0.0:
+		_invulnerable = IFRAME_SECONDS
+		if player != null:
+			player.shake(clampf(0.10 + applied * 0.02, 0.0, VoxelPlayer.SHAKE_MAX))
+	return applied
+
+
+func _on_landed(fall_distance: float) -> void:
+	if state != State.PLAYING:
+		return
+	var damage := Survival.fall_damage(fall_distance)
+	if damage > 0.0:
+		_apply_impact_damage(damage, "fall")
+
+
+func _on_health_changed() -> void:
+	if hud != null and health != null:
+		hud.set_health(health.health, health.max_health)
+
+
+func _on_health_damaged(_amount: float, source: String) -> void:
+	_last_damage_source = source
+
+
+func _on_health_died() -> void:
+	_enter_dead()
+
+
+## The player is dead: freeze the body, show the death screen and wait there
+## until the on-screen Respawn button is pressed.
+func _enter_dead() -> void:
+	if state == State.DEAD:
+		return
+	if crafting != null and crafting.is_open():
+		crafting.close()
+	state = State.DEAD
+	player.velocity = Vector3.ZERO
+	player.can_interact = false
+	player.set_physics_process(false)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if death_screen != null:
+		death_screen.show_death(_last_damage_source)
+	print("M17_GAME_DEATH cause=%s" % _last_damage_source)
+
+
+## Restores health/breath and returns the player to a valid spawn column.
+func _respawn() -> void:
+	if health == null:
+		return
+	health.revive()
+	breath = Survival.MAX_BREATH
+	_invulnerable = 0.0
+	_seconds_since_damage = 0.0
+	_last_damage_source = ""
+	if death_screen != null:
+		death_screen.hide_death()
+	var spawn_column := _find_spawn_column()
+	player.spawn_on_column(spawn_column.x, spawn_column.y)
+	player.look_yaw(38.0)
+	player.look_pitch(-12.0)
+	player.can_interact = true
+	player.set_physics_process(true)
+	streamer.focus_at(player.global_position)
+	state = State.PLAYING
+	if not bool(_options["capture"]):
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	hud.flash("Respawned", 2.0)
+	print("M17_GAME_RESPAWN player=%s" % player.global_position)
 
 
 func _update_status() -> void:
@@ -608,6 +826,10 @@ func _center_biome_name() -> String:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if state == State.DEAD:
+		# The death screen is modal: gameplay input and pause do nothing until
+		# the on-screen Respawn button is pressed.
+		return
 	if event.is_action_pressed("release_mouse"):
 		if state == State.PLAYING and crafting != null and crafting.is_open():
 			# Escape closes the crafting panel before it would pause the game.
@@ -720,7 +942,7 @@ func _on_fly_changed(enabled: bool) -> void:
 # =========================================================================
 
 func _save_now() -> void:
-	var written := saves.write(world, player, inventory, clock)
+	var written := saves.write(world, player, inventory, clock, health, breath)
 	if written:
 		hud.flash("Saved %d block edits to %s" % [world.edits.size(), ProjectSettings.globalize_path(saves.save_path())], 4.0)
 		print("M17_GAME_SAVED path=%s block_edits=%d fluid_edits=%d" % [
@@ -732,7 +954,7 @@ func _save_now() -> void:
 
 
 func _save_silently(reason: String) -> void:
-	if saves.write(world, player, inventory, clock):
+	if saves.write(world, player, inventory, clock, health, breath):
 		print("M17_GAME_AUTOSAVE reason=%s block_edits=%d" % [reason, world.edits.size()])
 	else:
 		push_error("M17_GAME_AUTOSAVE_FAILED %s" % saves.last_error)
@@ -743,10 +965,12 @@ func _reload_now() -> void:
 	if not result["ok"]:
 		hud.flash("Load failed: %s" % result["error"], 5.0)
 		return
-	var applied: Dictionary = saves.apply(result["data"], world, player, inventory, clock)
+	var applied: Dictionary = saves.apply(result["data"], world, player, inventory, clock, health)
 	if not applied["ok"]:
 		hud.flash("Load failed: %s" % applied["error"], 5.0)
 		return
+	if float(applied["breath"]) >= 0.0:
+		breath = float(applied["breath"])
 	streamer.focus_at(player.global_position)
 	hud.refresh()
 	hud.flash("Reloaded save (%d block edits)" % int(applied["block_edits"]), 4.0)
@@ -846,6 +1070,8 @@ func _smoke_summary() -> void:
 		"mesher": mesher.stats,
 		"edits": world.edits.size() if world != null else -1,
 		"inventory_used_slots": inventory.used_slots(),
+		"health": health.to_dictionary() if health != null else {},
+		"breath": breath,
 	}))
 	print("M17_RENDER_STATS draw_calls=%d primitives=%d objects=%d" % [
 		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),

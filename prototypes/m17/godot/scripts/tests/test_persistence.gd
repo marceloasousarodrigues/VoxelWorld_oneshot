@@ -103,8 +103,11 @@ func run(h: TestHarness) -> void:
 
 	var clock := DayNight.new(0.42, 900.0)
 
+	var health := Health.new(20.0, 13.0)
+	var breath := 4.5
+
 	# --- write --------------------------------------------------------------
-	h.check(saves.write(world, player, inventory, clock), "write() reports success")
+	h.check(saves.write(world, player, inventory, clock, health, breath), "write() reports success")
 	h.check(FileAccess.file_exists(saves.save_path()), "the save file exists on disk")
 
 	# --- read + validate ----------------------------------------------------
@@ -112,6 +115,8 @@ func run(h: TestHarness) -> void:
 	h.check(bool(result["ok"]), "read() accepts the save it just wrote")
 	var data: Dictionary = result["data"]
 	h.eq(int(data["seed"]), 17017, "the saved seed round-trips")
+	h.eq(int(data["version"]), SaveManager.VERSION, "the save is written at the current version")
+	h.eq(int(SaveManager.VERSION), 3, "the current save version is 3")
 
 	# --- apply to a fresh session ------------------------------------------
 	var restored_world := VoxelWorld.new(17017)
@@ -119,10 +124,14 @@ func run(h: TestHarness) -> void:
 	var restored_player := _spawn_player(restored_world)
 	var restored_inventory := Inventory.new()
 	var restored_clock := DayNight.new(0.0, 900.0)
-	var applied: Dictionary = saves.apply(result, restored_world, restored_player, restored_inventory, restored_clock)
+	var restored_health := Health.new()
+	var applied: Dictionary = saves.apply(result, restored_world, restored_player, restored_inventory, restored_clock, restored_health)
 	h.check(bool(applied["ok"]), "apply() accepts a save from the same seed")
 	h.eq(int(applied["block_edits"]), 2, "apply() reports the two block edits")
 	h.eq(int(applied["fluid_edits"]), 1, "apply() reports the one fluid edit")
+	h.approx(restored_health.health, 13.0, 1e-6, "the saved health survived the round-trip")
+	h.approx(restored_health.max_health, 20.0, 1e-6, "the saved maximum health survived the round-trip")
+	h.approx(float(applied["breath"]), 4.5, 1e-6, "the saved breath survived the round-trip")
 
 	h.eq(restored_world.get_block(edited), BlockDB.PLANKS, "the placed block survived the round-trip")
 	h.eq(restored_world.get_block(removed), BlockDB.AIR, "the broken block stayed broken")
@@ -148,17 +157,74 @@ func run(h: TestHarness) -> void:
 	h.check(not bool(rejected["ok"]), "apply() refuses a save from a different seed")
 	h.check(not other_world.edits.has(edited), "a refused save leaves the world untouched")
 
-	# --- version 1 saves still load (the clock field is optional) -----------
-	var v1_payload: Dictionary = saves.to_dictionary(world, player, inventory, clock)
+	# --- version 1 and 2 saves still load (newer fields are optional) -------
+	var v1_payload: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath)
 	v1_payload["version"] = 1
 	v1_payload.erase("clock")
+	v1_payload.erase("health")
+	v1_payload.erase("breath")
 	_write_raw(saves, JSON.stringify(v1_payload))
 	var v1_result: Dictionary = saves.read()
 	h.check(bool(v1_result["ok"]), "a version 1 save is accepted")
 	if bool(v1_result["ok"]):
 		var clock_before := DayNight.new(0.66, 900.0)
-		saves.apply(v1_result, restored_world, restored_player, restored_inventory, clock_before)
+		var health_before := Health.new(20.0, 9.0)
+		var v1_applied: Dictionary = saves.apply(v1_result, restored_world, restored_player, restored_inventory, clock_before, health_before)
+		h.check(bool(v1_applied["ok"]), "a version 1 save applies")
 		h.approx(clock_before.time_of_day, 0.66, 1e-6, "a version 1 save leaves the clock untouched")
+		h.approx(health_before.health, 9.0, 1e-6, "a version 1 save leaves health untouched")
+		h.less(float(v1_applied["breath"]), 0.0, "a version 1 save reports no breath")
+
+	var v2_payload: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath)
+	v2_payload["version"] = 2
+	v2_payload.erase("health")
+	v2_payload.erase("breath")
+	_write_raw(saves, JSON.stringify(v2_payload))
+	var v2_result: Dictionary = saves.read()
+	h.check(bool(v2_result["ok"]), "a version 2 save is accepted")
+	if bool(v2_result["ok"]):
+		var v2_clock := DayNight.new(0.0, 900.0)
+		var v2_health := Health.new(20.0, 20.0)
+		saves.apply(v2_result, restored_world, restored_player, restored_inventory, v2_clock, v2_health)
+		h.approx(v2_clock.time_of_day, 0.42, 1e-6, "a version 2 save still restores the clock")
+		h.approx(v2_health.health, 20.0, 1e-6, "a version 2 save leaves health untouched")
+
+	# --- a save whose health payload is malformed is quarantined ------------
+	var bad_health: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath)
+	bad_health["health"] = "broken"
+	_write_raw(saves, JSON.stringify(bad_health))
+	var bad_result: Dictionary = saves.read()
+	h.check(not bool(bad_result["ok"]), "a save with a malformed health payload is rejected")
+	h.check(not FileAccess.file_exists(saves.save_path()), "the malformed-health save is removed from its path")
+
+	# Current-version breath is required to be within the survival range.
+	for invalid_breath: float in [-1.0, Survival.MAX_BREATH + 1.0]:
+		var bad_breath: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath)
+		bad_breath["breath"] = invalid_breath
+		_write_raw(saves, JSON.stringify(bad_breath))
+		var bad_breath_result: Dictionary = saves.read()
+		h.check(not bool(bad_breath_result["ok"]), "out-of-range v3 breath is rejected: %s" % invalid_breath)
+		h.check(not FileAccess.file_exists(saves.save_path()), "invalid-breath v3 save is quarantined")
+
+	# Rejected data must be validated before any live state changes.
+	var protected_world := VoxelWorld.new(17017)
+	protected_world.ensure_chunk(chunk_coord)
+	var protected_player := _spawn_player(protected_world)
+	protected_player.teleport_to(Vector3(1.5, 70.0, 1.5))
+	var protected_inventory := Inventory.new()
+	protected_inventory.add(BlockDB.DIRT, 3)
+	var protected_health := Health.new(20.0, 8.0)
+	var protected_position := protected_player.global_position
+	var protected_items := protected_inventory.to_dictionary()
+	var bad_apply: Dictionary = result.duplicate(true)
+	(bad_apply["data"] as Dictionary)["breath"] = -2.0
+	var invalid_apply := saves.apply(bad_apply, protected_world, protected_player, protected_inventory, null, protected_health)
+	h.check(not bool(invalid_apply["ok"]), "invalid save cannot be applied")
+	h.check(protected_world.edits.is_empty(), "invalid save leaves world edits untouched")
+	h.approx(protected_health.health, 8.0, 1e-6, "invalid save leaves health untouched")
+	h.eq(protected_inventory.to_dictionary(), protected_items, "invalid save leaves inventory untouched")
+	h.approx(protected_player.global_position.distance_to(protected_position), 0.0, 1e-6, "invalid save leaves player untouched")
+	_release_player(protected_player)
 
 	# --- quarantine paths ---------------------------------------------------
 	# (a) an unknown version is rejected and the file is moved aside.

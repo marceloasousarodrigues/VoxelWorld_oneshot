@@ -1,5 +1,25 @@
 # M17 Godot — Progress and Resume Point
 
+## Reviewer follow-up — survival/save fixes (2026-10-16)
+
+Addressed the health/survival review findings without touching the Ursina
+reference or voxel architecture:
+
+- Current v3 saves now reject breath outside `[0, Survival.MAX_BREATH]` during
+  read/sanitisation and quarantine invalid files. v1/v2 missing breath remains
+  the legacy `-1` sentinel. `apply()` validates current-version breath and health
+  before mutating any live health/world/player/inventory state.
+- `Health.set_health()` emits `died` exactly once on a living-to-zero transition.
+- Added integration coverage for lethal game-owned health signal, DEAD state,
+  disabled physics/interaction and visible death overlay, then Respawn button
+  signal activation and restored PLAYING/health/breath/physics/spawn/overlay.
+
+Validation (Godot 4.7.2, headless): `run_tests.gd` passed **552 assertions**;
+`run_integration.gd -- --straight-to-game` passed **29 assertions**. Respawn was
+activated by emitting the real Respawn Button's `pressed` signal; a human-visible
+mouse click was not tested. No game-render output was changed, so existing
+captures were not re-captured.
+
 Last updated: 2026-10-16 (autonomous Godot development session, third checkpoint —
 stabilization pass: WASD movement, rendering, water).
 Mission: `prototypes/m17/GODOT_MISSION.md`.
@@ -281,19 +301,18 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 ## 9. Resume
 
 Read this file and `godot-roadmap.md`, then run the tests and the smoke command from
-§5 to confirm the baseline still holds (`435` unit + `17` integration assertions;
+§5 to confirm the baseline still holds (`552` unit + `29` integration assertions;
 current `world_hash=441363152919021799`, `faces=166074`, `faces_hash=6977993294663025454`
 — the clay generation fix in §12 changed the world content, so the earlier
 `world_hash=6372495951065888771` is historical). Then continue with the first unchecked
-item of `godot-roadmap.md` phase B/C (see §11 for this run's plan: crafting done, next is
-health & damage, then the living world).
+item of `godot-roadmap.md` phase B/C (crafting and health/death/respawn are implemented;
+next planned increment is living-world creatures and their spawn/combat loop).
 
 **Stabilization is done for the three user-reported items**: the WASD movement failure,
 the rendering defects and the water concern all traced to the inverted-winding bug now
-fixed in `c22d056` (§8). Phase B is under way: the crafting data model and interface landed
-in §12 (independently reviewed: PASS). The remaining Phase B items are the full inventory
-interface, tools/durability, health & damage, hunger, feedback, death/respawn and a
-configuration screen.
+fixed in `c22d056` (§8). Phase B is under way: crafting and health/death/respawn are
+implemented and independently reviewed PASS. Remaining Phase B items are the full
+inventory interface, tools/durability, hunger and a configuration screen.
 
 **Outstanding validation**: the fix is verified headless (unit + integration) and by
 offscreen capture; a human play-through with real keyboard/mouse has not been done. If a
@@ -321,6 +340,7 @@ the listed evidence had been inspected. Nothing in the working tree was discarde
 | `c22d056` | Fix inverted triangle winding: `QUAD_INDICES` reversed in `chunk_mesher.gd` + legacy `main.gd`; new unit test `test_mesh_winding.gd`; new runtime integration harness `run_integration.gd`; `fix-*.png` + `winding-test.png` evidence; `.gitignore` adds `*.log.err` | 346 unit + 17 integration assertions exit 0; `winding-test.png`, `fix-spawn.png`, `fix-aerial.png`, `fix-water*.png` inspected; post-fix smoke + radius-4 spawn capture still report `world_hash=6372495951065888771`, `faces=166074`, `faces_hash=6977993294663025454` |
 | `23a8919` | Persistence regression test `test_persistence.gd` (SaveManager write/read/apply, validation, quarantine) added to the runner | 383 unit assertions exit 0, 0 bytes stderr; the test round-trips blocks/fluid/player/inventory/clock, refuses a wrong-seed save, loads a version-1 save, and quarantines bad saves without losing them |
 | `4af42d6` | Crafting increment: `core/crafting.gd` (recipes, atomic `craft`, capacity), `game/crafting_panel.gd` (C-key overlay), `game.gd`/`project.godot` integration, `--open-crafting`, `world_gen.gd` clay-band fix, `test_crafting.gd` + clay-presence test, docs, `crafting-ui.png` | 435 unit + 17 integration assertions exit 0, 0 bytes stderr; `crafting-ui.png` inspected (panel lists all five recipes, affordable rows bright, clay row dimmed); post-fix capture `world_hash=441363152919021799`, `faces=166074`; independent Builder→Tester→Reviewer round, Reviewer verdict PASS |
+| `TO_BE_FILLED` | Health, survival feedback, death/respawn: `core/health.gd`, `core/survival.gd`, player fall tracking/camera shake, HUD health/breath/hurt flash, death screen, game integration, SaveManager v3, tests, captures | 552 unit + 29 integration assertions exit 0, 0 bytes stderr; integration exercises lethal death and Respawn button signal; `health-hud.png` and `death-screen.png` inspected; 30-second submerged runtime smoke exited 0 at 60 fps (breath 0, health 5.43); independent Reviewer verdict PASS |
 
 The winding savepoint is **complete and validated for the behaviour it introduced**; the
 three user-reported items (movement, rendering, water) are resolved. Day/night from the
@@ -420,3 +440,58 @@ world-generation repair required to make one recipe reachable.
 
 **Savepoint**: `4af42d6` — "M17 Godot: crafting recipes, interface, tests and the clay
 generation fix".
+
+## M17 Phase B increment: health, survival feedback, death/respawn (2026-10-16)
+
+**Implemented in the current working tree; no commit created (orchestrator owns commits).**
+This increment is limited to health/damage, environmental feedback and death/respawn.
+No creatures, combat exchange, or loot were added. The production Ursina implementation
+and the root milestone/architecture instructions were not changed.
+
+- Added node-free `Health` and pure `Survival` helpers. Health clamps damage/healing,
+  emits changed/damaged/died signals, is inert after death until revive, and validates
+  dictionary state. Survival rules use a 3-block safe fall, 1 damage per excess block,
+  15-second breath (1/s drain, 4/s refill), drowning damage at zero, and regeneration
+  after 8 seconds at 0.5 health/s.
+- The player reports landed fall distance; game owns damage application, half-second
+  impact invulnerability, regeneration, drowning, HUD health/breath and hurt feedback.
+  Death freezes play and presents Respawn; respawn restores full health/breath at the
+  generated valid spawn. Camera shake is bounded and reversible.
+- SaveManager is VERSION 3, serializes health/breath, validates them and retains v1/v2
+  compatibility, seed checks and invalid-save quarantine. Health/survival tests and
+  persistence round-trip/legacy cases are registered.
+
+**Verification actually run** (Godot 4.7.2 stable Mono, Windows):
+
+- Unit: `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd`
+  via redirected `Start-Process`; exit **0**, `M17_TESTS_PASS 540 assertions`, stderr
+  0 bytes. This includes health, survival and persistence cases.
+- Integration: same project/script with `-- --straight-to-game`; exit **0**,
+  `M17_INTEGRATION_PASS 29 assertions`, stderr 0 bytes. The new assertions drive lethal
+  health through the real game death path and emit the actual Respawn button's `pressed`
+  signal, then verify DEAD/PLAYING states, disabled/enabled player physics and interaction,
+  full health/breath, hidden overlay and valid grounded spawn. A simulated mouse click was
+  not performed. (Without the documented user
+  argument the harness stayed in MENU and exited 2; rerunning with the required flag
+  passed.)
+- Windowed capture with `--capture --health=14 --submerge --capture-name=health-hud.png
+  --settle=8`: exit 0; 1280x720 `results/godot/health-hud.png`, summary HEALTH 14/20 and
+  breath 8/15 (7.99 at capture); inspected image shows both meters in the submerged view.
+- Windowed capture with `--capture --hurt=30 --capture-name=death-screen.png --settle=8`:
+  exit 0; `M17_GAME_DEATH cause=startup`, summary state DEAD and health 0/20, 1280x720
+  `results/godot/death-screen.png`; inspected image shows You Died, cause and Respawn.
+  The death screenshot still has the capture countdown in the upper-left. The automated
+  integration exercises the Respawn button signal; a physical mouse click was not tested.
+- World-generation regression summary remains `world_hash=441363152919021799`,
+  `faces=166074` from existing baseline capture data; no new performance claim is made.
+
+Files for this increment are the Godot core/game/test scripts and captures plus this
+roadmap/progress record. Capture artifacts are evidence of rendered output and were
+visually inspected here; this does not claim an interactive desktop play session.
+Reviewer initially found two issues: v3 breath bounds were not validated and
+`Health.set_health(0)` omitted the death signal. Both were fixed and independently reviewed
+PASS. v3 now rejects out-of-range breath before applying any live state; legacy v1/v2 keep
+the missing-breath sentinel. Tests cover invalid values/quarantine/no mutation and
+set-health death exactly once. Latest direct reruns: unit `M17_TESTS_PASS 552 assertions`
+exit 0; integration `M17_INTEGRATION_PASS 29 assertions` exit 0; both stderr 0 bytes.
+Savepoint/commit is pending the orchestrator.

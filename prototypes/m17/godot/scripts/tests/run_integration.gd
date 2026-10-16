@@ -45,6 +45,30 @@ func _main() -> void:
 	var player = _game.player
 	_check(player.is_physics_processing(), "the player's physics process is enabled in play")
 
+	# Exercise the game-owned death signal path and activate the actual button
+	# signal (headless does not synthesize a visible mouse click).
+	_game.health.set_health(1.0)
+	_game.health.apply_damage(1.0, "integration")
+	await process_frame
+	_check(int(_game.state) == 4, "lethal health transition enters DEAD")
+	_check(not player.is_physics_processing(), "death disables player physics")
+	_check(not player.can_interact, "death disables player interaction/input")
+	_check(_game.death_screen.is_open(), "death overlay is visible")
+	var buttons: Array[Node] = _game.death_screen.find_children("*", "Button", true, false)
+	var respawn_button: Button = buttons[0] as Button if not buttons.is_empty() else null
+	_check(respawn_button != null, "death overlay contains Respawn button")
+	if respawn_button != null:
+		respawn_button.pressed.emit()
+	await process_frame
+	_check(int(_game.state) == 2, "Respawn button signal returns to PLAYING")
+	_check(is_equal_approx(_game.health.health, _game.health.max_health), "respawn restores full health")
+	_check(is_equal_approx(_game.breath, Survival.MAX_BREATH), "respawn restores full breath")
+	_check(player.is_physics_processing(), "respawn enables player physics")
+	_check(player.can_interact, "respawn enables player input")
+	_check(_game.death_screen != null and not _game.death_screen.is_open(), "respawn hides death overlay")
+	_check(_game.world.get_block(Vector3i(floori(player.global_position.x), floori(player.global_position.y - 1), floori(player.global_position.z))) != BlockDB.AIR,
+		"respawn places player over a valid solid spawn")
+
 	# Let gravity settle the player onto the terrain.
 	for i in range(90):
 		await physics_frame

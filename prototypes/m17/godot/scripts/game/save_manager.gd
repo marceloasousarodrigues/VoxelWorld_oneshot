@@ -14,9 +14,10 @@ extends RefCounted
 ## and reported, so a broken save can never destroy a working session.
 
 const FORMAT := "voxelworld.godot.save"
-## 1: block/fluid edits, player, inventory.  2: adds the day/night clock.  Version
-## 1 saves still load: every newer field is optional and falls back to a default.
-const VERSION := 2
+## 1: block/fluid edits, player, inventory.  2: adds the day/night clock.
+## 3: adds player health and breath.  Version 1 and 2 saves still load: every
+## newer field is optional and falls back to a default.
+const VERSION := 3
 const DEFAULT_DIRECTORY := "user://saves"
 const DEFAULT_NAME := "world.json"
 
@@ -42,7 +43,8 @@ func ensure_directory() -> bool:
 	return true
 
 
-func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null) -> Dictionary:
+func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null,
+		health: Health = null, breath: float = -1.0) -> Dictionary:
 	var block_edits: Array = []
 	for position: Vector3i in world.edits:
 		block_edits.append([position.x, position.y, position.z, int(world.edits[position])])
@@ -78,16 +80,19 @@ func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory,
 		"player": player_state,
 		"inventory": inventory.to_dictionary() if inventory != null else {},
 		"clock": clock.to_dictionary() if clock != null else {},
+		"health": health.to_dictionary() if health != null else {},
+		"breath": breath,
 		"blocks": block_edits,
 		"fluid": fluid_edits,
 	}
 
 
-func write(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null) -> bool:
+func write(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null,
+		health: Health = null, breath: float = -1.0) -> bool:
 	last_error = ""
 	if not ensure_directory():
 		return false
-	var payload := to_dictionary(world, player, inventory, clock)
+	var payload := to_dictionary(world, player, inventory, clock, health, breath)
 	var path := save_path()
 	var temporary := path + ".tmp"
 	var file := FileAccess.open(temporary, FileAccess.WRITE)
@@ -145,10 +150,21 @@ func read() -> Dictionary:
 
 
 ## Applies a validated save to the live world and player.  Returns a summary.
-func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null) -> Dictionary:
+func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null,
+		health: Health = null) -> Dictionary:
+	if not save.get("ok", false) or typeof(save.get("data")) != TYPE_DICTIONARY:
+		return {"ok": false, "error": "save is not validated"}
 	var data: Dictionary = save["data"]
 	if int(data["seed"]) != world.world_seed:
 		return {"ok": false, "error": "save belongs to seed %d, the world is seed %d" % [int(data["seed"]), world.world_seed]}
+	var health_data: Dictionary = data.get("health", {})
+	if not health_data.is_empty() and not Health.new().from_dictionary(health_data):
+		return {"ok": false, "error": "the saved health is invalid"}
+	var breath := float(data.get("breath", -1.0))
+	if int(data.get("version", 0)) >= 3 and (breath < 0.0 or breath > Survival.MAX_BREATH):
+		return {"ok": false, "error": "the saved breath is invalid"}
+	if health != null and not health_data.is_empty():
+		health.from_dictionary(health_data)
 	var block_edits: Dictionary = {}
 	for row: Array in data["blocks"]:
 		block_edits[Vector3i(int(row[0]), int(row[1]), int(row[2]))] = int(row[3])
@@ -172,12 +188,13 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 		player.look_pitch(rad_to_deg(float(state.get("pitch", 0.0))))
 		if bool(state.get("flying", false)) and not player.flying:
 			player.toggle_fly()
-	return {"ok": true, "error": "", "block_edits": block_edits.size(), "fluid_edits": fluid_edits.size()}
+	return {"ok": true, "error": "", "block_edits": block_edits.size(), "fluid_edits": fluid_edits.size(), "breath": breath}
 
 
 # --- validation ----------------------------------------------------------
 
 func _sanitise(data: Dictionary) -> Variant:
+	var version := int(data.get("version", 0))
 	var seed_value := int(data.get("seed", -1))
 	if seed_value < 0:
 		last_error = "save has no usable seed"
@@ -205,14 +222,30 @@ func _sanitise(data: Dictionary) -> Variant:
 	if typeof(clock_state) != TYPE_DICTIONARY:
 		last_error = "the clock is not an object"
 		return null
+	var health_state: Variant = data.get("health", {})
+	if typeof(health_state) != TYPE_DICTIONARY:
+		last_error = "health is not an object"
+		return null
+	if not (health_state as Dictionary).is_empty() and not Health.new().from_dictionary(health_state):
+		last_error = "the saved health is invalid"
+		return null
+	var breath_value: Variant = data.get("breath", -1.0)
+	if typeof(breath_value) != TYPE_FLOAT and typeof(breath_value) != TYPE_INT:
+		last_error = "breath is not a number"
+		return null
+	if version >= 3 and (float(breath_value) < 0.0 or float(breath_value) > Survival.MAX_BREATH):
+		last_error = "breath is outside the valid range"
+		return null
 	return {
 		"seed": seed_value,
 		"player": player_state,
 		"inventory": inventory_state,
 		"clock": clock_state,
+		"health": health_state,
+		"breath": float(breath_value),
 		"blocks": rows,
 		"fluid": fluid,
-		"version": int(data.get("version", 0)),
+		"version": version,
 	}
 
 

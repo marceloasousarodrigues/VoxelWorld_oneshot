@@ -24,6 +24,8 @@ const MODULES := [
 	"res://scripts/tests/test_day_night.gd",
 	"res://scripts/tests/test_determinism.gd",
 	"res://scripts/tests/test_crafting.gd",
+	"res://scripts/tests/test_health.gd",
+	"res://scripts/tests/test_survival.gd",
 ]
 
 const WATCHDOG_SECONDS := 300.0

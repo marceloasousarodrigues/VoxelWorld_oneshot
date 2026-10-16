@@ -10,6 +10,10 @@ extends CanvasLayer
 const SLOT_SIZE := 54
 const SLOT_GAP := 6
 const ICON_MARGIN := 5
+## Health / breath readout, bottom-left above the control hint.
+const HEALTH_BAR := Vector2(240, 16)
+const BREATH_BAR := Vector2(180, 10)
+const HURT_FLASH_SECONDS := 0.5
 
 var inventory: Inventory
 var library: TextureLibrary
@@ -26,6 +30,16 @@ var _debug: Label
 var _crosshair: Control
 var _message_timer := 0.0
 var _debug_visible := true
+
+var _health_label: Label
+var _health_fill: ColorRect
+var _health_text := ""
+var _breath_root: Control
+var _breath_label: Label
+var _breath_fill: ColorRect
+var _hurt: ColorRect
+var _hurt_timer := 0.0
+var _hurt_strength := 0.55
 
 
 func setup(player_inventory: Inventory, texture_library: TextureLibrary) -> void:
@@ -48,6 +62,7 @@ func _ready() -> void:
 
 func _build() -> void:
 	layer = 10
+	_build_hurt_overlay()
 	_crosshair = _build_crosshair()
 	_status = _build_label(Vector2(18, 14), 15, Color(1, 1, 1, 0.92))
 	_hint = _build_label(Vector2.ZERO, 13, Color(1, 1, 1, 0.62))
@@ -66,6 +81,76 @@ func _build() -> void:
 	_message.visible = false
 	_debug = _build_label(Vector2(18, 128), 13, Color(0.85, 0.95, 1.0, 0.78))
 	_build_hotbar()
+	_build_vitals()
+
+
+## A full-screen red tint that pulses on damage.  It is a HUD child drawn first,
+## so the crosshair, hotbar and readouts stay legible on top of it.
+func _build_hurt_overlay() -> void:
+	_hurt = ColorRect.new()
+	_hurt.name = "HurtFlash"
+	_hurt.color = Color(0.72, 0.03, 0.03, 0.0)
+	_hurt.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_hurt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_hurt)
+
+
+## Health and breath readouts, placed bottom-left above the control hint.
+func _build_vitals() -> void:
+	var health_root := Control.new()
+	health_root.name = "HealthPanel"
+	health_root.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	health_root.offset_left = 18
+	health_root.offset_top = -142
+	health_root.offset_right = 18 + HEALTH_BAR.x
+	health_root.offset_bottom = -78
+	health_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(health_root)
+
+	_health_label = _make_label(15, Color(1, 0.86, 0.86, 0.95))
+	_health_label.position = Vector2.ZERO
+	health_root.add_child(_health_label)
+
+	var health_bg := ColorRect.new()
+	health_bg.color = Color(0.09, 0.02, 0.02, 0.72)
+	health_bg.position = Vector2(0, HEALTH_BAR.y + 8)
+	health_bg.size = HEALTH_BAR
+	health_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	health_root.add_child(health_bg)
+	_health_fill = ColorRect.new()
+	_health_fill.color = Color(0.86, 0.16, 0.18)
+	_health_fill.position = health_bg.position
+	_health_fill.size = HEALTH_BAR
+	_health_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	health_root.add_child(_health_fill)
+
+	_breath_root = Control.new()
+	_breath_root.name = "BreathPanel"
+	_breath_root.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_breath_root.offset_left = 18
+	_breath_root.offset_top = -196
+	_breath_root.offset_right = 18 + BREATH_BAR.x
+	_breath_root.offset_bottom = -142
+	_breath_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_breath_root.visible = false
+	add_child(_breath_root)
+
+	_breath_label = _make_label(15, Color(0.82, 0.93, 1.0, 0.95))
+	_breath_label.position = Vector2.ZERO
+	_breath_root.add_child(_breath_label)
+
+	var breath_bg := ColorRect.new()
+	breath_bg.color = Color(0.02, 0.05, 0.09, 0.72)
+	breath_bg.position = Vector2(0, BREATH_BAR.y + 8)
+	breath_bg.size = BREATH_BAR
+	breath_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_breath_root.add_child(breath_bg)
+	_breath_fill = ColorRect.new()
+	_breath_fill.color = Color(0.35, 0.72, 0.95)
+	_breath_fill.position = breath_bg.position
+	_breath_fill.size = BREATH_BAR
+	_breath_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_breath_root.add_child(_breath_fill)
 
 
 func _build_crosshair() -> Control:
@@ -96,15 +181,21 @@ func _build_crosshair() -> Control:
 
 
 func _build_label(at: Vector2, font_size: int, colour: Color) -> Label:
-	var label := Label.new()
+	var label := _make_label(font_size, colour)
 	label.position = at
+	add_child(label)
+	return label
+
+
+## Builds a styled label without parenting it, so callers can place it in a panel.
+func _make_label(font_size: int, colour: Color) -> Label:
+	var label := Label.new()
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", colour)
 	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 	label.add_theme_constant_override("shadow_offset_x", 1)
 	label.add_theme_constant_override("shadow_offset_y", 1)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(label)
 	return label
 
 
@@ -213,6 +304,44 @@ func set_status(text: String) -> void:
 	_status.text = text
 
 
+## Updates the health readout.  `current`/`maximum` are in health points; the bar
+## fills proportionally and the number is always shown.
+func set_health(current: float, maximum: float) -> void:
+	if _health_label == null:
+		return
+	_health_text = "HEALTH  %d / %d" % [int(ceil(current)), int(maximum)]
+	_health_label.text = _health_text
+	var ratio := 0.0 if maximum <= 0.0 else clampf(current / maximum, 0.0, 1.0)
+	_health_fill.size = Vector2(HEALTH_BAR.x * ratio, HEALTH_BAR.y)
+
+
+## Updates the breath readout; the panel is only visible while it matters (the
+## head is under water or the body is still recovering its breath).
+func set_breath(current: float, maximum: float, visible: bool) -> void:
+	if _breath_root == null:
+		return
+	_breath_root.visible = visible
+	if not visible:
+		return
+	_breath_label.text = "BREATH  %d / %d" % [int(ceil(current)), int(maximum)]
+	var ratio := 0.0 if maximum <= 0.0 else clampf(current / maximum, 0.0, 1.0)
+	_breath_fill.size = Vector2(BREATH_BAR.x * ratio, BREATH_BAR.y)
+
+
+## Current health readout text (used by diagnostics).
+func health_text() -> String:
+	return _health_text
+
+
+## Flashes the red damage overlay.  `strength` is the peak alpha.
+func hurt_flash(strength: float = 0.55) -> void:
+	if _hurt == null:
+		return
+	_hurt_strength = clampf(strength, 0.0, 1.0)
+	_hurt_timer = HURT_FLASH_SECONDS
+	_hurt.color = Color(0.72, 0.03, 0.03, _hurt_strength)
+
+
 func set_debug(text: String) -> void:
 	_debug.text = text
 
@@ -239,3 +368,6 @@ func _process(delta: float) -> void:
 		_message.modulate.a = clampf(_message_timer, 0.0, 1.0)
 		if _message_timer <= 0.0:
 			_message.visible = false
+	if _hurt_timer > 0.0:
+		_hurt_timer = maxf(0.0, _hurt_timer - delta)
+		_hurt.color.a = _hurt_strength * clampf(_hurt_timer / HURT_FLASH_SECONDS, 0.0, 1.0)
