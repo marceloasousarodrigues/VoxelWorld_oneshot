@@ -27,7 +27,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (338 assertions) + headless determinism fingerprint
+- [x] Automated test suite (346 assertions) + runtime integration harness (17 assertions) + headless determinism fingerprint
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
 - [x] Visual quality pass: lighting/fog retuned and re-inspected; sand is bright and near-tree
       shadows are dark (both plausible, not fixed)
@@ -52,7 +52,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 ## Phase C — Living world
 
 - [x] Day/night cycle (sun angle, sky, ambient and fog follow a clock) — `day_night.gd`,
-      338-assertion suite, `day-noon.png` / `day-dusk.png` / `day-night.png` inspected;
+      tested, `day-noon.png` / `day-dusk.png` / `day-night.png` inspected;
       `--time=` / `--time-rate=` drive it, saved with the world (save VERSION 2)
 - [ ] Passive creatures (spawn rules, wandering AI, drops)
 - [ ] Hostile creatures (targeting, melee, spawning in the dark)
@@ -80,6 +80,11 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 - [x] Stale padded-buffer bug in `ChunkMesher._fill_padded` (leaked the previous chunk's
       neighbour data into a reused buffer) — fixed, regression test added
+- [x] Inverted triangle winding in `ChunkMesher` (faces wound opposite to Godot's
+      front-face convention, so `cull_back` hid the terrain and the collision trimesh
+      reported inverted normals — the root cause of the reported WASD movement failure and
+      the rendering defects) — fixed in `chunk_mesher.gd` + legacy `main.gd`, pinned by the
+      `test_mesh_winding.gd` unit test and the `run_integration.gd` runtime test
 - [x] Determinism regression tests (streaming batch sizes, generation order, fingerprints)
 - [~] First-fill cost: ~2.9 s generation + ~2.2 s meshing; reduce by spreading work or
       caching the height field

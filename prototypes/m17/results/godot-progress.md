@@ -1,11 +1,13 @@
 # M17 Godot — Progress and Resume Point
 
-Last updated: 2026-10-16 (autonomous Godot development session, second checkpoint).
+Last updated: 2026-10-16 (autonomous Godot development session, third checkpoint —
+stabilization pass: WASD movement, rendering, water).
 Mission: `prototypes/m17/GODOT_MISSION.md`.
 Roadmap: `prototypes/m17/results/godot-roadmap.md`.
 
-**Savepoints**: `fd9f7d2` — “M17 Godot: day/night cycle (clock-driven sun, sky, ambient,
-fog and water)” (current). Previous: `e029c68` — “M17 Godot: playable voxel game,
+**Savepoints**: `c22d056` — “M17 Godot: fix inverted triangle winding (movement +
+rendering)” (current). Previous: `fd9f7d2` — “M17 Godot: day/night cycle (clock-driven
+sun, sky, ambient, fog and water)”; `e029c68` — “M17 Godot: playable voxel game,
 streaming, water, persistence, tests and docs”. Full log in §10.
 
 ---
@@ -14,12 +16,15 @@ streaming, water, persistence, tests and docs”. Full log in §10.
 
 Turn VoxelWorld into a real, playable Godot 4 first-person voxel game and keep
 expanding it toward a survival/building game (mission phases A → D). Phase A
-(the playable voxel foundation) is essentially complete and visually verified;
-work is now on phase B (survival systems) and C (living world).
+(the playable voxel foundation) is complete and visually verified; work is now on
+phase B (survival systems) and C (living world). This checkpoint was a stabilization
+pass on the Phase A foundation: the user-reported WASD movement failure and the
+rendering defects were reproduced, traced to a single inverted-face-winding bug, and
+fixed (§8).
 
 ## 2. Current phase and next concrete task
 
-- **Phase**: A complete, B in progress.
+- **Phase**: A complete (post-fix, re-verified), B in progress.
 - **Next concrete task**: see §9 “Resume”.
 
 ## 3. What actually works (verified)
@@ -29,18 +34,19 @@ Verified means: observed in a run of the real project, not merely written.
 | Area | State | Evidence |
 | --- | --- | --- |
 | Project opens and runs | verified | windowed runs, 60 fps, exit code 0, empty stderr |
-| Deterministic terrain generation | verified | 3 consecutive runs, `world_hash=6372495951065888771`, `faces=166074` |
+| Deterministic terrain generation | verified | 3 consecutive runs, `world_hash=6372495951065888771`, `faces=166074` (unchanged after the winding fix) |
 | Chunk meshing (face culling) | verified | 392 chunks, 166 074 faces, 332 148 triangles at radius 4 |
+| **Correct face winding** | verified | `test_mesh_winding.gd` pins every solid + collision triangle to Godot's `BoxMesh` convention; `winding-test.png` |
 | Streaming + bounded work | verified | `queued=0`, `worst_mesh_ms≈16`, `generation_ms_total≈2.8 s` |
-| Player movement + collision | verified | movement observed in captures; physics-driven spawn/settle |
-| Block breaking / placing | verified | automated tests + HUD target readout in captures |
+| Player movement + collision | verified | `run_integration.gd` (17 assertions): lands at `y=70.000`, `is_on_floor()`, WASD forward/strafe/back, pause/resume, chunk-boundary walk |
+| Block breaking / placing | verified | integration test + automated tests + HUD target readout in captures |
 | Negative coordinates | verified | `test_coordinates.gd`, floor-based conversion |
-| Water (logical + rendered) | verified | `test_fluid.gd`, water visible in captures |
+| Water (logical + rendered) | verified | `test_fluid.gd`, water visible in `fix-water*.png`; no independent water defect found |
 | Save / load, versioned | verified | `SaveManager` + `test_edits.gd`; quarantine path on bad saves |
 | Main menu / pause / play loop | verified | menu is the boot scene; `--straight-to-game` skips it |
 | HUD, hotbar, item counts | verified | visible in `diag-shore.png`, `godot-game-tour-*.png` |
 | Textures, lighting, sky, fog | verified | inspected captures (see §6) |
-| Day/night cycle | verified | 338-assertion suite + `day-noon.png` / `day-dusk.png` / `day-night.png` inspected |
+| Day/night cycle | verified | test module + `day-noon.png` / `day-dusk.png` / `day-night.png` inspected |
 
 ## 4. Files and architecture
 
@@ -75,8 +81,9 @@ Godot project root: `prototypes/m17/godot/`.
 `scripts/regression.gd` are the earlier fixture-slice entry points; they still run
 but are no longer the project's main scene.
 
-**Diagnostics**: the capture harness inside `game.gd`, `scripts/tests/*` (`run_tests.gd` is the
-headless runner), `prototypes/m17/tools/image_stats.py` (objective image statistics).
+**Diagnostics**: the capture harness inside `game.gd`, `scripts/tests/*` (`run_tests.gd` is
+the headless unit runner; `run_integration.gd` boots the real scene and drives player
+input/collision), `prototypes/m17/tools/image_stats.py` (objective image statistics).
 
 ## 5. Commands
 
@@ -90,6 +97,9 @@ $repo  = 'C:\Users\Admin\Documents\Projects\VoxelWorld_oneshot'
 
 # Automated tests (headless, exit code is the result)
 & $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
+
+# Runtime integration test: boots the real scene and drives WASD/collision (exit code)
+& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
 
 # Headless smoke run (deterministic world fingerprint)
 & $godot --headless --path prototypes/m17/godot -- --straight-to-game --quit-after=30
@@ -116,11 +126,19 @@ and `--time-rate=<day-length-seconds>` (`0` freezes the clock).
 
 **Automated (headless)**
 
-- `M17_TESTS_PASS 338 assertions`, exit code 0, 0 bytes of stderr.
+- `M17_TESTS_PASS 346 assertions`, exit code 0, 0 bytes of stderr.
 - Modules: coordinates, chunk data/indexing, block DB, generation, mesher (incl. a
-  stale-padding regression), raycast, edits/persistence, fluid, fixture contract,
-  textures, day/night clock (wrap semantics, lighting curves, continuity, determinism,
-  clock text, save round-trip), streaming determinism, view/clear teardown.
+  stale-padding regression), **mesh winding**, raycast, edits/persistence, fluid,
+  fixture contract, textures, day/night clock (wrap semantics, lighting curves,
+  continuity, determinism, clock text, save round-trip), streaming determinism,
+  view/clear teardown.
+- Runtime integration: `M17_INTEGRATION_PASS 17 assertions`, exit code 0
+  (`run_integration.gd` boots `game.tscn` and drives the real player). It asserts
+  physics processing is on, the player settles onto the ground at exactly
+  `y=70.000` and reports `is_on_floor()`, that WASD forward/strafe/back actually move
+  the body, that movement still works after pause→resume, that looking straight down
+  targets/places/breaks a block through the real controller, and that walking across a
+  chunk boundary keeps the player grounded while the neighbour chunk streams in.
 
 **Runtime**
 
@@ -128,9 +146,22 @@ and `--time-rate=<day-length-seconds>` (`0` freezes the clock).
   `faces=166074`, `faces_hash=6977993294663025454`, `meshed=392`, `loaded=392`,
   `queued=0`; two byte-identical `--fog=0` vs `--fog=0.0018` captures proved the
   render path is deterministic.
+- **Post-fix**: the same smoke run and the radius-4 spawn capture
+  (`fix-spawn.png`) still report `world_hash=6372495951065888771`, `faces=166074`
+  and `faces_hash=6977993294663025454` — the winding fix changed only triangle order,
+  not world data or face counts.
 - Windowed captures: 1280×720, 224 draw calls, 201 684 primitives, 60 fps.
 
-**Visual (images actually inspected)**
+**Visual — post-fix (images actually inspected)**
+
+| Capture | What it shows |
+| --- | --- |
+| `results/godot/fix-spawn.png` | post-fix first-person spawn view: solid grass/path ground, intact trees, sand shore, ocean; no tearing or flipped faces |
+| `results/godot/fix-aerial.png` | post-fix aerial view: continuous terrain, coastline and water with no holes |
+| `results/godot/fix-water.png`, `fix-water-top.png` | post-fix water: transparent surface, seabed visible, sun glint; no independent defect |
+| `results/godot/winding-test.png` | controlled two-quad render: only the correctly (reversed) wound quad survives `cull_back`, pinning the convention |
+
+**Visual — pre-fix baseline captures (retained for comparison; the terrain views show the inverted-winding artifacts)**
 
 | Capture | What it shows |
 | --- | --- |
@@ -190,6 +221,38 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 
 ## 8. Known defects, limitations, blockers
 
+**Resolved in this session (was the top blocker; fixed in `c22d056`)**
+
+- **Inverted triangle winding** — the user-reported WASD movement failure *and* the
+  rendering defects had one root cause. The mesher emitted each quad wound opposite to
+  Godot's front-face convention (Godot winds so the right-hand-rule normal points *into*
+  the solid; verified against the engine's own `BoxMesh`).
+  - *Severity*: critical — the game was effectively unplayable while the symptom looked
+    like an input bug.
+  - *Repro*: play the game (or run `run_integration.gd`); the player wedges into the
+    ground instead of standing on it, and the terrain renders as grey streaks / torn and
+    flipped triangles. The earlier scripted `--fly` captures never exercised the keyboard
+    path, which is why the movement claim had gone unreproduced.
+  - *Root cause*: with `cull_back`, every outward face was a back face, so outward
+    surfaces were hidden and the collision trimesh reported inverted normals —
+    `is_on_floor()` was always `false`, so WASD input reached the controller but the body
+    never moved cleanly (mouse look still worked, which made it look like a movement bug).
+  - *Fix*: reversed `QUAD_INDICES` from `[0,1,2,0,2,3]` to `[0,2,1,0,3,2]` in
+    `chunk_mesher.gd`, and the same one-line fix in the legacy `main.gd` for consistency.
+    UVs and normals are unchanged; only triangle order changed.
+  - *Evidence*: `test_mesh_winding.gd` (unit) pins every solid + collision triangle to
+    `BoxMesh`'s convention; `run_integration.gd` proves the player lands at `y=70.000`,
+    reports `is_on_floor()` and moves with WASD; `winding-test.png` is a controlled
+    two-quad render showing only the correctly wound quad surviving `cull_back`. Spawn
+    capture `fix-spawn.png` is coherent and still reports `world_hash=6372495951065888771`.
+- **Water** — investigated; **no independent water defect**. Water uses `cull_disabled`,
+  so it was never affected by the winding bug; its apparent “distortion” was the broken
+  surrounding terrain. With the terrain fixed the water shows the intended transparency
+  (seabed visible), a level-based surface and sun glint (`fix-water.png`,
+  `fix-water-top.png`). Left unchanged.
+
+**Open limitations (not regressions)**
+
 - First fill takes ~2.9 s of generation + ~2.2 s of meshing before the world is ready
   (staged across frames, so the window stays responsive, but the loading screen is long).
 - The world edge is visible at the horizon when the render distance is small; fog
@@ -202,24 +265,30 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 - A second agent was editing the same project files during the session (it added
   `fixture_adapter.gd` and rewrote `main.gd`/`capture.gd`); re-run the tests after
   any unexpected file change.
-- **Reported by the user, not yet reproduced by the developer**: WASD movement failure
-  (movement does not respond as expected), plus further rendering and water defects. The
-  movement claim has *not* been reproduced in this session and no fix has been attempted;
-  the captures inspected here show the camera in scripted/`--fly` positions, which does not
-  exercise the keyboard path. These are the first items of the next (stabilization) task.
 - A true mid-twilight capture (`--time=0.50`) has not been taken; only the noon and night
   endpoints of the lighting curve have been inspected visually (both are covered by tests).
+- Runtime validation of the fix is headless + offscreen capture only. No human played the
+  game with a real keyboard/mouse in this session; the integration test drives the same
+  `Input`/`_physics_process` path the keyboard uses, but a human play-through is still
+  outstanding.
 
 ## 9. Resume
 
 Read this file and `godot-roadmap.md`, then run the tests and the smoke command from
-§5 to confirm the baseline still holds (`338 assertions`, `world_hash=6372495951065888771`).
-Then continue with the first unchecked item of `godot-roadmap.md` phase B/C.
+§5 to confirm the baseline still holds (`346` unit + `17` integration assertions,
+`world_hash=6372495951065888771`). Then continue with the first unchecked item of
+`godot-roadmap.md` phase B/C.
 
-**Next task (stabilization, not new features)**: reproduce and fix the user-reported WASD
-movement failure (`voxel_player.gd` — check that input reaches the controller outside of
-`--capture`/`--fly` mode and that `_physics_process` applies it), then the rendering and
-water defects. Do not start new roadmap items before the movement failure is understood.
+**Stabilization is done for the three user-reported items**: the WASD movement failure,
+the rendering defects and the water concern all traced to the inverted-winding bug now
+fixed in `c22d056` (§8). The next task is therefore back on the roadmap: pick the first
+unchecked Phase B item — the full inventory interface (only the hotbar row exists today;
+no drag & drop or overflow page) — or the crafting data model (`[ ] Crafting recipes`),
+whichever the user prefers.
+
+**Outstanding validation**: the fix is verified headless (unit + integration) and by
+offscreen capture; a human play-through with real keyboard/mouse has not been done. If a
+real play-through is possible, it should be the first thing to do before building on top.
 
 Baseline sanity command set (copy/paste):
 
@@ -227,6 +296,7 @@ Baseline sanity command set (copy/paste):
 cd C:\Users\Admin\Documents\Projects\VoxelWorld_oneshot
 $godot = 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe'
 & $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd | Select-Object -Last 1
+& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game | Select-Object -Last 1
 & $godot --headless --path prototypes/m17/godot -- --straight-to-game --quit-after=30 | Select-String M17_GAME_SUMMARY
 ```
 
@@ -239,7 +309,9 @@ the listed evidence had been inspected. Nothing in the working tree was discarde
 | --- | --- | --- |
 | `e029c68` | Playable voxel game: generation, streaming, meshing, water, edits/persistence, HUD/hotbar, main + pause menu, capture harness, test suite, docs, assets | 271 assertions exit 0; deterministic `world_hash=6372495951065888771`; `look-*.png`, `diag-*.png` inspected |
 | `fd9f7d2` | Day/night cycle: `core/day_night.gd`, clock-driven sun/sky/ambient/fog/water, `--time=` / `--time-rate=`, save `VERSION 2`, new test module, image-stats Pillow fix | 338 assertions exit 0, 0 bytes stderr; `day-noon.png` / `day-dusk.png` / `day-night.png` captured and inspected; post-commit smoke run still reports `world_hash=6372495951065888771` |
+| `c22d056` | Fix inverted triangle winding: `QUAD_INDICES` reversed in `chunk_mesher.gd` + legacy `main.gd`; new unit test `test_mesh_winding.gd`; new runtime integration harness `run_integration.gd`; `fix-*.png` + `winding-test.png` evidence; `.gitignore` adds `*.log.err` | 346 unit + 17 integration assertions exit 0; `winding-test.png`, `fix-spawn.png`, `fix-aerial.png`, `fix-water*.png` inspected; post-fix smoke + radius-4 spawn capture still report `world_hash=6372495951065888771`, `faces=166074`, `faces_hash=6977993294663025454` |
 
-The day/night savepoint is **complete and validated for the behaviour it introduced**.
-Unfinished work is listed in §8 and in the resume section §9; it is *not* part of this
-savepoint.
+The winding savepoint is **complete and validated for the behaviour it introduced**; the
+three user-reported items (movement, rendering, water) are resolved. Day/night from the
+previous savepoint is unchanged. Unfinished work is listed in §8 and the resume section
+§9; it is *not* part of this savepoint.
