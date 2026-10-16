@@ -42,7 +42,7 @@ Verified means: observed in a run of the real project, not merely written.
 | Block breaking / placing | verified | integration test + automated tests + HUD target readout in captures |
 | Negative coordinates | verified | `test_coordinates.gd`, floor-based conversion |
 | Water (logical + rendered) | verified | `test_fluid.gd`, water visible in `fix-water*.png`; no independent water defect found |
-| Save / load, versioned | verified | `SaveManager` + `test_edits.gd`; quarantine path on bad saves |
+| Save / load, versioned | verified | `test_persistence.gd` drives `SaveManager` write→read→apply (blocks, fluid, player, inventory, clock), seed-mismatch rejection, version-1 load and corrupt-save quarantine |
 | Main menu / pause / play loop | verified | menu is the boot scene; `--straight-to-game` skips it |
 | HUD, hotbar, item counts | verified | visible in `diag-shore.png`, `godot-game-tour-*.png` |
 | Textures, lighting, sky, fog | verified | inspected captures (see §6) |
@@ -126,12 +126,12 @@ and `--time-rate=<day-length-seconds>` (`0` freezes the clock).
 
 **Automated (headless)**
 
-- `M17_TESTS_PASS 346 assertions`, exit code 0, 0 bytes of stderr.
+- `M17_TESTS_PASS 383 assertions`, exit code 0, 0 bytes of stderr.
 - Modules: coordinates, chunk data/indexing, block DB, generation, mesher (incl. a
-  stale-padding regression), **mesh winding**, raycast, edits/persistence, fluid,
-  fixture contract, textures, day/night clock (wrap semantics, lighting curves,
-  continuity, determinism, clock text, save round-trip), streaming determinism,
-  view/clear teardown.
+  stale-padding regression), **mesh winding**, raycast, edits, **persistence (SaveManager
+  write/read/apply, validation and quarantine)**, fluid, fixture contract, textures,
+  day/night clock (wrap semantics, lighting curves, continuity, determinism, clock text,
+  save round-trip), streaming determinism, view/clear teardown.
 - Runtime integration: `M17_INTEGRATION_PASS 17 assertions`, exit code 0
   (`run_integration.gd` boots `game.tscn` and drives the real player). It asserts
   physics processing is on, the player settles onto the ground at exactly
@@ -281,7 +281,7 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 ## 9. Resume
 
 Read this file and `godot-roadmap.md`, then run the tests and the smoke command from
-§5 to confirm the baseline still holds (`346` unit + `17` integration assertions,
+§5 to confirm the baseline still holds (`383` unit + `17` integration assertions,
 `world_hash=6372495951065888771`). Then continue with the first unchecked item of
 `godot-roadmap.md` phase B/C.
 
@@ -316,8 +316,10 @@ the listed evidence had been inspected. Nothing in the working tree was discarde
 | `e029c68` | Playable voxel game: generation, streaming, meshing, water, edits/persistence, HUD/hotbar, main + pause menu, capture harness, test suite, docs, assets | 271 assertions exit 0; deterministic `world_hash=6372495951065888771`; `look-*.png`, `diag-*.png` inspected |
 | `fd9f7d2` | Day/night cycle: `core/day_night.gd`, clock-driven sun/sky/ambient/fog/water, `--time=` / `--time-rate=`, save `VERSION 2`, new test module, image-stats Pillow fix | 338 assertions exit 0, 0 bytes stderr; `day-noon.png` / `day-dusk.png` / `day-night.png` captured and inspected; post-commit smoke run still reports `world_hash=6372495951065888771` |
 | `c22d056` | Fix inverted triangle winding: `QUAD_INDICES` reversed in `chunk_mesher.gd` + legacy `main.gd`; new unit test `test_mesh_winding.gd`; new runtime integration harness `run_integration.gd`; `fix-*.png` + `winding-test.png` evidence; `.gitignore` adds `*.log.err` | 346 unit + 17 integration assertions exit 0; `winding-test.png`, `fix-spawn.png`, `fix-aerial.png`, `fix-water*.png` inspected; post-fix smoke + radius-4 spawn capture still report `world_hash=6372495951065888771`, `faces=166074`, `faces_hash=6977993294663025454` |
+| `23a8919` | Persistence regression test `test_persistence.gd` (SaveManager write/read/apply, validation, quarantine) added to the runner | 383 unit assertions exit 0, 0 bytes stderr; the test round-trips blocks/fluid/player/inventory/clock, refuses a wrong-seed save, loads a version-1 save, and quarantines bad saves without losing them |
 
 The winding savepoint is **complete and validated for the behaviour it introduced**; the
 three user-reported items (movement, rendering, water) are resolved. Day/night from the
-previous savepoint is unchanged. Unfinished work is listed in §8 and the resume section
-§9; it is *not* part of this savepoint.
+previous savepoint is unchanged. The persistence test closes the Priority-4 reliability gap
+where `SaveManager` had no coverage. Unfinished work is listed in §8 and the resume section
+§9; it is *not* part of these savepoints.
