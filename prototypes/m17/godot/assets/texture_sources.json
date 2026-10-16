@@ -1,0 +1,368 @@
+{
+  "generated_by": "prototypes/m17/godot/tools/import_textures.py",
+  "note": "Vendored copies of repository textures for the M17 Godot project. No file was downloaded; each entry records the in-repo source path.",
+  "textures": {
+    "bedrock": {
+      "description": "BEDROCK (dark unbreakable rock)",
+      "file": "default_obsidian_block.png",
+      "height": 128,
+      "key": "bedrock",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_obsidian_block.png",
+      "width": 128
+    },
+    "brick": {
+      "description": "BRICK",
+      "file": "default_brick.png",
+      "height": 128,
+      "key": "brick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_brick.png",
+      "width": 128
+    },
+    "cactus_side": {
+      "description": "CACTUS side",
+      "file": "default_cactus_side.png",
+      "height": 128,
+      "key": "cactus_side",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_cactus_side.png",
+      "width": 128
+    },
+    "cactus_top": {
+      "description": "CACTUS top",
+      "file": "default_cactus_top.png",
+      "height": 128,
+      "key": "cactus_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_cactus_top.png",
+      "width": 128
+    },
+    "clay": {
+      "description": "CLAY",
+      "file": "default_clay.png",
+      "height": 128,
+      "key": "clay",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_clay.png",
+      "width": 128
+    },
+    "coal_ore": {
+      "description": "COAL_ORE",
+      "file": "default_mineral_coal.png",
+      "height": 128,
+      "key": "coal_ore",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_mineral_coal.png",
+      "width": 128
+    },
+    "cobble": {
+      "description": "COBBLESTONE / STONE drop",
+      "file": "default_cobble.png",
+      "height": 128,
+      "key": "cobble",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_cobble.png",
+      "width": 128
+    },
+    "deco_dry_grass": {
+      "description": "dry grass tuft decoration",
+      "file": "default_dry_grass_1.png",
+      "height": 64,
+      "key": "deco_dry_grass",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_dry_grass_1.png",
+      "width": 64
+    },
+    "deco_grass_1": {
+      "description": "grass tuft decoration",
+      "file": "default_grass_1.png",
+      "height": 64,
+      "key": "deco_grass_1",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_grass_1.png",
+      "width": 64
+    },
+    "deco_grass_2": {
+      "description": "grass tuft decoration",
+      "file": "default_grass_2.png",
+      "height": 64,
+      "key": "deco_grass_2",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_grass_2.png",
+      "width": 64
+    },
+    "deco_grass_3": {
+      "description": "grass tuft decoration",
+      "file": "default_grass_3.png",
+      "height": 64,
+      "key": "deco_grass_3",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_grass_3.png",
+      "width": 64
+    },
+    "deco_grass_4": {
+      "description": "grass tuft decoration",
+      "file": "default_grass_4.png",
+      "height": 64,
+      "key": "deco_grass_4",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_grass_4.png",
+      "width": 64
+    },
+    "deco_grass_5": {
+      "description": "grass tuft decoration",
+      "file": "default_grass_5.png",
+      "height": 64,
+      "key": "deco_grass_5",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_grass_5.png",
+      "width": 64
+    },
+    "deco_jungle_grass": {
+      "description": "tall grass tuft decoration",
+      "file": "default_junglegrass.png",
+      "height": 128,
+      "key": "deco_jungle_grass",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_junglegrass.png",
+      "width": 64
+    },
+    "diamond_ore": {
+      "description": "DIAMOND_ORE",
+      "file": "default_mineral_diamond.png",
+      "height": 128,
+      "key": "diamond_ore",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_mineral_diamond.png",
+      "width": 128
+    },
+    "dirt": {
+      "description": "DIRT",
+      "file": "default_dirt.png",
+      "height": 128,
+      "key": "dirt",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_dirt.png",
+      "width": 128
+    },
+    "dry_grass_side": {
+      "description": "DRY_GRASS side (savanna)",
+      "file": "default_dry_grass_side.png",
+      "height": 128,
+      "key": "dry_grass_side",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_dry_grass_side.png",
+      "width": 128
+    },
+    "dry_grass_top": {
+      "description": "DRY_GRASS top (savanna)",
+      "file": "default_dry_grass.png",
+      "height": 128,
+      "key": "dry_grass_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_dry_grass.png",
+      "width": 128
+    },
+    "glass": {
+      "description": "GLASS",
+      "file": "default_glass.png",
+      "height": 128,
+      "key": "glass",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_glass.png",
+      "width": 128
+    },
+    "gold_ore": {
+      "description": "GOLD_ORE",
+      "file": "default_mineral_gold.png",
+      "height": 128,
+      "key": "gold_ore",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_mineral_gold.png",
+      "width": 128
+    },
+    "grass_side": {
+      "description": "GRASS side face",
+      "file": "grass_side_composite.png",
+      "height": 128,
+      "key": "grass_side",
+      "license": "Derived composite already used by M12 (Minetest default pack derivative).",
+      "source": "voxel_textures/blocks/grass_side_composite.png",
+      "width": 128
+    },
+    "grass_top": {
+      "description": "GRASS top face",
+      "file": "default_grass.png",
+      "height": 128,
+      "key": "grass_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_grass.png",
+      "width": 128
+    },
+    "gravel": {
+      "description": "GRAVEL",
+      "file": "default_gravel.png",
+      "height": 128,
+      "key": "gravel",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_gravel.png",
+      "width": 128
+    },
+    "iron_ore": {
+      "description": "IRON_ORE",
+      "file": "default_mineral_iron.png",
+      "height": 128,
+      "key": "iron_ore",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_mineral_iron.png",
+      "width": 128
+    },
+    "mossy_cobble": {
+      "description": "MOSSY_COBBLESTONE",
+      "file": "default_mossycobble.png",
+      "height": 128,
+      "key": "mossy_cobble",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_mossycobble.png",
+      "width": 128
+    },
+    "oak_leaves": {
+      "description": "OAK_LEAVES (alpha cutout)",
+      "file": "default_leaves.png",
+      "height": 128,
+      "key": "oak_leaves",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_leaves.png",
+      "width": 128
+    },
+    "oak_log_side": {
+      "description": "OAK_LOG side",
+      "file": "default_tree.png",
+      "height": 128,
+      "key": "oak_log_side",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tree.png",
+      "width": 128
+    },
+    "oak_log_top": {
+      "description": "OAK_LOG top/bottom",
+      "file": "default_tree_top.png",
+      "height": 128,
+      "key": "oak_log_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tree_top.png",
+      "width": 128
+    },
+    "obsidian": {
+      "description": "OBSIDIAN (dark volcanic rock)",
+      "file": "default_obsidian_block.png",
+      "height": 128,
+      "key": "obsidian",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_obsidian_block.png",
+      "width": 128
+    },
+    "pine_leaves": {
+      "description": "PINE_LEAVES (alpha cutout)",
+      "file": "default_pine_needles.png",
+      "height": 128,
+      "key": "pine_leaves",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_pine_needles.png",
+      "width": 128
+    },
+    "pine_log_side": {
+      "description": "PINE_LOG side",
+      "file": "default_pine_tree.png",
+      "height": 128,
+      "key": "pine_log_side",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_pine_tree.png",
+      "width": 128
+    },
+    "pine_log_top": {
+      "description": "PINE_LOG top/bottom",
+      "file": "default_pine_tree_top.png",
+      "height": 128,
+      "key": "pine_log_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_pine_tree_top.png",
+      "width": 128
+    },
+    "planks": {
+      "description": "PLANKS",
+      "file": "default_wood.png",
+      "height": 128,
+      "key": "planks",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_wood.png",
+      "width": 128
+    },
+    "sand": {
+      "description": "SAND",
+      "file": "default_sand.png",
+      "height": 128,
+      "key": "sand",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_sand.png",
+      "width": 128
+    },
+    "sandstone": {
+      "description": "SANDSTONE",
+      "file": "default_sandstone.png",
+      "height": 128,
+      "key": "sandstone",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_sandstone.png",
+      "width": 128
+    },
+    "snow": {
+      "description": "SNOW",
+      "file": "default_snow.png",
+      "height": 128,
+      "key": "snow",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_snow.png",
+      "width": 128
+    },
+    "stone": {
+      "description": "STONE",
+      "file": "default_stone.png",
+      "height": 128,
+      "key": "stone",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_stone.png",
+      "width": 128
+    },
+    "stone_brick": {
+      "description": "STONE_BRICK",
+      "file": "default_stone_brick.png",
+      "height": 128,
+      "key": "stone_brick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_stone_brick.png",
+      "width": 128
+    },
+    "water": {
+      "description": "WATER tile (static fallback)",
+      "file": "water.png",
+      "height": 16,
+      "key": "water",
+      "license": "Present in the repository since M9; small placeholder water tile.",
+      "source": "voxel_textures/blocks/water.png",
+      "width": 16
+    },
+    "water_anim": {
+      "description": "WATER surface, 8-frame animated strip",
+      "file": "default_water_source_animated.png",
+      "frames": 8,
+      "height": 1024,
+      "key": "water_anim",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_water_source_animated.png",
+      "width": 128
+    }
+  },
+  "version": 1
+}

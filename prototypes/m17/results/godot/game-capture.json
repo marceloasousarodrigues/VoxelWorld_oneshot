@@ -1,0 +1,69 @@
+{
+	"biome": "Beach",
+	"evidence": "offscreen Godot viewport PNG written from inside the running game scene; not a human visual inspection",
+	"eye": [
+		-30.0,
+		67.620002746582,
+		0.0
+	],
+	"fluid": {
+		"changes": 0,
+		"evaluations": 0,
+		"observed_edits": 0,
+		"pending": 0,
+		"seeded_chunks": 0
+	},
+	"fps_last_sample": 42.325653578634,
+	"godot_version": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"look": [
+		90.0,
+		-8.0
+	],
+	"mesher": {
+		"assemble_ms": 66.19,
+		"builds": 392,
+		"emit_ms": 1673.886,
+		"faces": 154718,
+		"fill_ms": 345.132,
+		"ms": 2084.408,
+		"triangles": 309436
+	},
+	"player": [
+		-30.0,
+		66.0,
+		0.0
+	],
+	"seed": 17017,
+	"streaming": {
+		"center": "(-2, 4, 0)",
+		"faces": 154718,
+		"faces_hash": 8868612017134738978,
+		"generated": 392,
+		"generation_ms_total": 2634.71,
+		"loaded": 392,
+		"mesh_ms_total": 2084.408,
+		"meshed": 392,
+		"queued": 0,
+		"render_radius": 4,
+		"unloaded": 0,
+		"vertical_radius": 4,
+		"views": 392,
+		"wanted": 392,
+		"worst_mesh_ms": 14.635
+	},
+	"window_size": [
+		1280,
+		720
+	],
+	"world_hash": 6446961232985762282
+}

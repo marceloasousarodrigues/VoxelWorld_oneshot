@@ -1,0 +1,21 @@
+{
+	"evidence": "offscreen Godot rendered viewport PNG; this is not a screenshot of a desktop window or human visual inspection",
+	"godot_version": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"loaded_fixture_chunks": 9,
+	"rendered_chunk_nodes": 9,
+	"resolution": [
+		1280,
+		720
+	],
+	"sha256": "684159385a799bcb779024e2ff0771e1352a9c2b123f8cfa720c4eebcb26a202"
+}

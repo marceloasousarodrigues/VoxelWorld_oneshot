@@ -1,0 +1,5 @@
+# Godot's import/build cache: regenerated locally, never committed.
+.godot/
+
+# Local run logs written by the headless test/capture harnesses.
+*.log

@@ -1,0 +1,3 @@
+# Python bytecode from the shared fixture generator.
+__pycache__/
+*.pyc

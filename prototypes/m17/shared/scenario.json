@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "seed": 17017,
+  "chunk_size": [16, 16, 16],
+  "coordinate_axes": {"x": "east", "y": "up", "z": "south"},
+  "block_palette": {"AIR": 0, "GRASS": 1, "DIRT": 2, "STONE": 3, "WATER": 4},
+  "chunk_coords": [[-1, 0, -1], [-1, 0, 0], [-1, 0, 1], [0, 0, -1], [0, 0, 0], [0, 0, 1], [1, 0, -1], [1, 0, 0], [1, 0, 1]],
+  "terrain": {"base_height": 7, "height_modulus": 5, "height_min_offset": -2, "lake_center_xz": [3, -5], "lake_radius_xz": [5, 4], "water_level": 6},
+  "camera_start": [8, 12, 8],
+  "player": {"move_speed": 7.0, "jump_speed": 7.0, "collision_height": 1.8, "camera_height": 1.6, "mouse_sensitivity": 0.002},
+  "interaction_range": 6.0,
+  "fluid_simulation": false,
+  "fixture_format": "Each chunk stores 4096 ASCII palette IDs in x + 16 * (z + 16 * y) order; SHA-256 covers the ASCII string."
+}
