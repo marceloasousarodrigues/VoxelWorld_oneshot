@@ -31,7 +31,10 @@ const FACE_CORNERS := [
 	[Vector3(0.5, -0.5, 0.5), Vector3(0.5, 0.5, 0.5), Vector3(-0.5, 0.5, 0.5), Vector3(-0.5, -0.5, 0.5)],
 	[Vector3(-0.5, -0.5, -0.5), Vector3(-0.5, 0.5, -0.5), Vector3(0.5, 0.5, -0.5), Vector3(0.5, -0.5, -0.5)]
 ]
-const QUAD_INDICES := [0, 1, 2, 0, 2, 3]
+## Godot's front faces wind so the right-hand-rule triangle normal points into
+## the solid; the opposite order made every face a back face (hidden surfaces and
+## inverted collision normals).
+const QUAD_INDICES := [0, 2, 1, 0, 3, 2]
 const FACE_SHADES := [1.0, 0.68, 1.14, 0.5, 0.82, 0.92]
 const MOVE_SPEED := 7.0
 const JUMP_SPEED := 7.0

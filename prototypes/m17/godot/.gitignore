@@ -3,3 +3,4 @@
 
 # Local run logs written by the headless test/capture harnesses.
 *.log
+*.log.err

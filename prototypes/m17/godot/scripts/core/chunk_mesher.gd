@@ -48,7 +48,11 @@ const FACE_UVS := [
 	[Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1)],
 	[Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1)],
 ]
-const QUAD_INDICES := [0, 1, 2, 0, 2, 3]
+## Godot winds front faces so the right-hand-rule normal of the triangle points
+## *into* the solid (see `BoxMesh`).  With the opposite order every face was a
+## back face: `cull_back` hid all outward surfaces and the collision trimesh
+## reported inverted normals, so the player fell through the ground.
+const QUAD_INDICES := [0, 2, 1, 0, 3, 2]
 ## Face shading: top faces catch the most light, bottom faces the least.
 const FACE_SHADE := [0.84, 0.84, 1.0, 0.52, 0.70, 0.70]
 const WATER_RENDER_HEIGHT := 0.875
