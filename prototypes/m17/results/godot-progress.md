@@ -151,6 +151,8 @@ and `--time-rate=<day-length-seconds>` (`0` freezes the clock).
   and `faces_hash=6977993294663025454` — the winding fix changed only triangle order,
   not world data or face counts.
 - Windowed captures: 1280×720, 224 draw calls, 201 684 primitives, 60 fps.
+- Longer stability run: `--straight-to-game --quit-after=60` (60 s of play) exits 0 with
+  0 bytes of stderr and no `ERROR`/`WARNING`/`SCRIPT ERROR` lines; ~120 fps headless.
 
 **Visual — post-fix (images actually inspected)**
 
@@ -160,6 +162,7 @@ and `--time-rate=<day-length-seconds>` (`0` freezes the clock).
 | `results/godot/fix-aerial.png` | post-fix aerial view: continuous terrain, coastline and water with no holes |
 | `results/godot/fix-water.png`, `fix-water-top.png` | post-fix water: transparent surface, seabed visible, sun glint; no independent defect |
 | `results/godot/winding-test.png` | controlled two-quad render: only the correctly (reversed) wound quad survives `cull_back`, pinning the convention |
+| `results/godot/fix-legacy-slice.png` | post-fix legacy `main.gd` slice (windowed `--capture-on-ready`): solid green/dirt/water blocks with correct shading, confirming the same fix in the compat entry point |
 
 **Visual — pre-fix baseline captures (retained for comparison; the terrain views show the inverted-winding artifacts)**
 
@@ -245,6 +248,9 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
     reports `is_on_floor()` and moves with WASD; `winding-test.png` is a controlled
     two-quad render showing only the correctly wound quad surviving `cull_back`. Spawn
     capture `fix-spawn.png` is coherent and still reports `world_hash=6372495951065888771`.
+    The legacy `main.gd` fix was verified twice: analytically (its own `FACE_CORNERS`
+    wound all six faces back-facing before, all six front-facing after) and visually
+    (`fix-legacy-slice.png`, windowed `--capture-on-ready`).
 - **Water** — investigated; **no independent water defect**. Water uses `cull_disabled`,
   so it was never affected by the winding bug; its apparent “distortion” was the broken
   surrounding terrain. With the terrain fixed the water shows the intended transparency
