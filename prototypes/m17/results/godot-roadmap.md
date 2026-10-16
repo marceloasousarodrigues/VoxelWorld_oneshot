@@ -39,8 +39,11 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [ ] Full inventory interface (only the hotbar row is visible; no drag & drop, no overflow page)
 - [x] Collecting drops into the inventory (mining adds the drop; inventory-full feedback)
 - [x] Placing items consumes them
-- [ ] Crafting recipes (data model + rules + tests)
-- [ ] Crafting interface
+- [x] Crafting recipes (data model + rules + tests) — `core/crafting.gd`: 5 fixed
+      recipes, atomic `craft` (AIR output rejected, capacity judged against the
+      post-consumption state), `can_craft`/`available_recipes`; all five inputs are
+      obtainable (clay generation fixed — see backlog)
+- [x] Crafting interface — `game/crafting_panel.gd`, opened with C; `crafting-ui.png` inspected
 - [ ] Tools, tool tiers and durability
 - [ ] Health and damage (fall damage, drowning, hostile damage)
 - [ ] Hunger / survival settings
@@ -88,6 +91,12 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Determinism regression tests (streaming batch sizes, generation order, fingerprints)
 - [x] Persistence regression test (`SaveManager` write/read/apply round-trip, version-1
       load, seed-mismatch rejection, corrupt-save quarantine) — previously untested
+- [x] Clay was unreachable: the `elif underwater and world_y >= height - 2` clay clause in
+      `world_gen.gd` was shadowed by the preceding `>= height - 3` branch, so clay never
+      generated (and the `4 Clay → 1 Brick` recipe was unusable). Reordered so the clay band
+      generates in submerged columns; `test_generation.gd` asserts clay is present.
+      This changed world content — `world_hash` is now `441363152919021799`
+      (`faces`/`faces_hash` unchanged: clay swaps one opaque subsurface block for another).
 - [~] First-fill cost: ~2.9 s generation + ~2.2 s meshing; reduce by spreading work or
       caching the height field
 - [ ] Background/threaded generation (mission §9: only if profiling shows it is needed)

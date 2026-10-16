@@ -34,7 +34,7 @@ Verified means: observed in a run of the real project, not merely written.
 | Area | State | Evidence |
 | --- | --- | --- |
 | Project opens and runs | verified | windowed runs, 60 fps, exit code 0, empty stderr |
-| Deterministic terrain generation | verified | 3 consecutive runs, `world_hash=6372495951065888771`, `faces=166074` (unchanged after the winding fix) |
+| Deterministic terrain generation | verified | 3 consecutive runs, `world_hash=6372495951065888771`, `faces=166074` (unchanged after the winding fix); the hash is now `441363152919021799` after the clay-generation fix (§12), `faces` unchanged |
 | Chunk meshing (face culling) | verified | 392 chunks, 166 074 faces, 332 148 triangles at radius 4 |
 | **Correct face winding** | verified | `test_mesh_winding.gd` pins every solid + collision triangle to Godot's `BoxMesh` convention; `winding-test.png` |
 | Streaming + bounded work | verified | `queued=0`, `worst_mesh_ms≈16`, `generation_ms_total≈2.8 s` |
@@ -281,16 +281,19 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 ## 9. Resume
 
 Read this file and `godot-roadmap.md`, then run the tests and the smoke command from
-§5 to confirm the baseline still holds (`383` unit + `17` integration assertions,
-`world_hash=6372495951065888771`). Then continue with the first unchecked item of
-`godot-roadmap.md` phase B/C.
+§5 to confirm the baseline still holds (`435` unit + `17` integration assertions;
+current `world_hash=441363152919021799`, `faces=166074`, `faces_hash=6977993294663025454`
+— the clay generation fix in §12 changed the world content, so the earlier
+`world_hash=6372495951065888771` is historical). Then continue with the first unchecked
+item of `godot-roadmap.md` phase B/C (see §11 for this run's plan: crafting done, next is
+health & damage, then the living world).
 
 **Stabilization is done for the three user-reported items**: the WASD movement failure,
 the rendering defects and the water concern all traced to the inverted-winding bug now
-fixed in `c22d056` (§8). The next task is therefore back on the roadmap: pick the first
-unchecked Phase B item — the full inventory interface (only the hotbar row exists today;
-no drag & drop or overflow page) — or the crafting data model (`[ ] Crafting recipes`),
-whichever the user prefers.
+fixed in `c22d056` (§8). Phase B is under way: the crafting data model and interface landed
+in §12 (independently reviewed: PASS). The remaining Phase B items are the full inventory
+interface, tools/durability, health & damage, hunger, feedback, death/respawn and a
+configuration screen.
 
 **Outstanding validation**: the fix is verified headless (unit + integration) and by
 offscreen capture; a human play-through with real keyboard/mouse has not been done. If a
@@ -323,3 +326,95 @@ three user-reported items (movement, rendering, water) are resolved. Day/night f
 previous savepoint is unchanged. The persistence test closes the Priority-4 reliability gap
 where `SaveManager` had no coverage. Unfinished work is listed in §8 and the resume section
 §9; it is *not* part of these savepoints.
+
+## 11. Session plan (2026-10-16, autonomous mission run)
+
+This run follows the repository agent architecture (Plan/orchestrator → Builder → Tester →
+Reviewer). The Plan agent does not implement; implementation is delegated to the Builder,
+independent runtime verification to the Tester, and independent review to the Reviewer.
+
+Baseline re-measured at the start of this run (unchanged): unit suite
+`M17_TESTS_PASS 383 assertions` exit 0; integration
+`M17_INTEGRATION_PASS 17 assertions` exit 0. Godot
+`4.7.2.stable.mono.official.ed1daf0bf`.
+
+Planned increments (Phase B/C of the mission §8), each Builder → Tester → Reviewer, each
+ending in a Git savepoint and a roadmap/progress update:
+
+1. **Crafting** — recipe data model + deterministic rules + tests + a functional crafting
+   interface (Phase B: `[ ] Crafting recipes`, `[ ] Crafting interface`).
+2. **Health & damage** — player health, fall damage, drowning, HUD hearts, death + respawn,
+   saved with the world (Phase B: health/damage, feedback, death/respawn).
+3. **Living world** — passive and hostile creatures, voxel-aware AI, spawn/despawn rules,
+   combat and loot (Phase C).
+
+Each increment must keep the existing suites green, add new automated tests, and produce a
+runtime capture that is *inspected* (not merely generated) before the increment is called
+done.
+
+## 12. Crafting increment (2026-10-16)
+
+Phase B crafting: the recipe data model, the crafting interface and their tests, plus a
+world-generation repair required to make one recipe reachable.
+
+**Changed**
+
+- New `scripts/core/crafting.gd` (`class_name Crafting`): a fixed, ordered five-recipe
+  list (Oak Log → 4 Planks; 4 Planks → Crafting Table; Stone → Cobblestone;
+  2 Sand → Glass; 4 Clay → Brick) plus `recipes()`, `can_craft()`, `craft()`,
+  `available_recipes()` and `label()`. Only blocks that exist in `BlockDB`.
+  - `craft()` is atomic: it validates the recipe, checks the ingredients and checks that
+    the output fits *after* the inputs would be consumed (computed on a scratch copy of
+    the slot counts, never the live inventory) — all before touching the inventory.
+    Consuming the inputs is therefore allowed to free the slot the output needs.
+  - `validate()` rejects an `AIR` output, so an AIR-output recipe can never consume inputs
+    and then fail. `available_recipes()` returns deep copies, so callers cannot corrupt the
+    canonical recipe list.
+- New `scripts/game/crafting_panel.gd` (`class_name CraftingPanel extends Control`): a
+  centred overlay listing the recipes with a per-row enabled/disabled state and a Craft
+  button. It reads the `Inventory` and `Crafting` data only and never mutates the world;
+  it emits `crafted(result)`.
+- `game.gd`: builds the panel on a layer-15 `CanvasLayer` (between the HUD at 10 and the
+  menu at 20), toggles it with the new `open_crafting` (C) action while `PLAYING` (mouse
+  `VISIBLE` and `player.can_interact` disabled while open; `CAPTURED` and interaction
+  restored when closed), flashes the outcome with `hud.flash`, and adds `--open-crafting`.
+  Escape closes the panel before it would pause; pausing also closes it.
+- `project.godot`: new `open_crafting` action (`physical_keycode` 67 = C).
+- `game_hud.gd`: control hint now mentions "C craft".
+- `core/world_gen.gd`: the clay band in submerged columns was unreachable — the
+  `elif underwater and world_y >= height - 2` clause sat after the `elif world_y >= height - 3`
+  fallback, which captured every cell it could match. Reordered so the clay clause precedes
+  the fallback; clay now generates as a thin subsurface band (~1 in 5 of the two cells below
+  an underwater surface). This is what makes the `4 Clay → 1 Brick` recipe obtainable, and it
+  changes world content (see the new hash below). Bedrock, caves, ores and surface material
+  are untouched.
+- New `scripts/tests/test_crafting.gd`, registered in `run_tests.gd`; `test_generation.gd`
+  gained a clay-presence assertion.
+
+**Tests / evidence**
+
+- Unit: `M17_TESTS_PASS 435 assertions` (383 baseline + 52 new), exit 0, 0 bytes stderr.
+  The crafting module covers: the fixed/ordered/valid recipe list; `can_craft` true/false;
+  exact input consumption and output addition; insufficient ingredients rejected with the
+  inventory byte-identical; a genuinely-full inventory rejected atomically (input slot
+  retains items after consumption); the freed-slot case that now succeeds; merging into an
+  existing stack; an `AIR` output rejected without consuming; unknown/malformed recipes
+  rejected; and `available_recipes` returning copies. `test_generation.gd` finds clay in
+  underwater columns (13 cells in the scan).
+- Integration: `M17_INTEGRATION_PASS 17 assertions`, exit 0, 0 bytes stderr.
+- Runtime (temporary windowed harness, since removed, re-run after the fixes): 17/17
+  assertions — the C action opens and closes the panel, mouse mode and `player.can_interact`
+  follow it, a real Craft button press consumes the inputs and adds the output, Escape closes
+  the panel without pausing, and pausing closes it. (A headless run cannot confirm the mouse
+  mode: Godot's headless DisplayServer always reports `mouse_mode = VISIBLE`; the same probe
+  returns `CAPTURED` in a windowed run.)
+- Capture `results/godot/crafting-ui.png` (1280×720; `--capture --open-crafting
+  --capture-name=crafting-ui.png --settle=14`) inspected: the centred dark "CRAFTING" panel
+  lists all five recipes, the four affordable rows bright and "4 Clay → 1 Brick" dimmed (the
+  starter kit has no Clay — clay must be mined, and now generates), with the hint line, drawn
+  above the hotbar. The run exits 0 with 0 bytes of stderr and no `ERROR`/`SCRIPT ERROR` lines.
+  With the clay fix the world content changed: `world_hash=441363152919021799` (was
+  `6372495951065888771`); `faces=166074` and `faces_hash=6977993294663025454` are unchanged,
+  because clay swaps one opaque subsurface block for another and so adds no visible faces.
+
+**Savepoint**: pending — the orchestrator commits this increment.

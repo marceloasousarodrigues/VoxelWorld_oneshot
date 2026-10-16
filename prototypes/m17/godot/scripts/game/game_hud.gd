@@ -188,7 +188,7 @@ func refresh() -> void:
 	var selected_block := inventory.selected_block()
 	_selected_label.text = "" if selected_block == BlockDB.AIR \
 		else "%s   (slot %d)" % [BlockDB.name_of(selected_block), inventory.selected + 1]
-	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  LMB mine  ·  RMB build\n" \
+	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  LMB mine  ·  RMB build  ·  C craft\n" \
 		+ "1-9 select  ·  F fly  ·  F5 save  ·  F9 load  ·  F3 debug  ·  Esc pause"
 
 

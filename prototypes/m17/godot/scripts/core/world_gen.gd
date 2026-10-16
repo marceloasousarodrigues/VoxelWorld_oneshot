@@ -381,10 +381,13 @@ func generate_chunk(chunk: ChunkData) -> void:
 						block_id = BlockDB.BEDROCK
 					elif world_y == height:
 						block_id = surface_block
+					elif underwater and world_y >= height - 2:
+						# A thin subsurface clay band in submerged columns.  This
+						# branch must precede the `>= height - 3` fallback below,
+						# which would otherwise shadow it and make clay unreachable.
+						block_id = BlockDB.CLAY if _hash3(world_x, world_y, world_z, 31) % 5 == 0 else subsurface
 					elif world_y >= height - 3:
 						block_id = subsurface
-					elif underwater and world_y >= height - 2:
-						block_id = BlockDB.CLAY if _hash3(world_x, world_y, world_z, 31) % 5 == 0 else subsurface
 					else:
 						block_id = BlockDB.STONE
 						var ore := _ore_at(world_x, world_y, world_z)

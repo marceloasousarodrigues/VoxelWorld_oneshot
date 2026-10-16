@@ -27,6 +27,7 @@ var player: VoxelPlayer
 var inventory: Inventory
 var hud: GameHUD
 var menu: MainMenu
+var crafting: CraftingPanel
 var saves: SaveManager
 
 var sun: DirectionalLight3D
@@ -59,6 +60,7 @@ var _options := {
 	"straight_to_game": false,
 	"hide_hud": false,
 	"fly": false,
+	"open_crafting": false,
 	"sun_angle": Vector2(-48.0, -132.0),
 	"shots": [],
 	"quit_after": 0.0,
@@ -250,6 +252,19 @@ func _build_ui() -> void:
 	menu.set_save_callback(_save_now)
 	menu.set_title_callback(_return_to_title)
 
+	# The crafting panel lives on its own layer between the HUD (10) and the
+	# menu (20), so its rows draw above the hotbar but the pause menu still
+	# covers it.
+	var crafting_layer := CanvasLayer.new()
+	crafting_layer.name = "CraftingLayer"
+	crafting_layer.layer = 15
+	add_child(crafting_layer)
+	crafting = CraftingPanel.new()
+	crafting.name = "CraftingPanel"
+	crafting_layer.add_child(crafting)
+	crafting.setup(inventory)
+	crafting.crafted.connect(_on_crafted)
+
 
 # =========================================================================
 # Command line
@@ -306,6 +321,8 @@ func _parse_arguments() -> void:
 				_options["shots"] = _parse_shots(value)
 			"--straight-to-game":
 				_options["straight_to_game"] = true
+			"--open-crafting":
+				_options["open_crafting"] = true
 			"--hide-hud":
 				_options["hide_hud"] = true
 			"--fly":
@@ -351,6 +368,8 @@ func _parse_shots(value: String) -> Array:
 func _show_title() -> void:
 	state = State.MENU
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if crafting != null and crafting.is_open():
+		crafting.close()
 	menu.set_title_callback(_return_to_title)
 	var has_save := FileAccess.file_exists(saves.save_path())
 	var note := "Saves are written to %s" % ProjectSettings.globalize_path(saves.directory)
@@ -361,6 +380,8 @@ func _show_title() -> void:
 
 func _start_world(seed_value: int, save: Variant) -> void:
 	menu.hide_menu()
+	if crafting != null and crafting.is_open():
+		crafting.close()
 	state = State.LOADING
 	_loading_seconds = 0.0
 	_play_seconds = 0.0
@@ -467,6 +488,8 @@ func _enter_play(area_ready: bool) -> void:
 		hud.flash("World streaming is still catching up", 4.0)
 	elif _play_seconds == 0.0 and not bool(_options["capture"]):
 		hud.flash("VoxelWorld — seed %d" % world.world_seed, 4.0)
+	if bool(_options["open_crafting"]):
+		_open_crafting()
 	print("M17_GAME_READY seed=%d player=%s chunks=%d views=%d meshed=%d" % [
 		world.world_seed, player.global_position, streamer.loaded_count(), streamer.view_count(), int(streamer.stats["meshed"]),
 	])
@@ -475,6 +498,8 @@ func _enter_play(area_ready: bool) -> void:
 func _pause() -> void:
 	if state != State.PLAYING:
 		return
+	if crafting != null and crafting.is_open():
+		crafting.close()
 	state = State.PAUSED
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.can_interact = false
@@ -584,7 +609,10 @@ func _center_biome_name() -> String:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("release_mouse"):
-		if state == State.PLAYING:
+		if state == State.PLAYING and crafting != null and crafting.is_open():
+			# Escape closes the crafting panel before it would pause the game.
+			_close_crafting()
+		elif state == State.PLAYING:
 			_pause()
 		elif state == State.PAUSED:
 			_resume()
@@ -595,13 +623,60 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("load_saved_world"):
 		_reload_now()
 	elif state == State.PLAYING:
-		if event.is_action_pressed("toggle_fly"):
+		if event.is_action_pressed("open_crafting"):
+			_toggle_crafting()
+		elif crafting != null and crafting.is_open():
+			# The open panel owns the mouse; ignore gameplay input.
+			pass
+		elif event.is_action_pressed("toggle_fly"):
 			player.toggle_fly()
 		elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
 				and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		else:
 			_handle_hotbar_input(event)
+
+
+# =========================================================================
+# Crafting
+# =========================================================================
+
+func _toggle_crafting() -> void:
+	if crafting == null:
+		return
+	if crafting.is_open():
+		_close_crafting()
+	else:
+		_open_crafting()
+
+
+func _open_crafting() -> void:
+	if crafting == null or state != State.PLAYING:
+		return
+	crafting.open()
+	# While the panel is open the mouse drives the interface instead of the
+	# world, so the player must not break or place blocks.
+	player.can_interact = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _close_crafting() -> void:
+	if crafting == null:
+		return
+	crafting.close()
+	if state == State.PLAYING:
+		player.can_interact = true
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _on_crafted(result: Dictionary) -> void:
+	if bool(result.get("ok", false)):
+		hud.flash("Crafted %d %s" % [
+			int(result.get("output_count", 0)), BlockDB.name_of(int(result.get("output", BlockDB.AIR))),
+		], 2.4)
+	else:
+		hud.flash(str(result.get("reason", "Cannot craft")), 2.4)
+	hud.refresh()
 
 
 func _handle_hotbar_input(event: InputEvent) -> void:

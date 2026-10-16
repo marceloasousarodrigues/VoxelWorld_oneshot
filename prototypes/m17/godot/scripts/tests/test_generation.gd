@@ -83,6 +83,23 @@ func run(h: TestHarness) -> void:
 	h.eq(world.get_fluid(Vector3i(0, 0, 0)), 0, "solid rock carries no fluid")
 	h.eq(world.surface_height(0, 0), world.surface_height(0, 0), "surface height is stable")
 
+	# Clay: a thin subsurface band in submerged columns must actually generate.
+	# A branch-ordering bug previously shadowed the clay clause, so the band was
+	# never reached and clay was unobtainable.
+	var clay_cells := 0
+	for x in range(-96, 97, 16):
+		for z in range(-96, 97, 16):
+			var column_height := world.surface_height(x, z)
+			if column_height >= WorldGen.SEA_LEVEL:
+				continue
+			for y in [column_height - 1, column_height - 2]:
+				if y <= 0:
+					continue
+				world.ensure_chunk(VoxelWorld.world_to_chunk(Vector3i(x, y, z)))
+				if world.get_block(Vector3i(x, y, z)) == BlockDB.CLAY:
+					clay_cells += 1
+	h.greater(float(clay_cells), 0.0, "clay generates in underwater columns (%d cells found)" % clay_cells)
+
 	# Trees and decoration near the surface.  A bounded 3x3 chunk block around the
 	# origin is loaded explicitly so the scan never reads unloaded chunks as air.
 	for chunk_x in range(-1, 2):
