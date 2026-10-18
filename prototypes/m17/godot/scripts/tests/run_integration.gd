@@ -478,6 +478,29 @@ func _main() -> void:
 		_check(not hit.is_empty() and absf(hit_position.z - float(boundary_cell.z + 1)) < 0.02,
 			"collision stops a probe through the +Z boundary hole at the remaining wall")
 
+	# Configuration panel: values apply live to the streamer and the player.
+	var original_distance: int = _game.settings.render_distance
+	var original_sensitivity: float = _game.settings.mouse_sensitivity
+	var original_vsync: bool = _game.settings.vsync
+	_game._open_settings()
+	await process_frame
+	_check(_game.settings_panel.is_open(), "the settings panel opens")
+	_check(not player.can_interact, "the settings panel disables player interaction")
+	_game._on_setting_changed("render_distance", 2)
+	_check(_game.settings.render_distance == 2, "the render distance setting is stored")
+	_check(_game.streamer.render_radius == 2, "the render distance applies live to the streamer")
+	_game._on_setting_changed("mouse_sensitivity", 0.004)
+	_check(is_equal_approx(player.mouse_sensitivity, 0.004), "the sensitivity applies live to the player")
+	_game._on_setting_changed("vsync", not original_vsync)
+	_check(_game.settings.vsync == (not original_vsync), "the vsync setting is stored")
+	_game._on_setting_changed("render_distance", original_distance)
+	_game._on_setting_changed("mouse_sensitivity", original_sensitivity)
+	_game._on_setting_changed("vsync", original_vsync)
+	_game._close_settings()
+	await process_frame
+	_check(not _game.settings_panel.is_open(), "the settings panel closes")
+	_check(_game.streamer.render_radius == original_distance, "the restored render distance applies back")
+
 	if _failures.is_empty():
 		print("M17_INTEGRATION_PASS %d assertions" % _passes)
 		quit(0)

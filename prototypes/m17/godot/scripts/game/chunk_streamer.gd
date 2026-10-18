@@ -208,6 +208,17 @@ func focus_at(world_position: Vector3) -> void:
 	_scan_dirty()
 
 
+## Applies a new render distance live: recomputes the wanted set around the
+## current focus, unloads what fell out of range and queues what came in.
+func apply_render_radius(radius: int) -> void:
+	render_radius = maxi(1, radius)
+	if _center.x == 2147483647:
+		return
+	_rebuild_wanted()
+	_unload_out_of_range()
+	_scan_dirty()
+
+
 ## Drops every rendered view and every logical chunk.
 func clear() -> void:
 	_shutdown_worker()

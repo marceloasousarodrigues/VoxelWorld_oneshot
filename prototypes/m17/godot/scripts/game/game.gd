@@ -31,9 +31,11 @@ var inventory: Inventory
 var hud: GameHUD
 var menu: MainMenu
 var crafting: CraftingPanel
+var settings_panel: SettingsPanelNode
 var death_screen: DeathScreen
 var saves: SaveManager
 var health: Health
+var settings: GameSettingsModel
 var creature_model
 var creature_nodes: Dictionary = {}
 var creature_root: Node3D
@@ -46,6 +48,9 @@ const CreatureNode = preload("res://scripts/game/passive_creature.gd")
 const CreatureModel = preload("res://scripts/core/passive_creatures.gd")
 const HostileNode = preload("res://scripts/game/hostile_creature.gd")
 const HostileModel = preload("res://scripts/core/hostile_creatures.gd")
+const SettingsPanelNode = preload("res://scripts/game/settings_panel.gd")
+const GameSettingsModel = preload("res://scripts/core/game_settings.gd")
+const SETTINGS_PATH := "user://voxelworld_settings.cfg"
 
 ## Seconds of breath left; drained while the player's head is under water.
 var breath := Survival.MAX_BREATH
@@ -81,6 +86,7 @@ var _options := {
 	"hide_hud": false,
 	"fly": false,
 	"open_crafting": false,
+	"open_settings": false,
 	"creature_feedback_capture": false,
 	"spawn_hostiles": false,
 	"hostile_feedback_capture": false,
@@ -96,6 +102,8 @@ var _options := {
 ## Set when `--time-rate=` appears on the command line, so the capture harness
 ## only freezes the clock when the caller did not ask for a specific rate.
 var _time_rate_given := false
+## Set when `--render-distance=` appears, so the CLI value wins over a saved one.
+var _render_distance_given := false
 ## Set when `--sun=` pins the light direction; otherwise the clock drives it.
 var _sun_angle_locked := false
 
@@ -127,6 +135,7 @@ func _ready() -> void:
 		# A capture is evidence: freeze the clock at the requested time of day
 		# unless the caller explicitly asked for a running clock.
 		_options["time_rate"] = 0.0
+	_load_settings()
 	clock = DayNight.new(float(_options["time_of_day"]), _cycle_length())
 	library = TextureLibrary.new()
 	if not library.load_all():
@@ -140,6 +149,8 @@ func _ready() -> void:
 	_build_environment()
 	_build_nodes()
 	_build_ui()
+	player.mouse_sensitivity = settings.mouse_sensitivity
+	_apply_display_settings()
 
 	if _options["straight_to_game"] or _options["capture"]:
 		_start_world(int(_options["seed"]), null)
@@ -252,7 +263,7 @@ func _build_nodes() -> void:
 
 	streamer = ChunkStreamer.new()
 	streamer.name = "ChunkStreamer"
-	streamer.render_radius = int(_options["render_radius"])
+	streamer.render_radius = settings.render_distance
 	streamer.vertical_radius = int(_options["vertical_radius"])
 	streamer.generation_budget = int(_options["generation_budget"])
 	streamer.generation_millisecond_budget = float(_options["generation_budget_ms"])
@@ -300,6 +311,18 @@ func _build_ui() -> void:
 	crafting.setup(inventory)
 	crafting.crafted.connect(_on_crafted)
 
+	# The settings panel shares the crafting layer height, just above it, so both
+	# overlays draw over the HUD but the death screen and menu still cover them.
+	var settings_layer := CanvasLayer.new()
+	settings_layer.name = "SettingsLayer"
+	settings_layer.layer = 16
+	add_child(settings_layer)
+	settings_panel = SettingsPanelNode.new()
+	settings_panel.name = "SettingsPanel"
+	settings_layer.add_child(settings_panel)
+	settings_panel.setup(settings)
+	settings_panel.setting_changed.connect(_on_setting_changed)
+
 	# The death screen sits above the HUD and the crafting panel but below the
 	# menu (20), and owns the screen while the player is dead.
 	var death_layer := CanvasLayer.new()
@@ -342,6 +365,7 @@ func _parse_arguments() -> void:
 				_options["seed"] = value.to_int()
 			"--render-distance":
 				_options["render_radius"] = maxi(1, value.to_int())
+				_render_distance_given = true
 			"--vertical-radius":
 				_options["vertical_radius"] = maxi(1, value.to_int())
 			"--generation-budget":
@@ -374,6 +398,8 @@ func _parse_arguments() -> void:
 				_options["straight_to_game"] = true
 			"--open-crafting":
 				_options["open_crafting"] = true
+			"--open-settings":
+				_options["open_settings"] = true
 			"--creature-feedback-capture":
 				_options["creature_feedback_capture"] = true
 			"--spawn-hostiles":
@@ -609,6 +635,8 @@ func _enter_play(area_ready: bool) -> void:
 		hud.flash("VoxelWorld — seed %d" % world.world_seed, 4.0)
 	if bool(_options["open_crafting"]):
 		_open_crafting()
+	if bool(_options["open_settings"]):
+		_open_settings()
 	print("M17_GAME_READY seed=%d player=%s chunks=%d views=%d meshed=%d" % [
 		world.world_seed, player.global_position, streamer.loaded_count(), streamer.view_count(), int(streamer.stats["meshed"]),
 	])
@@ -734,6 +762,8 @@ func _apply_hurt_option() -> void:
 func _pause() -> void:
 	if state != State.PLAYING:
 		return
+	if settings_panel != null and settings_panel.is_open():
+		settings_panel.close()
 	if crafting != null and crafting.is_open():
 		crafting.close()
 	state = State.PAUSED
@@ -974,7 +1004,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		# the on-screen Respawn button is pressed.
 		return
 	if event.is_action_pressed("release_mouse"):
-		if state == State.PLAYING and crafting != null and crafting.is_open():
+		if state == State.PLAYING and settings_panel != null and settings_panel.is_open():
+			# Escape closes the settings panel before it would pause the game.
+			_close_settings()
+		elif state == State.PLAYING and crafting != null and crafting.is_open():
 			# Escape closes the crafting panel before it would pause the game.
 			_close_crafting()
 		elif state == State.PLAYING:
@@ -988,10 +1021,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("load_saved_world"):
 		_reload_now()
 	elif state == State.PLAYING:
-		if event.is_action_pressed("open_crafting"):
+		if event.is_action_pressed("open_settings"):
+			_toggle_settings()
+		elif event.is_action_pressed("open_crafting"):
 			_toggle_crafting()
-		elif crafting != null and crafting.is_open():
-			# The open panel owns the mouse; ignore gameplay input.
+		elif (settings_panel != null and settings_panel.is_open()) or (crafting != null and crafting.is_open()):
+			# The open overlay owns the mouse; ignore gameplay input.
 			pass
 		elif event.is_action_pressed("toggle_fly"):
 			player.toggle_fly()
@@ -1018,6 +1053,8 @@ func _toggle_crafting() -> void:
 func _open_crafting() -> void:
 	if crafting == null or state != State.PLAYING:
 		return
+	if settings_panel != null and settings_panel.is_open():
+		settings_panel.close()
 	crafting.open()
 	# While the panel is open the mouse drives the interface instead of the
 	# world, so the player must not break or place blocks.
@@ -1042,6 +1079,92 @@ func _on_crafted(result: Dictionary) -> void:
 	else:
 		hud.flash(str(result.get("reason", "Cannot craft")), 2.4)
 	hud.refresh()
+
+
+# =========================================================================
+# Settings
+# =========================================================================
+
+func _toggle_settings() -> void:
+	if settings_panel == null:
+		return
+	if settings_panel.is_open():
+		_close_settings()
+	else:
+		_open_settings()
+
+
+func _open_settings() -> void:
+	if settings_panel == null or state != State.PLAYING:
+		return
+	if crafting != null and crafting.is_open():
+		crafting.close()
+	settings_panel.open()
+	player.can_interact = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _close_settings() -> void:
+	if settings_panel == null:
+		return
+	settings_panel.close()
+	if state == State.PLAYING:
+		player.can_interact = true
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Applies one changed setting to the live game and persists the whole set.
+func _on_setting_changed(key: String, value: Variant) -> void:
+	if settings == null:
+		return
+	match key:
+		"render_distance":
+			settings.set_render_distance(float(value))
+			if streamer != null:
+				streamer.apply_render_radius(settings.render_distance)
+		"mouse_sensitivity":
+			settings.set_mouse_sensitivity(float(value))
+			if player != null:
+				player.mouse_sensitivity = settings.mouse_sensitivity
+		"vsync":
+			settings.set_vsync(bool(value))
+			_apply_display_settings()
+	_save_settings()
+
+
+func _apply_display_settings() -> void:
+	if settings == null:
+		return
+	var mode := DisplayServer.VSYNC_ENABLED if settings.vsync else DisplayServer.VSYNC_DISABLED
+	DisplayServer.window_set_vsync_mode(mode)
+
+
+func _load_settings() -> void:
+	settings = GameSettingsModel.new()
+	settings.set_render_distance(float(_options["render_radius"]))
+	if FileAccess.file_exists(SETTINGS_PATH):
+		var config := ConfigFile.new()
+		if config.load(SETTINGS_PATH) == OK:
+			settings.from_dictionary({
+				"render_distance": config.get_value("game", "render_distance", settings.render_distance),
+				"mouse_sensitivity": config.get_value("game", "mouse_sensitivity", settings.mouse_sensitivity),
+				"vsync": config.get_value("game", "vsync", settings.vsync),
+			})
+	# A command-line render distance is explicit intent for this run (captures,
+	# profiling) and wins over the saved value.
+	if _render_distance_given:
+		settings.set_render_distance(float(_options["render_radius"]))
+
+
+func _save_settings() -> void:
+	if settings == null:
+		return
+	var config := ConfigFile.new()
+	var values: Dictionary = settings.to_dictionary()
+	config.set_value("game", "render_distance", values["render_distance"])
+	config.set_value("game", "mouse_sensitivity", values["mouse_sensitivity"])
+	config.set_value("game", "vsync", values["vsync"])
+	config.save(SETTINGS_PATH)
 
 
 func _handle_hotbar_input(event: InputEvent) -> void:

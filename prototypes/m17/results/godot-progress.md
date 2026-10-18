@@ -1020,3 +1020,38 @@ can never hang the run. (Found while doing the hostile TDD RED step.)
   (structures/NPCs) remain unchecked.
 - Validation is scripted through the real scene (physics, rays and windowed captures); no human
   keyboard/mouse play-through was performed.
+
+## M17 Phase B increment: configuration screen (2026-10-18, same session)
+
+The roadmap's configuration item was finished: the render distance was CLI-only and nothing
+exposed sensitivity or vsync.
+
+- `scripts/core/game_settings.gd` (`class_name GameSettings`): render distance (2-8), mouse
+  sensitivity (0.0005-0.006) and vsync, with clamping setters and a `to_dictionary` /
+  `from_dictionary` round-trip. `from_dictionary` reads only well-typed keys (out-of-range
+  numbers clamp, garbage is rejected without touching live values).
+- `scripts/game/settings_panel.gd`: a centred overlay mirroring the crafting panel -- two
+  sliders with numeric readouts plus a vsync toggle, emitting `setting_changed(key, value)`.
+- `game.gd`: builds the panel on a layer-16 `CanvasLayer`, opens it with the new `O` action
+  (or `--open-settings`), applies each change live and persists the whole set to
+  `user://voxelworld_settings.cfg` (a `--render-distance` on the command line still wins for
+  captures). Render-distance changes call the new
+  `ChunkStreamer.apply_render_radius()`, which recomputes the wanted set, unloads what fell out
+  of range and queues what came in. Opening settings closes crafting (and vice versa); Escape
+  closes the panel before it would pause; pausing closes it.
+- `project.godot` gains the `open_settings` action; the HUD hint mentions "O settings".
+
+Tests: `test_settings.gd` (22 assertions: defaults, clamping, round-trip, clamped payloads,
+garbage rejection leaving state untouched) and 8 real-scene integration assertions (open,
+interaction disabled, render distance stored and applied to the streamer, sensitivity applied
+to the player, vsync stored, close, restored distance re-applied).
+
+Verification: unit `M17_TESTS_PASS 767 assertions` exit 0 stderr 0; integration
+`M17_INTEGRATION_PASS 68 assertions` exit 0 stderr 0; smoke unchanged
+(`world_hash=441363152919021799`). Windowed capture `results/godot/settings-ui.png`
+(`--capture --open-settings`) inspected: the panel shows Render distance 4, Mouse sensitivity
+0.0022, Vertical sync, with the persistence hint, over the paused-looking scene.
+
+Limitations: no settings file migration/versioning yet; only the three listed settings are
+exposed (shadows, fog and vertical radius remain CLI-only); verification is scripted, not a
+human click-through.

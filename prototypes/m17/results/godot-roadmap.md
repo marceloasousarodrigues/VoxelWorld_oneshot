@@ -30,7 +30,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (745 assertions, verified 2026-10-18) + runtime integration harness (60 assertions, verified 2026-10-18) + headless determinism fingerprint
+- [x] Automated test suite (767 assertions, verified 2026-10-18) + runtime integration harness (68 assertions, verified 2026-10-18) + headless determinism fingerprint
 - [x] Frame-time benchmark harness (`scripts/tests/run_perf.gd`): six scripted activities, per-frame
       timings and streaming counters, before/after JSON reports (verified 2026-10-16)
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
@@ -54,7 +54,13 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [ ] Hunger / survival settings
 - [x] Environmental feedback (hurt flash, bounded reversible camera shake; particles not included)
 - [x] Death and respawn (death screen and valid spawn; no creature combat in this increment)
-- [ ] Configuration screen (render distance, sensitivity, vsync) — render distance is currently CLI-only
+- [x] Configuration screen (render distance, sensitivity, vsync) — `core/game_settings.gd`
+      (clamped, validated, dictionary round-trip) + `game/settings_panel.gd`, opened with `O`
+      or `--open-settings`; render distance applies live through
+      `ChunkStreamer.apply_render_radius`, sensitivity to the player, vsync to the display,
+      all persisted to `user://voxelworld_settings.cfg` (CLI `--render-distance` still wins for
+      captures). `test_settings.gd` + 8 integration assertions; `settings-ui.png` inspected
+      (2026-10-18)
 - [x] Pause menu
 
 ## Phase C — Living world
