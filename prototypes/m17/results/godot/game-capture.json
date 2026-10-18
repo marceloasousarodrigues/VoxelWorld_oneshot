@@ -1,10 +1,10 @@
 {
-	"biome": "Plains",
+	"biome": "Snow",
 	"evidence": "offscreen Godot viewport PNG written from inside the running game scene; not a human visual inspection",
 	"eye": [
-		8.5,
-		71.6203002929688,
-		8.5
+		-115.5,
+		71.620002746582,
+		53.0
 	],
 	"fluid": {
 		"changes": 0,
@@ -13,7 +13,7 @@
 		"pending": 0,
 		"seeded_chunks": 0
 	},
-	"fps_last_sample": 42.4606884792496,
+	"fps_last_sample": 60.0,
 	"godot_version": {
 		"build": "official",
 		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
@@ -26,48 +26,48 @@
 		"timestamp": 0
 	},
 	"look": [
-		38.0,
-		-12.0
+		-179.999984741211,
+		-22.0
 	],
 	"mesher": {
-		"assemble_ms": 67.847,
-		"builds": 392,
-		"emit_ms": 1967.377,
-		"faces": 166074,
-		"fill_ms": 384.16,
-		"ms": 2359.601,
-		"triangles": 332148
+		"assemble_ms": 81.313,
+		"builds": 481,
+		"emit_ms": 2308.472,
+		"faces": 195696,
+		"fill_ms": 500.404,
+		"ms": 2818.341,
+		"triangles": 391392
 	},
 	"player": [
-		8.5,
-		70.0002975463867,
-		8.5
+		-115.5,
+		70.0,
+		53.0
 	],
 	"seed": 17017,
 	"streaming": {
-		"attach_ms_total": 3350.985,
-		"center": "(0, 4, 0)",
-		"faces": 166074,
-		"faces_hash": 6977993294663025454,
-		"generated": 392,
+		"attach_ms_total": 3941.017,
+		"center": "(-8, 4, 3)",
+		"faces": 194402,
+		"faces_hash": 1996746191217077250,
+		"generated": 614,
 		"generation_in_flight": 0,
-		"generation_ms_total": 486.345,
-		"generation_worker_ms": 2695.827,
+		"generation_ms_total": 766.405,
+		"generation_worker_ms": 4081.05,
 		"loaded": 392,
-		"mesh_ms_total": 2359.601,
-		"meshed": 392,
+		"mesh_ms_total": 2799.636,
+		"meshed": 479,
 		"meshes_in_flight": 0,
 		"queued": 0,
 		"render_radius": 4,
-		"unloaded": 0,
+		"unloaded": 222,
 		"vertical_radius": 4,
 		"views": 392,
 		"wanted": 392,
-		"worst_mesh_ms": 17.986
+		"worst_mesh_ms": 16.886
 	},
 	"window_size": [
 		1280,
 		720
 	],
-	"world_hash": 441363152919021799
+	"world_hash": 7593456547551010670
 }

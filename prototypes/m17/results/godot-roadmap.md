@@ -31,7 +31,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (1062 assertions, verified 2026-10-19) + runtime integration harness (153 assertions, verified 2026-10-19) + headless determinism fingerprint
+- [x] Automated test suite (1105 assertions, verified 2026-10-19) + runtime integration harness (153 assertions, verified 2026-10-19) + headless determinism fingerprint
 - [x] Frame-time benchmark harness (`scripts/tests/run_perf.gd`): six scripted activities, per-frame
       timings and streaming counters, before/after JSON reports (verified 2026-10-16)
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
@@ -142,9 +142,19 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ## Phase D — Structures and settlements
 
-- [ ] Procedural structures (camps, ruins, wells) as reusable definitions
+- [x] Procedural structures (camps, ruins, wells) as reusable definitions (2026-10-19) —
+      `core/structure_db.gd` + placement in `world_gen.gd`: five kinds (Abandoned Hut with
+      stations inside, Campsite, Ruined Watchtower, Desert Well with water, Ore Outcrop), one
+      per 96-block region at a deterministic hash-chosen anchor, biome/slope/sea-level siting,
+      written across chunk boundaries so generation order and threading stay irrelevant.
+      `--find-structure=<id|any>` diagnostic; `structure-hut.png` / `structure-tower.png`
+      inspected; `test_structures.gd` (43 assertions) pins definitions, determinism, siting,
+      cross-chunk completeness and bedrock preservation
+- [x] Reusable structure definition format (2026-10-19) — ASCII layer maps with a per-layer
+      symbol key, `.` = leave the world alone, `_` = force air, negative `dy` for dug features,
+      validated by `StructureDB.validate()` (reserved symbols, unknown blocks/biomes, footprint
+      limit, siting limits). Pure data: the generator, tests and a future editor share it
 - [ ] Player construction beyond single blocks (blueprint/paste helpers)
-- [ ] Reusable structure definition format
 - [ ] NPC foundation with persistent identity and state
 - [ ] NPC movement and basic tasks
 - [ ] Settlement layout and resident assignment

@@ -416,6 +416,10 @@ func _parse_arguments() -> void:
 				_options["open_crafting"] = true
 			"--open-inventory":
 				_options["open_inventory"] = true
+			"--find-structure":
+				# Diagnostic: teleport to the nearest placed structure (optionally of
+				# a given id) so a capture can show one without a long walk.
+				_options["find_structure"] = value if not value.is_empty() else "any"
 			"--open-settings":
 				_options["open_settings"] = true
 			"--tools":
@@ -644,6 +648,57 @@ func _give_diagnostic_tools() -> void:
 	inventory.add(ItemDB.APPLE, 6)
 
 
+## Diagnostic (`--find-structure`): places the player above the nearest structure
+## so a capture or a manual check can inspect one without a long walk.
+func _apply_find_structure() -> void:
+	var wanted := str(_options.get("find_structure", ""))
+	if wanted.is_empty() or world == null or player == null:
+		return
+	var placement := _nearest_structure(wanted)
+	if placement.is_empty():
+		hud.flash("No '%s' structure within 6 regions" % wanted, 5.0)
+		return
+	var definition := StructureDB.definition(str(placement["id"]))
+	var size := StructureDB.footprint(definition)
+	var origin_x := int(placement["x"]) - (size.x - 1) / 2
+	var origin_z := int(placement["z"]) - (size.z - 1) / 2
+	player.flying = true
+	player.teleport_to(Vector3(origin_x + size.x * 0.5, float(placement["base_y"]) + 5.0, origin_z - 8.0))
+	player.look_yaw(180.0)
+	player.look_pitch(-22.0)
+	streamer.focus_at(player.global_position)
+	hud.flash("Found %s at (%d, %d, %d)" % [definition["name"], int(placement["x"]),
+		int(placement["base_y"]), int(placement["z"])], 8.0)
+	print("M17_STRUCTURE_FOUND id=%s x=%d y=%d z=%d biome=%d" % [placement["id"], int(placement["x"]),
+		int(placement["base_y"]), int(placement["z"]), int(placement["biome"])])
+
+
+## The nearest placement matching `wanted` ("any" or a structure id), searched in
+## expanding rings of regions around the origin.
+func _nearest_structure(wanted: String) -> Dictionary:
+	for ring in range(0, 7):
+		var best := {}
+		var best_distance := 1 << 30
+		for region_z in range(-ring, ring + 1):
+			for region_x in range(-ring, ring + 1):
+				if maxi(absi(region_x), absi(region_z)) != ring:
+					continue
+				var placement := world.generator.structure_placement(Vector2i(region_x, region_z))
+				if placement.is_empty():
+					continue
+				if wanted != "any" and str(placement["id"]) != wanted:
+					continue
+				var x := int(placement["x"])
+				var z := int(placement["z"])
+				var distance := x * x + z * z
+				if distance < best_distance:
+					best_distance = distance
+					best = placement
+		if not best.is_empty():
+			return best
+	return {}
+
+
 ## Picks a pleasant spawn: a land column near the origin that is above sea level.
 func _find_spawn_column() -> Vector2i:
 	var generator: WorldGen = world.generator
@@ -697,6 +752,7 @@ func _enter_play(area_ready: bool) -> void:
 		_open_inventory()
 	if bool(_options["open_settings"]):
 		_open_settings()
+	_apply_find_structure()
 	print("M17_GAME_READY seed=%d player=%s chunks=%d views=%d meshed=%d" % [
 		world.world_seed, player.global_position, streamer.loaded_count(), streamer.view_count(), int(streamer.stats["meshed"]),
 	])

@@ -1187,6 +1187,83 @@ needs.
 - Verification is scripted; the drag & drop code path is exercised through the same
   `move_slot` call the drop handler makes, not by synthesising OS-level mouse drags.
 
+## M17 Phase D foundation: procedural structures / points of interest (2026-10-19)
+
+The first Phase D system. Structures are authored as data, placed deterministically as part of
+generation, and written across chunk boundaries without any runtime bookkeeping.
+
+### Definitions (`scripts/core/structure_db.gd`, new)
+
+- A structure is an ASCII layer map: `{"dy": 1, "key": {"P": PLANKS}, "rows": ["PGP", ...]}`,
+  where row 0 is the -Z edge, each character is one +X step, `.` leaves the generated block
+  alone (so a building can sit on a hillside without carving), `_` forces air and any other
+  character must appear in the layer's `key`. `dy` is the height above the anchor and may be
+  negative (the ore outcrop digs into the ground).
+- `footprint()`, `symbol_block()`, `allows_biome()` and a strict `validate()` (reserved symbols,
+  unknown blocks/biomes, mismatched keys, footprints over 8x8, negative siting limits).
+- Five structures, all built from blocks the game already had:
+  - **Abandoned Hut** — planks, glass windows, a log roof, and a crafting table plus furnace
+    inside as the reward.
+  - **Campsite** — a cobblestone platform, four log posts, a crafting table and a furnace.
+  - **Ruined Watchtower** — a broken stone-brick/mossy ring; a landmark with a view.
+  - **Desert Well** — a sandstone rim with a water source (a reliable drink stop).
+  - **Ore Outcrop** — visible coal and iron with more below, gated behind a pickaxe by the
+    existing harvest rules.
+
+### Placement (`scripts/core/world_gen.gd`)
+
+- One structure per 96-block "region": a hash roll picks whether the region has one (62 %), a
+  hash offset picks the anchor inside the region (kept 8 blocks from the edge so footprints
+  cannot overlap), and the catalogue is tried in a hash-chosen order, so a kind whose biome or
+  slope does not fit is replaced by another kind instead of leaving the region empty.
+- Siting is a pure function of the seed and the world columns: the biome must be allowed, the
+  height spread over the footprint must be within the structure's `max_slope`, and the base must
+  be at least `min_floor_above_sea` above the sea. The anchor height is the highest footprint
+  column + 1, so nothing floats.
+- `generate_chunk` writes the part of every placed structure whose footprint reaches into the
+  chunk, for anchor regions up to `max_extent` away. A chunk therefore never depends on its
+  neighbour being generated first, chunks can be generated in any order or on either thread, and
+  the whole thing stays a pure function of the seed. Bedrock is never overwritten, and the well's
+  water goes into the fluid arrays like generated water does.
+- `StructureDB` definitions are stripped of any knowledge of the world, so the same data can
+  later feed a structure editor or a settlement planner.
+
+### Diagnostics and evidence
+
+- `--find-structure=<id|any>` teleports the player above the nearest placement (searching
+  expanding region rings) and prints `M17_STRUCTURE_FOUND id=… x=… y=… z=… biome=…`, so a
+  capture can inspect a structure without a long walk.
+- Windowed captures inspected: `structure-hut.png` (a plank-and-glass hut with its log roof on a
+  grassy slope, at x=44 z=-172) and `structure-tower.png` (a broken stone-brick/mossy watchtower
+  in a snowy pine forest, at x=-116 z=62).
+
+### Tests
+
+- New `scripts/tests/test_structures.gd` (43 assertions, bounded scans so the suite stays at
+  ~17 s): definition validity and every rejection case, footprint measurement (including the
+  outcrop's three layers and the 8x8 limit), the reserved-symbol contract, placement
+  determinism across calls and seeds, region maths for negative coordinates, siting (biome,
+  slope, sea level, "sits on the highest column") on every placement in a bounded scan,
+  **cross-chunk completeness** (every block of six placements present at its world position,
+  with at least one block on a chunk border), bedrock preservation and the outcrop's real ore.
+- Unit **1105 assertions**, integration **153 assertions**, both exit 0 with 0 bytes stderr.
+- Smoke: `world_hash=441363152919021799`, `faces=166074`, `faces_hash=6977993294663025454`
+  unchanged — the nearest structure is outside the 4-chunk streamed spawn region, so the spawn
+  area is byte-identical. `generation_worker_ms` was 2810 ms versus 2799 ms before the change
+  (+0.4 %, i.e. the siting tests are not a measurable cost at radius 4).
+- Existing generation tests still pass unchanged (surface materials, water, clay, trees,
+  decorations, biome variety), which is why siting rejects slopes and water columns.
+
+### Limitations
+
+- Only five kinds, all surface structures; there are no dungeons, villages or interiors with
+  loot containers (there is no container block yet).
+- Structures do not claim or clear trees outside their own cells, so a forest can crowd a ruin
+  (visible in the tower capture).
+- Placement is per-region with no spacing rule beyond the region size, so two structures can be
+  as close as ~90 blocks; there is no "village" grouping yet.
+- No runtime evidence of a player *walking* to a structure: the captures teleport to one.
+
 
 ## M17 Priority 3: items, tools, mining and a real crafting system (2026-10-19)
 

@@ -15,6 +15,14 @@ const SEA_LEVEL := 62
 const BASE_HEIGHT := 66
 const TREE_PAD := 3
 
+## Structures are placed one per "region" of this many blocks, at a deterministic
+## offset inside it.  `STRUCTURE_MARGIN` keeps a footprint inside its own region,
+## so two structures can never overlap.
+const STRUCTURE_REGION := 96
+const STRUCTURE_MARGIN := 8
+## Out of 1000 regions, the ones whose roll is below this get a structure.
+const STRUCTURE_CHANCE := 620
+
 enum Biome { OCEAN, BEACH, PLAINS, FOREST, DESERT, SAVANNA, SNOW, MOUNTAIN }
 
 const BIOME_NAMES := ["Ocean", "Beach", "Plains", "Forest", "Desert", "Savanna", "Snow", "Mountain"]
@@ -405,6 +413,7 @@ func generate_chunk(chunk: ChunkData) -> void:
 
 	_generate_trees(chunk)
 	_generate_decorations(chunk, heights, biomes, base_x, base_z, base_y)
+	_apply_structures(chunk)
 	chunk.surface = heights.duplicate()
 	chunk.generated = true
 	chunk.mark_dirty()
@@ -510,3 +519,130 @@ func _generate_decorations(chunk: ChunkData, heights: PackedInt32Array, biomes: 
 			var deco := decoration_at(base_x + local_x, base_z + local_z, height, surface_block, biome)
 			if deco != BlockDB.AIR:
 				chunk.blocks[index] = deco
+
+
+# --- structures (Phase D foundation) --------------------------------------
+#
+# Structures are in the world, not bolted on at runtime: the generator decides
+# where every structure is as a pure function of the seed and the region, and
+# each chunk writes only the part of it that falls inside the chunk.  That keeps
+# determinism, thread safety, cross-chunk completeness and save files identical
+# to the terrain rules: nothing has to be remembered separately.
+
+## The region a world coordinate belongs to (floor semantics for negatives).
+static func structure_region_of(value: int) -> int:
+	return floori(float(value) / float(STRUCTURE_REGION))
+
+
+## Deterministic placement for one region: `{}` when this region holds nothing, or
+## `{"id": String, "x": int, "base_y": int, "z": int, "biome": int}`.
+##
+## The candidates are tried in a hash-chosen order, so a kind whose biome or
+## slope does not fit is replaced by another one instead of leaving the region
+## empty, and the same region always yields the same structure.
+func structure_placement(region: Vector2i) -> Dictionary:
+	if _hash2(region.x, region.y, 8801) % 1000 >= STRUCTURE_CHANCE:
+		return {}
+	var offset := STRUCTURE_MARGIN
+	var span := STRUCTURE_REGION - STRUCTURE_MARGIN * 2
+	var anchor_x := region.x * STRUCTURE_REGION + offset + _hash2(region.x, region.y, 8802) % span
+	var anchor_z := region.y * STRUCTURE_REGION + offset + _hash2(region.x, region.y, 8803) % span
+	var ids: Array = StructureDB.ids()
+	var count: int = ids.size()
+	if count == 0:
+		return {}
+	var start := _hash2(region.x, region.y, 8804) % count
+	for step in count:
+		var id := str(ids[(start + step) % count])
+		var placement := _place_structure(StructureDB.definition(id), Vector2i(anchor_x, anchor_z))
+		if not placement.is_empty():
+			return placement
+	return {}
+
+
+## Siting test for one definition at one anchor (the footprint centre).
+func _place_structure(definition: Dictionary, anchor: Vector2i) -> Dictionary:
+	if definition.is_empty():
+		return {}
+	var size := StructureDB.footprint(definition)
+	var origin_x := anchor.x - (size.x - 1) / 2
+	var origin_z := anchor.y - (size.z - 1) / 2
+	var biome := 0
+	var lowest := WORLD_HEIGHT
+	var highest := 0
+	for local_z in size.z:
+		for local_x in size.x:
+			var x := origin_x + local_x
+			var z := origin_z + local_z
+			if local_x == 0 and local_z == 0:
+				biome = _world_biome(x, z)
+			var height := _world_height(x, z)
+			lowest = mini(lowest, height)
+			highest = maxi(highest, height)
+	if not StructureDB.allows_biome(definition, biome):
+		return {}
+	if highest - lowest > int(definition.get("max_slope", 0)):
+		return {}
+	var base_y := highest + 1
+	if base_y - 1 < SEA_LEVEL + int(definition.get("min_floor_above_sea", 0)):
+		return {}
+	return {"id": str(definition["id"]), "x": anchor.x, "base_y": base_y, "z": anchor.y, "biome": biome}
+
+
+## Writes the part of every placed structure that falls inside this chunk.  A
+## structure whose anchor is in a neighbouring region but whose footprint reaches
+## into this chunk is written here too, so a chunk never depends on its neighbour
+## having been generated first.
+func _apply_structures(chunk: ChunkData) -> void:
+	var reach := StructureDB.max_extent()
+	var min_x := chunk.coord.x * ChunkData.SIZE
+	var min_z := chunk.coord.z * ChunkData.SIZE
+	var max_x := min_x + ChunkData.SIZE - 1
+	var max_z := min_z + ChunkData.SIZE - 1
+	for region_z in range(structure_region_of(min_z - reach), structure_region_of(max_z + reach) + 1):
+		for region_x in range(structure_region_of(min_x - reach), structure_region_of(max_x + reach) + 1):
+			var placement := structure_placement(Vector2i(region_x, region_z))
+			if not placement.is_empty():
+				_write_structure(chunk, placement)
+
+
+## Writes one placed structure's cells that land inside a chunk.
+func _write_structure(chunk: ChunkData, placement: Dictionary) -> void:
+	var definition := StructureDB.definition(str(placement["id"]))
+	if definition.is_empty():
+		return
+	var size := StructureDB.footprint(definition)
+	var origin_x := int(placement["x"]) - (size.x - 1) / 2
+	var origin_z := int(placement["z"]) - (size.z - 1) / 2
+	var base_x := chunk.coord.x * ChunkData.SIZE
+	var base_y := chunk.coord.y * ChunkData.SIZE
+	var base_z := chunk.coord.z * ChunkData.SIZE
+	for layer: Dictionary in definition.get("layers", []):
+		var world_y := int(placement["base_y"]) + int(layer["dy"])
+		if world_y < base_y or world_y >= base_y + ChunkData.SIZE:
+			continue
+		var rows: Array = layer.get("rows", [])
+		for row_index in rows.size():
+			var row := str(rows[row_index])
+			var world_z := origin_z + row_index
+			if world_z < base_z or world_z >= base_z + ChunkData.SIZE:
+				continue
+			for column in row.length():
+				var world_x := origin_x + column
+				if world_x < base_x or world_x >= base_x + ChunkData.SIZE:
+					continue
+				var block_id := StructureDB.symbol_block(layer, row[column])
+				if block_id == BlockDB.NO_DROP:
+					continue
+				var index := ChunkData.cell_index(world_x - base_x, world_y - base_y, world_z - base_z)
+				# Bedrock is never carved through, so a structure can never
+				# open the bottom of the world.
+				if chunk.blocks[index] == BlockDB.BEDROCK:
+					continue
+				chunk.blocks[index] = block_id
+				if block_id == BlockDB.WATER:
+					chunk.fluid[index] = ChunkData.SOURCE_LEVEL
+					chunk.sources[index] = 1
+				else:
+					chunk.fluid[index] = ChunkData.NO_FLUID
+					chunk.sources[index] = 0
