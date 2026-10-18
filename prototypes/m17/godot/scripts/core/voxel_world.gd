@@ -90,12 +90,14 @@ func ensure_chunk(coord: Vector3i) -> ChunkData:
 	return chunk
 
 
-## Loads a chunk from pre-built data (shared fixture loading / tests).
+## Loads a chunk from pre-built data (background generation / shared fixture
+## loading / tests).  The generation worker builds the voxels; this adopts them
+## on the main thread exactly like `ensure_chunk`, so saved edits are re-applied
+## and the derived state is flagged.
 func adopt_chunk(chunk: ChunkData) -> void:
 	chunks[chunk.coord] = chunk
-	_count_solid(chunk)
-	chunk.mark_dirty()
 	_apply_saved_edits(chunk)
+	_count_solid(chunk)
 	chunk.mark_dirty()
 	stats["loaded"] = chunks.size()
 	chunk_created.emit(chunk.coord)

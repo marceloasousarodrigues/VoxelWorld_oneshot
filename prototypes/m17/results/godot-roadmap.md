@@ -30,7 +30,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (767 assertions, verified 2026-10-18) + runtime integration harness (68 assertions, verified 2026-10-18) + headless determinism fingerprint
+- [x] Automated test suite (785 assertions, verified 2026-10-18) + runtime integration harness (68 assertions, verified 2026-10-18) + headless determinism fingerprint
 - [x] Frame-time benchmark harness (`scripts/tests/run_perf.gd`): six scripted activities, per-frame
       timings and streaming counters, before/after JSON reports (verified 2026-10-16)
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
@@ -146,12 +146,29 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       the main thread, pure `build_geometry` on the worker, `assemble` + node attach on the main
       thread); measured walk p99 28.5→16.3 ms, 1 % low 31.9→53.5 fps, and settling 4.3→3.1 s
       wall clock. See the renderer-investigation section of `godot-progress.md`.
-- [~] First-fill cost: ~2.9 s generation + ~2.3 s meshing + ~0.5 s attach for 392 chunks after
-      the worker-thread change; generation is still synchronous on the main thread and a single
-      heavy chunk (~10 ms typical, ~17 ms worst) can occasionally drop one frame
-- [ ] Background/threaded generation (mission §9): meshing is now threaded; **generation** still
-      runs in the frame. This is the remaining known hitch source and the next step if the
-      residual single-frame dips matter more than their current size
+      **Chunk generation followed on 2026-10-18** (second worker thread, own `WorldGen`):
+      settle p99 22.2→8.3 ms, walk p99 16.3→6.3 ms, 1 % low 52.4→111.2 fps, world-ready
+      5.3→3.5 s. Reports `perf-{walk,settle}-{inline,bg}.json`.
+- [~] First-fill cost: after background generation the world is ready in ~3.5 s wall clock
+      (was ~5.3 s) for 392 chunks at radius 4; the first-PLAYING frame (~53 ms, engine
+      first-use) is unchanged and present in every baseline. Generation and meshing are both
+      off the main thread now; the residual per-frame streaming cost is geometry **attach**
+      (ArrayMesh upload + trimesh shape, up to ~26 ms on one settle frame)
+- [x] Background/threaded generation (mission §9, 2026-10-18): chunk generation was the last
+      streaming step inside the frame (~6 ms/chunk typical, up to ~21 ms). It now runs on a
+      second worker thread that owns its own `WorldGen`; the main thread only submits
+      coordinates and adopts finished chunks, bounded by `max_generation_in_flight`.
+      A/B on one machine (seed 17017, radius 4, vsync off): settle p99 22.2 → 8.3 ms,
+      walk p99 16.3 → 6.3 ms, walk 1 % low 52.4 → 111.2 fps, world-ready 5.3 → 3.5 s.
+      Tested by `test_streaming_lifecycle.gd` (in-flight cap, stale results dropped, clean
+      `clear()`/restart) and the `test_determinism.gd` background-vs-inline equivalence.
+      Remaining hitch is the first-PLAYING frame (~53 ms) and GPU-bound frames, not
+      generation; see the progress report
+- [x] Benchmark harness measured the display refresh rate, not the game (2026-10-18): the
+      settings screen persists vsync and `game.gd::_ready()` applies it, overriding the
+      harness's pre-boot `VSYNC_DISABLED`. `run_perf.gd` now re-asserts vsync-off/max-fps
+      after boot and before each phase, records `vsync_mode`/`max_fps`/`threaded_*` in the
+      report, and gained `--sync-generation` for single-machine A/B runs
 - [x] Save format versioning: VERSION 3 accepts versions 1..3 (adds health and breath;
       v1/v2 fields remain optional); unknown versions are still quarantined
 - [x] Remove temporary diagnostics (`M17_OPTIONS`, `_probe_surface.gd`)
@@ -188,7 +205,9 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Test runner hung on a module that fails to parse (2026-10-18):
       `(script as GDScript).new()` aborted `_run_all` and left the suite running until the 300 s
       watchdog. `run_tests.gd` now checks `can_instantiate()` and reports a normal failure
-- [~] Remaining streaming hitch (2026-10-18 re-measured after the race fix): walk p99
-      17.12 ms / settle p99 21.44 ms, unchanged by the race fix and still dominated by chunk
-      **generation** (~12-20 ms in-frame) plus GPU first-use of new geometry; threaded
-      generation is the next engineering step (no performance fix claimed)
+- [x] Remaining streaming hitch (2026-10-18): generation moved off the main thread
+      (`threaded_generation`). In-frame generation no longer exists, so the frames that used to
+      cost 23-26 ms doing it are gone (settle p99 22.2→8.3 ms, walk p99 16.3→6.3 ms on the A/B
+      above). What remains is the first-PLAYING frame (engine first-use, ~53 ms, present in
+      every baseline) and occasional GPU-bound frames with 6.5 ms of CPU work; geometry attach
+      (ArrayMesh + trimesh shape) is the largest surviving main-thread streaming cost

@@ -29,6 +29,7 @@ var _game: Node
 var _player: Node
 var _scenario := "look"
 var _label := ""
+var _sync_generation := false  # --sync-generation: A/B the background generator
 var _api_edge := ""  # '' or a message from a failed precondition
 
 # --- recording buffers ----------------------------------------------------
@@ -46,7 +47,10 @@ func _initialize() -> void:
 	call_deferred("_main")
 
 
-## Writes nothing; keeps the measurement itself honest by NOT capping frames.
+## Forces the measurement conditions: no vsync and no frame cap.  Called before
+## the game boots *and* again after it boots, because the game applies its
+## persisted display settings (including vsync) in `_ready`, which would
+## otherwise silently cap every measured phase at the display refresh rate.
 func _configure_display() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
@@ -62,11 +66,16 @@ func _parse() -> void:
 				_scenario = value
 			"--label":
 				_label = value
+			"--sync-generation":
+				_sync_generation = true
 	if _label.is_empty():
 		_label = "perf-%s" % _scenario
 
 
 func _begin_phase(name: String) -> void:
+	# Re-assert the measurement conditions: whatever opened, closed or saved
+	# settings during boot must not cap the frames this phase records.
+	_configure_display()
 	_current_phase = name
 	_phase_start_usec = Time.get_ticks_usec()
 	print("M17_PERF_PHASE_START %s" % name)
@@ -275,6 +284,10 @@ func _write_report() -> void:
 		"label": _label,
 		"seed": _game.world.world_seed,
 		"render_distance": int(_game._options["render_radius"]),
+		"vsync_mode": DisplayServer.window_get_vsync_mode(),
+		"max_fps": Engine.max_fps,
+		"threaded_generation": _streamer().threaded_generation,
+		"threaded_meshing": _streamer().threaded_meshing,
 		"godot": Engine.get_version_info(),
 		"overall": _stats_for(_frames),
 		"phases": _phase_rows(),
@@ -311,6 +324,12 @@ func _main() -> void:
 	_game = scene.instantiate()
 	root.add_child(_game)
 	_player = _game.player
+	# The game applies its persisted vsync setting in `_ready`; force the
+	# measurement conditions back on now that boot is over.
+	_configure_display()
+	if _sync_generation and _streamer() != null:
+		# A/B control: run the same workload with the background generator off.
+		_streamer().threaded_generation = false
 	if not await _wait_until_playing():
 		print("M17_PERF_FAIL never reached PLAYING")
 		_print_summary()

@@ -1055,3 +1055,93 @@ Verification: unit `M17_TESTS_PASS 767 assertions` exit 0 stderr 0; integration
 Limitations: no settings file migration/versioning yet; only the three listed settings are
 exposed (shadows, fog and vertical radius remain CLI-only); verification is scripted, not a
 human click-through.
+
+## M17 Priority 1: background chunk generation (2026-10-18, continued)
+
+The roadmap's remaining streaming-hitch item. Chunk **generation** was still the one
+expensive streaming step running inside the frame (~6 ms per chunk typical, up to ~21 ms),
+so a heavy chunk could still drop a frame even though meshing had already moved to a
+worker thread. Generation now runs on its own worker thread too.
+
+### Measurement-harness defect found first (FIXED)
+
+Before touching the streamer, an A/B run was taken and it showed *every* phase pinned at
+~60 fps with idle frames costing 15.2 ms instead of the usual 1.2 ms. The cause was not the
+streamer: the configuration screen added in `9cd77de` persists vsync to
+`user://voxelworld_settings.cfg`, and `game.gd::_ready()` applies it — which overrode
+`run_perf.gd`'s pre-boot `VSYNC_DISABLED` / `Engine.max_fps = 0`. The first two benchmark
+runs of this session were therefore measuring the display refresh rate, not the game, and
+were deleted rather than reported. `run_perf.gd` now:
+
+- re-asserts `VSYNC_DISABLED` / `max_fps = 0` after the game scene boots (its `_ready` runs
+  during `add_child`) and at the start of every phase;
+- records `vsync_mode`, `max_fps`, `threaded_generation` and `threaded_meshing` in the
+  report, so the measurement conditions are auditable instead of implied;
+- gained `--sync-generation`, which turns the background generator off after boot, so the
+  two code paths can be A/B-compared on one machine in one session.
+
+### Implementation
+
+- `scripts/game/chunk_streamer.gd`: new `threaded_generation` (default `true`) and
+  `max_generation_in_flight` (default 8). A second worker thread owns its **own**
+  `WorldGen`, seeded identically, so the shared `_column_cache` is never touched from two
+  threads. The main thread only `_submit_generation_batch()`es coordinates (cheap, bounded
+  by `generation_budget` and the in-flight cap) and `_collect_generation_batch()`es finished
+  `ChunkData`s, adopting them through `world.adopt_chunk`. `is_settled()` counts in-flight
+  generation; `clear()`/`_exit_tree()` tear the worker down and `clear()` restarts it;
+  `_rebuild_wanted()` drops queued generation for coordinates the focus has left; `report()`
+  gained `generation_in_flight` and `generation_worker_ms`.
+- `scripts/core/voxel_world.gd::adopt_chunk` now applies the saved edits **before** counting
+  solids, so a background-generated chunk is adopted exactly the way `ensure_chunk` used to
+  build one (previously the order differed).
+- Determinism is preserved by construction (the generator is a pure function of seed and
+  coordinate and only ever writes inside its own chunk) and is pinned by tests.
+
+### Measured (windowed, RTX 3080 / i7-10700K, seed 17017, radius 4, vsync off)
+
+A/B in the same session: `--sync-generation` (`perf-*-inline.json`) vs the default
+background generator (`perf-*-bg.json`).
+
+| run | phase | metric | inline (sync) | background |
+| --- | --- | --- | --- | --- |
+| walk | settle | p95 / p99 / worst | 16.73 / 25.19 / 55.94 ms | **5.61 / 11.99 / 52.93 ms** |
+| walk | settle | 1 % low | 31.3 fps | **46.9 fps** |
+| walk | walk | p95 / p99 / worst | 4.54 / 16.32 / 31.01 ms | **3.80 / 6.30 / 31.21 ms** |
+| walk | walk | 1 % low | 52.4 fps | **111.2 fps** |
+| settle | settle | p95 / p99 / worst | 16.38 / 22.22 / 56.95 ms | **5.26 / 8.30 / 53.43 ms** |
+| settle | settle | 1 % low | 33.8 fps | **52.0 fps** |
+| walk | boot + settle | wall clock to ready | 5.26 s | **3.47 s** |
+| settle | boot + settle | wall clock to ready | 5.47 s | **3.76 s** |
+
+The `worst` frames are unchanged (~53 ms in both) and are the previously documented single
+first-PLAYING frame (engine first-use), not a streaming frame. The remaining >20 ms walk
+frames are GPU-bound, not CPU: three consecutive 31 ms frames report `process_ms` 6.5 ms
+with 300 draw calls, and the same 31 ms frames exist in both runs. Main-thread montage cost
+that survives is `attach` (ArrayMesh upload + `create_trimesh_shape()`), measured at up to
+~26 ms on one settle frame; capping attachments per frame was already tested in a previous
+session and made no measurable difference.
+
+### Tests
+
+- New `scripts/tests/test_streaming_lifecycle.gd` (registered in `run_tests.gd`): the
+  in-flight generation count never exceeds `max_generation_in_flight`; a result for a
+  coordinate that left the wanted set while it was being generated is **dropped**, so the
+  loaded set stays exactly the wanted set after a large focus jump; `clear()` unloads
+  everything and the streamer streams again afterwards.
+- `scripts/tests/test_determinism.gd`: background generation must produce the identical
+  logical-world fingerprint and identical geometry hash as synchronous generation, must
+  leave `generation_in_flight == 0` when settled, and must load the same chunk count. The
+  `--sync-generation` control in the harness is what makes this a real equivalence test.
+- `test_determinism.gd` also had a swallowed assertion: a stray `#` made
+  `h.eq(fine.face_counts.size(), wanted, "every wanted chunk is meshed exactly once")` part
+  of a comment. Restored (and it passes).
+- Unit: **785 assertions**, exit 0, 0 bytes stderr (was 767).
+- Integration: **68 assertions**, exit 0, 0 bytes stderr.
+- Smoke: exit 0, `world_hash=441363152919021799`, `faces=166074`,
+  `faces_hash=6977993294663025454` — unchanged, and `generation_worker_ms=2829` matches the
+  old main-thread `generation_ms_total≈2810`, which is the direct proof the work moved
+  rather than disappeared.
+
+Savepoint (this increment): committed with message
+"M17 Godot: background chunk generation + trustworthy perf harness".
+

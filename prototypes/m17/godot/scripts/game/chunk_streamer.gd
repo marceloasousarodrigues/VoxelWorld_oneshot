@@ -35,9 +35,17 @@ const FACE_OFFSETS: Array[Vector3i] = [
 ## thread only snapshots the input (when a chunk's neighbours are final) and
 ## attaches finished meshes.  Set false for the synchronous path used by tests.
 @export var threaded_meshing := true
+## When true chunk generation also runs on a worker thread.  The main thread only
+## submits coordinates and adopts the finished `ChunkData`; generation is a pure
+## function of the seed and the coordinate, so this changes only *when* a chunk
+## appears, never its contents.
+@export var threaded_generation := true
 ## Upper bound on submitted-but-unattached mesh jobs.  The worker builds one at a
 ## time, so this only bounds the queue depth.
 @export var max_mesh_in_flight := 4
+## Upper bound on generated-but-not-yet-adopted chunks.  A slower frame therefore
+## never has to drain a large burst of generation results at once.
+@export var max_generation_in_flight := 8
 ## When false a fresh chunk streams without generating collision geometry.
 @export var collision_enabled := true
 
@@ -74,12 +82,25 @@ var _worker_stopping := false
 var _job_queue: Array = []
 var _results: Array = []
 var _pending: Dictionary = {}
+## Dedicated generation worker: one chunk at a time, results handed back under a
+## mutex.  It owns its own `WorldGen` so the shared column cache is never touched
+## from two threads.
+var _gen_thread: Thread = null
+var _gen_worker_gen: WorldGen = null
+var _gen_mutex := Mutex.new()
+var _gen_signal := Semaphore.new()
+var _gen_stopping := false
+var _gen_queue: Array[Vector3i] = []
+var _gen_results: Array = []
+var _gen_pending: Dictionary = {}
+var _gen_busy_ms := 0.0
 
 
 func setup(target_world: VoxelWorld, chunk_mesher: ChunkMesher) -> void:
 	world = target_world
 	mesher = chunk_mesher
 	_start_worker()
+	_start_generation_worker()
 	world.chunk_created.connect(_on_chunk_created)
 	world.chunk_removed.connect(_on_chunk_removed)
 	_active = true
@@ -94,13 +115,24 @@ func _start_worker() -> void:
 	_worker_thread.start(_worker_loop)
 
 
+func _start_generation_worker() -> void:
+	if not threaded_generation or world == null or _gen_thread != null:
+		return
+	_gen_worker_gen = WorldGen.new(world.world_seed)
+	_gen_busy_ms = 0.0
+	_gen_stopping = false
+	_gen_thread = Thread.new()
+	_gen_thread.start(_generation_worker_loop)
+
+
 func _exit_tree() -> void:
-	# The worker must never outlive the streamer (it reads a snapshot and its own
-	# mesher, but ownership has to be explicit for a clean teardown).
+	# The workers must never outlive the streamer (they read snapshots and their
+	# own helpers, but ownership has to be explicit for a clean teardown).
 	_shutdown_worker()
+	_shutdown_generation_worker()
 
 
-## Stops the worker and waits for it, so no build is running afterwards.
+## Stops the mesh worker and waits for it, so no build is running afterwards.
 func _shutdown_worker() -> void:
 	if _worker_thread == null:
 		return
@@ -114,6 +146,45 @@ func _shutdown_worker() -> void:
 	_job_queue.clear()
 	_results.clear()
 	_pending.clear()
+
+
+## Stops the generation worker and waits for it.  The pending queue is dropped
+## first so a shutdown never has to wait for a backlog of unwanted chunks.
+func _shutdown_generation_worker() -> void:
+	if _gen_thread == null:
+		return
+	_gen_mutex.lock()
+	_gen_stopping = true
+	_gen_queue.clear()
+	_gen_mutex.unlock()
+	_gen_signal.post()
+	_gen_thread.wait_to_finish()
+	_gen_thread = null
+	_gen_worker_gen = null
+	_gen_queue.clear()
+	_gen_results.clear()
+	_gen_pending.clear()
+
+
+func _generation_worker_loop() -> void:
+	while true:
+		_gen_signal.wait()
+		_gen_mutex.lock()
+		if _gen_stopping and _gen_queue.is_empty():
+			_gen_mutex.unlock()
+			return
+		var coord: Variant = _gen_queue.pop_front() if not _gen_queue.is_empty() else null
+		_gen_mutex.unlock()
+		if coord == null:
+			continue
+		var chunk := ChunkData.new(coord)
+		var started := Time.get_ticks_usec()
+		_gen_worker_gen.generate_chunk(chunk)
+		var elapsed := float(Time.get_ticks_usec() - started) / 1000.0
+		_gen_mutex.lock()
+		_gen_busy_ms += elapsed
+		_gen_results.append(chunk)
+		_gen_mutex.unlock()
 
 
 func _worker_loop() -> void:
@@ -153,7 +224,8 @@ static func chunk_of(world_position: Vector3) -> Vector3i:
 func is_settled() -> bool:
 	if not _active:
 		return false
-	return _wanted.size() > 0 and _queue.is_empty() and _pending.is_empty() and world.chunks.size() >= _wanted.size()
+	return _wanted.size() > 0 and _queue.is_empty() and _pending.is_empty() \
+		and _gen_pending.is_empty() and world.chunks.size() >= _wanted.size()
 
 
 ## True once every chunk within `radius` of the given position has been meshed at
@@ -223,6 +295,8 @@ func apply_render_radius(radius: int) -> void:
 func clear() -> void:
 	_shutdown_worker()
 	_start_worker()
+	_shutdown_generation_worker()
+	_start_generation_worker()
 	for coord: Vector3i in views.keys():
 		_destroy_view(coord)
 	for coord: Vector3i in world.chunks.keys():
@@ -252,7 +326,12 @@ func _process(_delta: float) -> void:
 	stats["center"] = _center
 	stats["wanted"] = _wanted.size()
 	stats["queued"] = _queue.size()
-	_generate_batch()
+	if threaded_generation and _gen_thread != null:
+		# Collect before submitting so a freed slot is usable in the same frame.
+		_collect_generation_batch()
+		_submit_generation_batch()
+	else:
+		_generate_batch()
 	if threaded_meshing:
 		# Collect first so a free worker is available for this frame's submits.
 		_collect_mesh_batch()
@@ -290,6 +369,15 @@ func _rebuild_wanted() -> void:
 	for coord: Vector3i in _queue.keys():
 		if not _wanted.has(coord):
 			_queue.erase(coord)
+	# Drop generation jobs that were queued for a region the focus has left,
+	# so the worker does not spend its time on chunks nobody wants any more.
+	if not _gen_queue.is_empty():
+		_gen_mutex.lock()
+		for index in range(_gen_queue.size() - 1, -1, -1):
+			if not _wanted.has(_gen_queue[index]):
+				_gen_pending.erase(_gen_queue[index])
+				_gen_queue.remove_at(index)
+		_gen_mutex.unlock()
 
 
 func _nearer_first(a: Vector3i, b: Vector3i) -> bool:
@@ -343,6 +431,60 @@ func _generate_batch() -> int:
 		if float(Time.get_ticks_usec() - started) / 1000.0 >= generation_millisecond_budget:
 			break
 	return done
+
+
+# --- threaded generation --------------------------------------------------
+#
+# `WorldGen.generate_chunk` is ~6 ms of GDScript per chunk and a heavy chunk costs
+# more than a whole frame, so it is the remaining in-frame streaming cost.  The
+# main thread only submits coordinates (cheap) and adopts finished chunks; the
+# worker keeps its own `WorldGen`, seeded identically, so the shared column cache
+# is never touched from two threads and the voxels are bit-identical.
+
+## Hands queued coordinates whose chunk is not loaded yet to the generation
+## worker.  Bounded by `generation_budget` and `max_generation_in_flight`.
+func _submit_generation_batch() -> int:
+	var budget := maxi(0, generation_budget)
+	if budget == 0:
+		return 0
+	var in_flight_max := maxi(1, max_generation_in_flight)
+	var submitted := 0
+	for coord: Vector3i in _order:
+		if submitted >= budget or _gen_pending.size() >= in_flight_max:
+			break
+		if world.has_chunk(coord) or _gen_pending.has(coord):
+			continue
+		_gen_mutex.lock()
+		_gen_queue.append(coord)
+		_gen_mutex.unlock()
+		_gen_signal.post()
+		_gen_pending[coord] = true
+		submitted += 1
+	return submitted
+
+
+## Adopts every finished worker chunk whose coordinate is still wanted.  A result
+## for a coordinate that left the wanted set while it was generated is dropped:
+## adopting it would leave a loaded chunk outside the streamed region.
+func _collect_generation_batch() -> int:
+	if _gen_results.is_empty():
+		return 0
+	var started := Time.get_ticks_usec()
+	_gen_mutex.lock()
+	var finished: Array = _gen_results
+	_gen_results = []
+	_gen_mutex.unlock()
+	var adopted := 0
+	for chunk: ChunkData in finished:
+		var coord: Vector3i = chunk.coord
+		_gen_pending.erase(coord)
+		if not _wanted.has(coord) or world.has_chunk(coord):
+			continue
+		world.adopt_chunk(chunk)
+		stats["generated"] = int(stats["generated"]) + 1
+		adopted += 1
+	stats["generation_ms"] = float(stats["generation_ms"]) + float(Time.get_ticks_usec() - started) / 1000.0
+	return adopted
 
 
 # --- meshing -------------------------------------------------------------
@@ -611,6 +753,8 @@ func report() -> Dictionary:
 		"mesh_ms_total": float(stats["mesh_ms"]),
 		"attach_ms_total": float(stats["attach_ms"]),
 		"meshes_in_flight": _pending.size(),
+		"generation_in_flight": _gen_pending.size(),
+		"generation_worker_ms": _gen_busy_ms,
 		"worst_mesh_ms": float(stats["worst_mesh_ms"]),
 		"generation_ms_total": float(stats["generation_ms"]),
 	}

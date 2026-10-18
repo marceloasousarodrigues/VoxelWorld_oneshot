@@ -28,7 +28,7 @@ func _setup() -> void:
 ## Streams one world to completion around a fixed focus point with the given
 ## per-frame budgets.  The streamer is attached to the scene root so it behaves
 ## exactly like the streamer in the running game.
-func _stream(radius: int, vertical: int, generation_budget: int, mesh_budget: int, threaded: bool = true) -> ChunkStreamer:
+func _stream(radius: int, vertical: int, generation_budget: int, mesh_budget: int, threaded: bool = true, threaded_generation: bool = true) -> ChunkStreamer:
 	var world := VoxelWorld.new(17017)
 	var streamer := ChunkStreamer.new()
 	streamer.render_radius = radius
@@ -36,6 +36,7 @@ func _stream(radius: int, vertical: int, generation_budget: int, mesh_budget: in
 	streamer.generation_budget = generation_budget
 	streamer.mesh_budget = mesh_budget
 	streamer.threaded_meshing = threaded
+	streamer.threaded_generation = threaded_generation
 	streamer.focus_node = null
 	streamer.setup(world, _mesher)
 	# The engine must not drive the streamer itself: this test owns the frame loop.
@@ -48,10 +49,10 @@ func _stream(radius: int, vertical: int, generation_budget: int, mesh_budget: in
 	while not streamer.is_settled() and guard < 30000:
 		streamer._process(0.016)
 		guard += 1
-		if threaded:
-			# A tight synchronous loop would starve the mesh worker, so give it a
+		if threaded or threaded_generation:
+			# A tight synchronous loop would starve the workers, so give them a
 			# slice.  The real game calls `_process` once per frame, which already
-			# gives the worker the whole frame.
+			# gives the workers the whole frame.
 			OS.delay_usec(200)
 	return streamer
 
@@ -93,7 +94,23 @@ func run(h: TestHarness) -> void:
 			mismatches += 1
 	h.eq(mismatches, 0, "no single chunk differs between the two batch sizes")
 
-	# 2) Every wanted chunk must be meshed, and no unwanted chunk may be.	h.eq(fine.face_counts.size(), int(fine_report["wanted"]), "every wanted chunk is meshed exactly once")
+	# 1c) Background generation must produce exactly the same logical world as
+	# synchronous generation: generation is a pure function of seed + coordinate,
+	# so moving it to a worker changes only *when* a chunk appears, never its
+	# contents or the derived geometry.
+	var sync_gen := _stream(3, 2, 8, 3, true, false)
+	var sync_gen_report := sync_gen.report()
+	h.eq(sync_gen.world.fingerprint(), coarse.world.fingerprint(),
+		"background generation yields the identical logical world")
+	h.eq(int(sync_gen_report["faces_hash"]), int(coarse_report["faces_hash"]),
+		"background generation yields the identical geometry hash (%d vs %d faces)" % [int(sync_gen_report["faces"]), int(coarse_report["faces"])])
+	h.eq(int(coarse_report["generation_in_flight"]), 0,
+		"no background generation is left in flight once settled")
+	h.eq(int(coarse_report["loaded"]), int(sync_gen_report["loaded"]),
+		"both generation paths load the same chunks")
+
+	# 2) Every wanted chunk must be meshed, and no unwanted chunk may be.
+	h.eq(fine.face_counts.size(), int(fine_report["wanted"]), "every wanted chunk is meshed exactly once")
 	var face_total := 0
 	for coord: Vector3i in fine.face_counts:
 		face_total += int(fine.face_counts[coord])
@@ -143,4 +160,5 @@ func run(h: TestHarness) -> void:
 	_release(fine)
 	_release(coarse)
 	_release(threaded)
+	_release(sync_gen)
 	h.finish()
