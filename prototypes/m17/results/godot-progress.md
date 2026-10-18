@@ -1,5 +1,158 @@
 # M17 Godot — Progress and Resume Point
 
+## Renderer investigation — texture corruption and streaming frame-time spikes (2026-10-16, autonomous session)
+
+Two independent defects were reproduced from the 15:39 and 17:27 recordings and fixed.
+Each was diagnosed with instrumentation before any code changed, and each fix was measured
+with the same seed (17017), render distance (4) and camera paths before and after.
+
+### 1. Texture corruption: the array-layer coordinate was sampled at its midpoint (FIXED)
+
+Symptoms (both recordings): grass surfaces covered in gravel-like pale blotches, sand with
+large bright wedges and streaks, fruit/foliage streaked, and the pattern changing as the
+camera moved. The committed `fix-spawn.png` already showed it (it had been read as a dirt
+path next to the spawn).
+
+Evidence gathered before touching code:
+
+- Frames extracted from both recordings with ffmpeg; the artifacts are patchy, per-face and
+  view dependent.
+- Atlas probe (temporary windowed script): all 47 `Texture2DArray` layers are byte-identical
+  to the source mip chains (worst byte difference 0) — the atlas data is correct.
+- CPU probe (temporary headless script): `face_layer` resolves all 204 block faces correctly,
+  the emitted buffers carry the right layer per face (grass top 21, sides 20, log 26, leaves
+  25) and UV2 survives `add_surface_from_arrays` intact.
+- Remaining candidate — the shader. Every voxel shader sampled
+  `texture(atlas, vec3(UV, UV2.x + 0.5))`. For a `sampler2DArray` the third coordinate selects
+  the layer; `+ 0.5` places it exactly on the boundary between two layers. This engine build
+  rounds the coordinate, so faces — and, through per-pixel interpolation noise around the exact
+  midpoint, parts of faces — sampled the *next* layer in sorted order:
+  `grass_top`(21)→`gravel`(22), `sand`(33)→`sandstone`(34),
+  `oak_leaves`(25)→`oak_log_side`(26), water animation frames→the next frame. Because the flip
+  is driven by per-pixel interpolation, the patches move with the camera.
+- Minimal experiment: removing `+ 0.5` from `voxel_opaque.gdshader` **only** cleaned the grass
+  and left the leaves streaked (`m17-bug-oddlayer-test.png`), exactly as predicted.
+
+Fix: sample the exact integer layer in all five voxel shaders; the water shader adds only the
+integer animation frame index.
+
+Regression test: `test_textures.gd` reads the five shader sources and fails if any atlas sample
+offsets the layer coordinate by `+ 0.5` (the headless suite cannot execute the fragment path,
+so the contract is pinned at source level).
+
+Runtime evidence: before `m17-bug-baseline.png` (beach vantage) and `fix-spawn.png` (spawn);
+experiment `m17-bug-oddlayer-test.png`; after `godot-game-tour-0.png` (same spawn vantage as
+`fix-spawn.png`), `godot-game-tour-2.png` (terrace strata), and the separately required
+foliage/water checks `m17-fix-foliage.png` and `m17-fix-water.png`.
+
+Limitation: the engine build's rounding behaviour was established empirically; the contract
+test protects our shaders, not a future engine version.
+
+### 2. Frame-time spikes: in-frame chunk meshing and generation (FIXED)
+
+Baseline method (new `scripts/tests/run_perf.gd`): boots the real scene windowed with vsync
+disabled, drives one of six scripted activities (`settle`, `look`, `walk`, `cross`, `foliage`,
+`water`), and records per frame the frame interval, `TIME_PROCESS`, generation/mesh/attach
+milliseconds, queued/loaded counts and draw calls into
+`../results/godot/perf-<scenario>-<label>.json`.
+
+Attribution (before): steady state is cheap — settled `look`, `foliage` and `water` frames
+average 1.10–1.29 ms (~800 fps), so draw calls and triangle counts are not the limit. **Every**
+frame over 20 ms did chunk generation and/or meshing on the main thread: frames doing both
+averaged 23.4–24.5 ms and there were 161–435 of them per run. Generation costs ~6 ms/chunk and
+meshing ~5.7 ms/chunk (worst 17 ms), so two units cannot fit in a 16.7 ms frame.
+
+Fix (remove the blocking work rather than hide it, no reduction in detail or render distance):
+mesh construction now runs on a dedicated worker thread.
+
+- `chunk_mesher.gd` is split into `capture_input` (main-thread snapshot of the chunk plus its
+  six neighbours), `build_geometry` (pure arrays, creates no engine resources, safe off-thread)
+  and `assemble` (ArrayMesh + collision shape on the main thread). `build()` keeps the old
+  synchronous behaviour for tests.
+- `chunk_streamer.gd` submits snapshots to one worker thread (`Thread` + `Mutex` + `Semaphore`),
+  attaches finished geometry on the main thread, and stops/joins the worker deterministically in
+  `clear()` and `_exit_tree()`.
+- `chunk_data.gd` gained `mesh_revision`, bumped by `mark_dirty()`. The streamer only clears
+  `mesh_dirty` when no newer edit landed while the build was in flight, and skips coordinates
+  that already have a build in flight (without that it re-meshed the same chunks endlessly).
+
+Measured before → after:
+
+| activity | metric | before | after |
+| --- | --- | --- | --- |
+| walking (`walk`) | p95 / p99 / worst | 19.8 / 28.5 / 39.7 ms | 4.7 / 16.3 / 28.1 ms |
+| walking | 1 % low | 31.9 fps | 53.5 fps |
+| walking | frames > 20 ms that did gen+mesh | 432 | 46 |
+| crossing chunks (`cross`) | p99 / worst | 20.6 / 39.2 ms | 7.5 / 26.6 ms |
+| crossing chunks | 1 % low | 39.1 fps | 65.9 fps |
+| settling (`settle`) | avg / p95 / p99 | 8.9 / 26.5 / 29.9 ms | 4.3 / 16.2 / 20.7 ms |
+| settling | wall-clock until settled | 4.45 s | 3.32 s |
+| settled `look` / `foliage` / `water` | average frame | 1.10–1.29 ms | 1.07–1.25 ms (unchanged) |
+
+Streaming is not slower: mesh throughput during the settle phase rose from ~65 to ~90 units/s
+and wall-clock settling fell ~27 %, because generation and meshing now overlap instead of
+serialising inside the frame.
+
+Regression tests: `test_mesher.gd` asserts a captured snapshot is immune to later edits and
+that a fresh snapshot sees them; `test_determinism.gd` streams the same region synchronously
+and threaded and requires the identical geometry hash; the existing fingerprint assertions pin
+`world_hash=441363152919021799`, `faces=166074`, `faces_hash=6977993294663025454` (re-verified
+unchanged).
+
+Remaining limitations:
+
+- One first-PLAYING frame costs ~49–50 ms in every run, before and after (first-use engine work;
+  an identical frame exists in the baseline).
+- Chunk **generation** still runs in the frame (~6 ms typical, up to ~21 ms), so a heavy chunk
+  can still drop a single frame. Threaded generation is the next step (roadmap).
+- The settle-phase 36–46 ms frames are dominated by first-use GPU work when a burst of geometry
+  first appears; the attach time measured in those frames is only 1.7–23 ms. An attachment cap
+  of 2 per frame was tried (`perf-{settle,walk}-after2.json`) and changed nothing measurable
+  (settle p95 16.4 vs 16.2 ms, walk p99 16.3 vs 16.3 ms), so it was not kept.
+
+### 3. "Apparent suspended terrain" (explained, not a defect)
+
+The 17:27 recording shows terrain apparently floating in the sky (HUD `XY 8.6 / 1.1 / 8.4`,
+`56/196` chunks). This is the world seen from *underneath* while it streams: the player is at
+y≈1 (bottom chunk) and the mesher only emits outward faces (an unloaded neighbour must never
+cull anything), so loaded chunks appear as detached shells; the dark quads are faces in shadow
+(no sunlight reaches under the terrain). Reproduced deliberately with
+`--fly --player-at=8.6,1.1,8.4 --look=38,20` → `m17-fix-underground.png`, which shows the same
+appearance with correct textures. Face winding is already pinned by `test_mesh_winding.gd`.
+No code change was made for this.
+
+### Files changed
+
+- `shaders/voxel_{opaque,cutout,blend,deco,water}.gdshader` — exact-integer layer sampling.
+- `scripts/core/chunk_mesher.gd` — snapshot / pure build / assemble split.
+- `scripts/core/chunk_streamer.gd` — worker-thread meshing, revision guard, deterministic teardown.
+- `scripts/core/chunk_data.gd` — `mesh_revision`.
+- `scripts/game/game.gd` — smoke/capture summaries report the worker mesher's statistics.
+- `scripts/tests/run_perf.gd` (new) — reproducible frame-time harness.
+- `scripts/tests/test_textures.gd`, `test_mesher.gd`, `test_determinism.gd` — regression tests.
+
+### Verification on the frozen code (this session)
+
+- `run_tests.gd` (headless): **M17_TESTS_PASS 615 assertions**, exit code 0, 0 bytes of stderr.
+- `run_integration.gd -- --straight-to-game` (headless): **M17_INTEGRATION_PASS 35 assertions**,
+  exit code 0, 0 bytes of stderr.
+- Headless smoke `--straight-to-game --quit-after=25`: exit code 0,
+  `world_hash=441363152919021799`, `faces=166074`, `faces_hash=6977993294663025454`.
+- Perf reports and screenshots: `results/godot/perf-{look,settle,walk,cross,foliage,water}-{before,after}.json`,
+  `m17-bug-baseline.png`, `m17-bug-oddlayer-test.png`, `godot-game-tour-0..4.png`,
+  `m17-fix-foliage.png`, `m17-fix-water.png`, `m17-fix-underground.png`.
+
+```powershell
+$godot = 'C:\Godot\Godot_v4.7.2-stable_mono_win64\...\Godot_v4.7.2-stable_mono_win64.exe'
+# unit suite / integration suite
+& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
+& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
+# frame-time benchmark (windowed; one scenario per run)
+& $godot --path prototypes/m17/godot --script res://scripts/tests/run_perf.gd -- --straight-to-game --seed=17017 --scenario=walk --label=perf-walk-after
+```
+
+---
+
 ## Reviewer follow-up — survival/save fixes (2026-10-16)
 
 Addressed the health/survival review findings without touching the Ursina
@@ -103,7 +256,8 @@ but are no longer the project's main scene.
 
 **Diagnostics**: the capture harness inside `game.gd`, `scripts/tests/*` (`run_tests.gd` is
 the headless unit runner; `run_integration.gd` boots the real scene and drives player
-input/collision), `prototypes/m17/tools/image_stats.py` (objective image statistics).
+input/collision; `run_perf.gd` is the frame-time benchmark harness),
+`prototypes/m17/tools/image_stats.py` (objective image statistics).
 
 ## 5. Commands
 
@@ -641,3 +795,228 @@ the ground cells under candidates are loaded and can be edited.
   integration.
 
 This follow-up is included in savepoint `b993af4` (independently re-reviewed: PASS).
+
+## M17 bug fix: missing faces and walk-through at Z chunk boundaries (2026-10-18)
+
+A user-reported gameplay defect ("after breaking blocks some terrain faces disappear and the
+player can sometimes walk through the terrain") was reproduced, traced to one line group, and
+fixed in the current working tree. Nothing was committed (the orchestrator owns commits);
+existing dirty files were preserved.
+
+**Symptom.** Breaking a block that sits on a chunk's **-Z or +Z border** left the neighbouring
+chunk's newly exposed face missing from both the rendered mesh and the collision trimesh. The
+player could therefore see through the hole into the terrain behind it and pass through the
+boundary wall. Interior edits and X/Y boundaries behaved correctly, which made the defect look
+intermittent and orientation-dependent (digging `+Z`/`-Z`).
+
+**Root cause (`scripts/core/voxel_world.gd::_flag_neighbours`).** The routine that dirties the
+loaded neighbour chunk after an edit mapped the two Z directions backwards:
+
+```gdscript
+if local.z == 0:            neighbours.append(Vector3i.BACK)     # (0,0,1)  -- wrong
+if local.z == SIZE - 1:     neighbours.append(Vector3i.FORWARD)  # (0,0,-1) -- wrong
+```
+
+Godot's `Vector3i.FORWARD` is `(0,0,-1)` and `BACK` is `(0,0,1)`, so the negative-Z face marked
+the chunk *ahead* and the positive-Z face marked the chunk *behind*. The true neighbour was never
+marked dirty, so its shared face stayed culled (it was still hiding the old block) and no
+collision was generated there. The legacy `scripts/main.gd` equivalent uses the correct mapping
+(`local_z == 0 -> FORWARD`, `== SIZE-1 -> BACK`), which is what the fix restores.
+
+**Fix (one scope-limited change).** `_flag_neighbours` now maps the -Z border to
+`coord + Vector3i(0, 0, -1)` and the +Z border to `coord + Vector3i(0, 0, 1)`, using explicit
+vectors with a comment naming Godot's convention. Only invalidation changed; world data, face
+counts and the deterministic fingerprint are untouched.
+
+**Tests first (TDD).** New `scripts/tests/test_edit_rebuild.gd`, registered in `run_tests.gd`,
+verifying resulting geometry and collision rather than internal flags:
+
+- breaking a fully enclosed block exposes exactly its six neighbouring faces in the render mesh
+  **and** collision, the authoritative voxel is gone, and untouched adjacent blocks keep their
+  shared face culled (the 3x3x3 cube stays at 54 outer faces, plus a separate adjacent pair);
+- all six chunk-boundary directions invalidate and rebuild the neighbour's exposed face
+  (render + collision) -- this is the RED case for PZ/NZ;
+- the real threaded `ChunkStreamer` rebuilds the +Z neighbour after a boundary edit and its live
+  view mesh/collision contain the exposed face;
+- two consecutive edits with the first rebuild genuinely in flight both survive and the final
+  rendered geometry matches a fresh build from the authoritative voxels.
+
+RED before the fix: exit **1**, **13** failing assertions (all PZ/NZ boundary cases plus the
+streamed +Z and consecutive-edit cases). GREEN after the fix: exit **0**.
+
+`scripts/tests/run_integration.gd` gained **17** assertions (35 -> 52) that boot the real game
+scene, break an enclosed block and a +Z boundary block through the live threaded streamer, and
+assert the live chunk mesh/collision match a fresh voxel build, that the neighbour gained the
+exposed face, and that a physics ray through each hole is stopped at the remaining wall.
+
+**Visual evidence (windowed, scripted, `--time-rate=0`).** A two-layer stone-brick wall was
+built across the +Z boundary at `z=16` and a hole was broken in the front layer (chunk `z=0`),
+so the hole's back faces belong to the neighbour chunk (`z=1`):
+
+- before the fix `results/godot/m17-edit-bug-after.png`: the hole shows straight through the
+  terrain (distant landscape visible, neighbour faces missing);
+- after the fix `results/godot/m17-edit-fix-after.png`: the same break reveals a closed,
+  recessed stone chamber (every neighbour face present);
+- `m17-edit-{bug,fix}-before.png` are the intact-wall baselines.
+
+**Verification actually run (Godot 4.7.2-stable mono, Windows, this machine).**
+
+```powershell
+& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
+& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
+& $godot --headless --path prototypes/m17/godot -- --straight-to-game --quit-after=25
+```
+
+- Unit: exit **0**, `M17_TESTS_PASS 701 assertions`, stderr **0 bytes** (was 615).
+- Integration: exit **0**, `M17_INTEGRATION_PASS 52 assertions`, stderr **0 bytes** (was 35).
+- Headless smoke: exit **0**, `world_hash=441363152919021799`, `faces=166074`,
+  `faces_hash=6977993294663025454` -- unchanged, confirming the fix is invalidation-only.
+
+**Remaining limitations.**
+
+- A separate, transient race (an in-flight threaded mesh build captured before a chunk is
+  unloaded/reloaded can briefly keep stale culling at the loaded-region edge) was investigated
+  and left unchanged to keep this fix narrowly scoped; it resolves once the chunk is next
+  invalidated. It is not the reported defect.
+- The runtime/visual validation was scripted through the real scene (player-path physics rays
+  and windowed captures); no human keyboard/mouse play-through was performed.
+- `m17-edit-*` captures were produced by a temporary harness that was removed after the run;
+  the PNGs are retained as evidence.
+
+## M17 stabilization pass and hostile creatures (2026-10-18, continued)
+
+Uncommitted working-tree increment; the previous session's renderer/threading work and all
+other dirty files were preserved. No unrelated project file was touched.
+
+### 1. Day/night cycle finished and visually verified
+
+The previous session had left one capture outstanding (a true mid-twilight frame). The cycle
+was exercised across the whole clock in the real game with the deterministic capture harness
+(frozen clock, same seed 17017 and spawn vantage), and every frame was inspected:
+
+| capture (`results/godot/`) | clock | observation |
+| --- | --- | --- |
+| `day-cycle-000.png` | 06:00 Dawn | cool dawn light, terrain fully readable |
+| `day-cycle-025.png` | 12:00 Day | bright, correct textures, canopy shadows |
+| `day-cycle-050.png` | 18:00 Dusk | sun on the horizon, cold sky, still day-lit |
+| `day-cycle-055.png` | 19:12 Night | moonlit blue-grey terrain, readable |
+| `day-cycle-075.png` | 00:00 Night | moonlit, no pale horizon band, water dark |
+| `day-cycle-095.png` | 05:xx pre-dawn | night palette, slightly brighter fill |
+
+`tools/image_stats.py` confirms the curve is monotonic and bounded (mean RGB `83 149 89` at
+noon, `8-9 27-30 17` at night; crushed shadows 0 % at noon, ~21-25 % at night). The HUD clock
+text matches `DayNight` (`06:00`, `12:00`, `18:00 Dusk`, `19:12 Night`, `00:00`). A live-clock
+smoke (`--time-rate=120`, 10 s) advanced the clock in PLAYING (`time_of_day 0.28 → 0.3519`,
+`14:27 Day`), so the running game drives the cycle, not just the frozen captures.
+
+No defect was found: the sunset-to-night transition is quick (the twilight window is ~0.076 of
+a day ≈ 69 s at the default 900 s cycle) because the sun-elevation curve is steep near the
+horizon, and the existing tests pin the intended `daylight() = 0.5` at sunrise/sunset. It is a
+tuning choice, not a bug, and was left unchanged.
+
+### 2. Documented asynchronous chunk-rebuild race (FIXED)
+
+The race left open in the previous pass was reproduced and fixed with tests first. When a chunk
+with a mesh build in flight had its neighbour set change (a neighbour unloaded, loaded or
+regenerated), the finished build was captured against the *old* border. `_apply_result` then saw
+an unchanged `mesh_revision`, cleared `mesh_dirty`, and `_collect_mesh_batch` erased the queued
+rebuild, so the chunk kept a mesh (and collision) that culled against a chunk that no longer
+existed -- a hole at the edge of the loaded region until something else re-dirtied it.
+
+Fix in `scripts/game/chunk_streamer.gd`:
+
+- `_on_chunk_created` / `_on_chunk_removed` now call `mark_dirty()` on every loaded neighbour
+  instead of only queueing it, so the neighbour's `mesh_revision` advances and any build already
+  in flight for it is discarded as stale.
+- `_collect_mesh_batch` only erases the coordinate from the queue when the attached result was
+  current; a still-dirty coordinate stays queued and is rebuilt by the same frame's submit pass.
+
+TDD: the new `test_edit_rebuild.gd` case `_test_pending_build_survives_neighbour_unload` starts a
+build that culls against a neighbour, unloads that neighbour while the build is in flight, and
+asserts the edited chunk is rebuilt with the newly exposed face in both the render mesh and the
+collision. RED before the fix: exit 1, 3 failures (face count 11 vs 12, missing render face,
+missing collision face). GREEN after: exit 0.
+
+### 3. WASD reliability: the player moved while the game was paused (FIXED)
+
+`_pause()` set `player.can_interact = false` but never stopped the player's physics, so the body
+kept reading WASD and gravity behind the pause menu. Reproduced through the real controller:
+30 physics frames of forward input while paused moved the body **8.67 units**. Fix:
+`_pause()` now calls `player.set_physics_process(false)` and `_resume()` restores it (death and
+respawn already managed this). Integration assertions added: the player does not move while
+paused (0.000 units), pause disables physics, resume enables it.
+
+### 4. Texture corruption: no remaining defect reproduced
+
+The layer-sampling corruption fixed in the previous session is pinned by `test_textures.gd` and
+by the inspected before/after captures. A fresh runtime check was performed: a close-up wall of
+brick, glass, oak leaves, oak log, sand, stone, dirt and grass was rendered at noon with the HUD
+hidden (`results/godot/stabilize-textures.png`). Every tile matches its source texture; glass is
+transparent over the leaves behind it, leaves keep their cutout, no face samples a neighbouring
+array layer. No new code change was needed and none is claimed.
+
+### 5. FPS drops: measured, no regression; remaining hitch documented
+
+The race fix does not regress frame times. `run_perf.gd` (windowed, seed 17017) before → after:
+
+| scenario | p95 | p99 | 1 % low | stream-work frames |
+| --- | --- | --- | --- | --- |
+| settle | 17.16 → 17.20 ms | 21.90 → 21.44 ms | 34.7 → 31.5 fps | 402 → 404 |
+| walk | 8.17 → 8.62 ms | 17.19 → 17.12 ms | 49.3 → 49.5 fps | 1450 → 1439 |
+
+The remaining slow frames are the known, previously-documented ones: one ~49 ms first-PLAYING
+frame (present in every baseline) and 23-26 ms walk/settle frames whose time is chunk
+**generation** (~12-20 ms, still on the main thread) plus GPU first-use of newly attached
+geometry. Meshing itself is already off-thread. Threaded generation remains the roadmap item;
+no performance fix is claimed here.
+
+### 6. Phase C increment: hostile creatures, melee combat and loot
+
+One dark-dwelling hostile species ("grunt") with the same node-free-plus-node shape as the
+passive boar:
+
+- `scripts/core/hostile_creatures.gd` -- deterministic spawn on **live** ground (never on top of
+  the player, 12-32 blocks away), a night-only gate (`dark` flag), chase decisions that stop at
+  attack range and refuse mined/flooded ground, a pure attack cadence
+  (`ATTACK_DAMAGE 2.0`, `ATTACK_INTERVAL 1.2 s`), 4 HP, one Coal drop and bounded pruning.
+- `scripts/game/hostile_creature.gd` -- primitive dark humanoid with glowing eyes, a capsule
+  collider on layer 2, voxel-following movement and `attacked_player` / `killed` signals.
+- `game.gd` -- owns a transient night population (cap 4, spawn every 2 s while `clock.is_night()`
+  or `--spawn-hostiles`), retires it a few per frame at dawn, routes contact damage through the
+  existing `_apply_impact_damage` (invulnerability window + camera shake), and shares the
+  existing LMB creature attack path. `--hostile-feedback-capture` renders a controlled grunt for
+  evidence. Hostiles are deliberately not saved, exactly like the boars.
+- `voxel_player.gd` -- the LMB creature ray now also recognizes `hostile_creature`.
+
+Tests: new `test_hostiles.gd` (38 assertions: darkness gate, determinism, cap/distance, live
+ground, chase bounds and hole refusal, attack cadence, damage/drop-once, bounded prune) and 8
+new integration assertions (contact damage 20→18 through the real node, LMB targeting, four
+player hits kill it, loot added, and the night clock spawning through the game's own spawner).
+
+Visual evidence: `results/godot/hostile-creature.png` (windowed, `--time=0.75`,
+`--hostile-feedback-capture`) shows the grunt in the forest at midnight with "Grunt hurt (3/4)".
+
+### 7. Test-runner hardening
+
+A module that fails to parse used to be returned by `load()` as a non-instantiable GDScript;
+`(script as GDScript).new()` then aborted the whole runner and hung the suite until the watchdog.
+`run_tests.gd` now checks `can_instantiate()` and reports a normal failure, so a broken module
+can never hang the run. (Found while doing the hostile TDD RED step.)
+
+### Verification actually run (Godot 4.7.2-stable mono, Windows)
+
+- Unit: `M17_TESTS_PASS 745 assertions`, exit 0, stderr 0 bytes.
+- Integration: `M17_INTEGRATION_PASS 60 assertions`, exit 0, stderr 0 bytes.
+- Smoke: exit 0, `world_hash=441363152919021799`, `faces=166074`,
+  `faces_hash=6977993294663025454` (unchanged).
+- Perf: `perf-settle-racefix.json`, `perf-walk-racefix.json` written and compared above.
+
+### Remaining limitations
+
+- Chunk generation is still synchronous; the residual 23-26 ms streaming frames are documented
+  and thread-generation is the next engineering step.
+- Hostile combat is melee-only with one drop and one species; no weapons/durability, ranged
+  attack, varied loot or daytime spawning. Weather, exploration incentives and Phase D
+  (structures/NPCs) remain unchecked.
+- Validation is scripted through the real scene (physics, rays and windowed captures); no human
+  keyboard/mouse play-through was performed.

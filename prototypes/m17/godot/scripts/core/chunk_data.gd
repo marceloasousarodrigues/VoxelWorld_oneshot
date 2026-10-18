@@ -26,6 +26,10 @@ var solid_cells := 0
 # Derived state.
 var mesh_dirty := true
 var collision_dirty := true
+## Bumped on every `mark_dirty()`.  The streamer records it when it snapshots a
+## chunk and only clears `mesh_dirty` when no newer edit happened while the mesh
+## was being built off the main thread.
+var mesh_revision := 0
 
 
 func _init(chunk_coord: Vector3i = Vector3i.ZERO) -> void:
@@ -74,6 +78,7 @@ func is_source(index: int) -> bool:
 func mark_dirty() -> void:
 	mesh_dirty = true
 	collision_dirty = true
+	mesh_revision += 1
 
 
 func highest_solid_at(local_x: int, local_z: int) -> int:

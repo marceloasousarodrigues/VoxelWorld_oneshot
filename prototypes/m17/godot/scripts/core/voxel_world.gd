@@ -281,10 +281,13 @@ func _flag_neighbours(world_position: Vector3i) -> void:
 		neighbours.append(Vector3i.DOWN)
 	if local.y == SIZE - 1:
 		neighbours.append(Vector3i.UP)
+	# Godot's FORWARD is -Z and BACK is +Z; the negative Z face therefore touches
+	# the chunk at `coord - Z`, not `coord + Z`.  Getting these two backwards
+	# leaves the neighbour's newly exposed face (and its collision) missing.
 	if local.z == 0:
-		neighbours.append(Vector3i.BACK)
+		neighbours.append(Vector3i(0, 0, -1))
 	if local.z == SIZE - 1:
-		neighbours.append(Vector3i.FORWARD)
+		neighbours.append(Vector3i(0, 0, 1))
 	for offset: Vector3i in neighbours:
 		var neighbour: ChunkData = chunks.get(coord + offset, null)
 		if neighbour != null:

@@ -104,9 +104,43 @@ static func padded_index(x: int, y: int, z: int) -> int:
 	return (x + 1) + PAD * ((z + 1) + PAD * (y + 1))
 
 
-## Builds the mesh.  Returns
-## `{"mesh": ArrayMesh?, "collision": ArrayMesh?, "faces": int, "ms": float}`.
+## Builds the mesh from live world data.  Kept for tests and the synchronous
+## path: the streamer instead captures an input snapshot on the main thread and
+## runs `build_input` on a worker thread.
+## Returns `{"mesh": ArrayMesh?, "collision": ArrayMesh?, "faces": int, "ms": float}`.
 func build(chunk: ChunkData, world: VoxelWorld) -> Dictionary:
+	return build_input(capture_input(chunk, world))
+
+
+## Main-thread snapshot of everything the mesh build reads: the chunk's own
+## voxels and the six neighbour chunks' data.  `build_input` never touches the
+## live world, so it is safe to run off the main thread while the player edits.
+func capture_input(chunk: ChunkData, world: VoxelWorld) -> Dictionary:
+	var neighbour_blocks: Array = []
+	var neighbour_fluid: Array = []
+	for face in 6:
+		var neighbour: ChunkData = world.chunks.get(chunk.coord + FACE_NORMAL_I[face], null)
+		if neighbour == null:
+			neighbour_blocks.append(PackedByteArray())
+			neighbour_fluid.append(PackedByteArray())
+		else:
+			neighbour_blocks.append(neighbour.blocks.duplicate())
+			neighbour_fluid.append(neighbour.fluid.duplicate())
+	return {
+		"coord": chunk.coord,
+		"blocks": chunk.blocks.duplicate(),
+		"fluid": chunk.fluid.duplicate(),
+		"biomes": chunk.biomes.duplicate(),
+		"neighbour_blocks": neighbour_blocks,
+		"neighbour_fluid": neighbour_fluid,
+	}
+
+
+## Pure mesh build from a `capture_input` snapshot.  Deterministic for a given
+## snapshot and touches no engine resources, so it is safe to run on a worker
+## thread; the caller turns the returned arrays into meshes with `assemble`.
+## Returns `{"surfaces": Array, "collision": Dictionary, "faces": int, "ms": float}`.
+func build_geometry(input: Dictionary) -> Dictionary:
 	var started := Time.get_ticks_usec()
 	for surface: Dictionary in _buffers:
 		surface["vertex"].clear()
@@ -119,39 +153,78 @@ func build(chunk: ChunkData, world: VoxelWorld) -> Dictionary:
 	_collision["vertex"].clear()
 	_collision["index"].clear()
 
-	_fill_padded(chunk, world)
+	_fill_padded(input)
 	var after_fill := Time.get_ticks_usec()
-	_emit_faces(chunk, world)
+	_emit_faces(input)
 	var after_emit := Time.get_ticks_usec()
 
-	var mesh := _build_array_mesh(SOLID_LAYERS)
-	var water_mesh := _build_array_mesh([BlockDB.LAYER_WATER])
-	var collision: ArrayMesh = null
-	if not _collision["index"].is_empty():
-		collision = ArrayMesh.new()
-		var arrays: Array = []
-		arrays.resize(Mesh.ARRAY_MAX)
-		arrays[Mesh.ARRAY_VERTEX] = _collision["vertex"]
-		arrays[Mesh.ARRAY_INDEX] = _collision["index"]
-		collision.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	# The mesher reuses its scratch buffers between builds, so the result has to
+	# own copies before the next build can start.
+	var surfaces: Array = []
+	for layer: int in BlockDB.LAYER_COUNT:
+		var surface: Dictionary = _buffers[layer]
+		surfaces.append({
+			"vertex": (surface["vertex"] as PackedVector3Array).duplicate(),
+			"normal": (surface["normal"] as PackedVector3Array).duplicate(),
+			"uv": (surface["uv"] as PackedVector2Array).duplicate(),
+			"uv2": (surface["uv2"] as PackedVector2Array).duplicate(),
+			"color": (surface["color"] as PackedColorArray).duplicate(),
+			"index": (surface["index"] as PackedInt32Array).duplicate(),
+			"faces": int(surface["faces"]),
+		})
 
 	var elapsed := float(Time.get_ticks_usec() - started) / 1000.0
 	stats["builds"] = int(stats["builds"]) + 1
 	stats["ms"] = float(stats["ms"]) + elapsed
 	stats["fill_ms"] = float(stats["fill_ms"]) + float(after_fill - started) / 1000.0
 	stats["emit_ms"] = float(stats["emit_ms"]) + float(after_emit - after_fill) / 1000.0
-	stats["assemble_ms"] = float(stats["assemble_ms"]) + float(Time.get_ticks_usec() - after_emit) / 1000.0
 	var faces := 0
-	for surface: Dictionary in _buffers:
+	for surface: Dictionary in surfaces:
 		faces += int(surface["faces"])
 	stats["faces"] = int(stats["faces"]) + faces
 	stats["triangles"] = int(stats["triangles"]) + faces * 2
-	return {"mesh": mesh, "water_mesh": water_mesh, "collision": collision, "faces": faces, "ms": elapsed}
+	return {
+		"surfaces": surfaces,
+		"collision": {
+			"vertex": (_collision["vertex"] as PackedVector3Array).duplicate(),
+			"index": (_collision["index"] as PackedInt32Array).duplicate(),
+		},
+		"faces": faces,
+		"ms": elapsed,
+	}
 
 
-func _fill_padded(chunk: ChunkData, world: VoxelWorld) -> void:
-	var blocks := chunk.blocks
-	var fluid := chunk.fluid
+## Turns a `build_geometry` result into engine meshes.  Runs on the main thread
+## because it creates ArrayMesh and collision-shape resources.
+func assemble(geometry: Dictionary) -> Dictionary:
+	var started := Time.get_ticks_usec()
+	var surfaces: Array = geometry["surfaces"]
+	var mesh := _assemble_array_mesh(surfaces, SOLID_LAYERS)
+	var water_mesh := _assemble_array_mesh(surfaces, [BlockDB.LAYER_WATER])
+	var collision_arrays: Dictionary = geometry["collision"]
+	var collision: ArrayMesh = null
+	if not (collision_arrays["index"] as PackedInt32Array).is_empty():
+		collision = ArrayMesh.new()
+		var arrays: Array = []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = collision_arrays["vertex"]
+		arrays[Mesh.ARRAY_INDEX] = collision_arrays["index"]
+		collision.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	stats["assemble_ms"] = float(stats["assemble_ms"]) + float(Time.get_ticks_usec() - started) / 1000.0
+	return {
+		"mesh": mesh, "water_mesh": water_mesh, "collision": collision,
+		"faces": int(geometry["faces"]), "ms": float(geometry["ms"]),
+	}
+
+
+## Combined path used by tests and the synchronous build: capture, build, assemble.
+func build_input(input: Dictionary) -> Dictionary:
+	return assemble(build_geometry(input))
+
+
+func _fill_padded(input: Dictionary) -> void:
+	var blocks: PackedByteArray = input["blocks"]
+	var fluid: PackedByteArray = input["fluid"]
 	# The padded buffer is reused between builds and only the interior plus the
 	# slabs of *loaded* neighbours get overwritten below.  It must be reset first:
 	# a slab whose neighbour is not loaded has to read as AIR (which only ever
@@ -167,13 +240,11 @@ func _fill_padded(chunk: ChunkData, world: VoxelWorld) -> void:
 			for local_x in ChunkData.SIZE:
 				_padded[padded_row + local_x] = blocks[row + local_x]
 				_padded_fluid[padded_row + local_x] = fluid[row + local_x]
-	var coord := chunk.coord
 	for face in 6:
-		var offset: Vector3i = FACE_NORMAL_I[face]
-		var neighbour: ChunkData = world.chunks.get(coord + offset, null)
-		if neighbour == null:
+		var neighbour_blocks: PackedByteArray = input["neighbour_blocks"][face]
+		if neighbour_blocks.is_empty():
 			continue
-		_fill_padded_slab(neighbour.blocks, neighbour.fluid, face)
+		_fill_padded_slab(neighbour_blocks, input["neighbour_fluid"][face], face)
 
 
 func _fill_padded_slab(neighbour_blocks: PackedByteArray, neighbour_fluid: PackedByteArray, face: int) -> void:
@@ -222,11 +293,12 @@ func _fill_padded_slab(neighbour_blocks: PackedByteArray, neighbour_fluid: Packe
 					_padded_fluid[target] = neighbour_fluid[index]
 
 
-func _emit_faces(chunk: ChunkData, world: VoxelWorld) -> void:
-	var blocks := chunk.blocks
-	var origin := VoxelWorld.chunk_origin(chunk.coord)
+func _emit_faces(input: Dictionary) -> void:
+	var blocks: PackedByteArray = input["blocks"]
+	var fluid: PackedByteArray = input["fluid"]
+	var origin := VoxelWorld.chunk_origin(input["coord"])
 	var base := Vector3(origin)
-	var biomes := chunk.biomes
+	var biomes: PackedByteArray = input["biomes"]
 	# Hoist the definition tables and the padded buffer: this loop runs 4096 times
 	# per chunk and every static member access or helper call is measurable.
 	var padded := _padded
@@ -260,7 +332,7 @@ func _emit_faces(chunk: ChunkData, world: VoxelWorld) -> void:
 		var surface_height := 1.0
 		if is_water:
 			var above := int(padded[padded_centre + stride[BlockDB.FACE_PY]])
-			var level := int(chunk.fluid[index])
+			var level := int(fluid[index])
 			surface_height = 1.0 if above == block_id else WATER_RENDER_HEIGHT * clampf(float(level) / 8.0, 0.125, 1.0)
 		var is_liquid := liquid[block_id] == 1
 		var culls := cull_same[block_id] == 1
@@ -399,10 +471,10 @@ func _emit_deco(block_id: int, centre: Vector3, tint: Color) -> void:
 		surface["faces"] = int(surface["faces"]) + 1
 
 
-func _build_array_mesh(layers: Array) -> ArrayMesh:
+func _assemble_array_mesh(surfaces: Array, layers: Array) -> ArrayMesh:
 	var mesh: ArrayMesh = null
 	for layer: int in layers:
-		var surface: Dictionary = _buffers[layer]
+		var surface: Dictionary = surfaces[layer]
 		var indices: PackedInt32Array = surface["index"]
 		if indices.is_empty():
 			continue

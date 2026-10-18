@@ -1,0 +1,571 @@
+{
+ "note": "aggregated from perf-*.json; raw per-frame reports are regenerable with run_perf.gd",
+ "scenarios": {
+  "perf-cross-after": {
+   "scenario": "cross",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 153,
+     "avg_ms": 13.32,
+     "p95_ms": 19.93,
+     "p99_ms": 21.44,
+     "worst_ms": 49.99,
+     "one_percent_low_fps": 27.5,
+     "wall_s": 2.04,
+     "generated": 212,
+     "meshed": 92,
+     "frames_over_20ms": 8
+    },
+    "settle": {
+     "frames": 615,
+     "avg_ms": 5.15,
+     "p95_ms": 16.64,
+     "p99_ms": 20.07,
+     "worst_ms": 44.5,
+     "one_percent_low_fps": 34.0,
+     "wall_s": 3.12,
+     "generated": 180,
+     "meshed": 300,
+     "frames_over_20ms": 7
+    },
+    "cross": {
+     "frames": 32470,
+     "avg_ms": 1.39,
+     "p95_ms": 1.79,
+     "p99_ms": 7.49,
+     "worst_ms": 26.59,
+     "one_percent_low_fps": 65.9,
+     "wall_s": 45.0,
+     "generated": 503,
+     "meshed": 1300,
+     "frames_over_20ms": 31
+    }
+   }
+  },
+  "perf-cross-before": {
+   "scenario": "cross",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 144,
+     "avg_ms": 17.47,
+     "p95_ms": 30.93,
+     "p99_ms": 37.99,
+     "worst_ms": 50.49,
+     "one_percent_low_fps": 22.6,
+     "wall_s": 2.52,
+     "generated": 201,
+     "meshed": 101,
+     "frames_over_20ms": 59
+    },
+    "settle": {
+     "frames": 326,
+     "avg_ms": 13.56,
+     "p95_ms": 27.41,
+     "p99_ms": 33.08,
+     "worst_ms": 49.52,
+     "one_percent_low_fps": 25.8,
+     "wall_s": 4.37,
+     "generated": 191,
+     "meshed": 291,
+     "frames_over_20ms": 106
+    },
+    "cross": {
+     "frames": 26714,
+     "avg_ms": 1.68,
+     "p95_ms": 1.98,
+     "p99_ms": 20.59,
+     "worst_ms": 39.19,
+     "one_percent_low_fps": 39.1,
+     "wall_s": 45.0,
+     "generated": 492,
+     "meshed": 1168,
+     "frames_over_20ms": 284
+    }
+   }
+  },
+  "perf-foliage-after": {
+   "scenario": "foliage",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 155,
+     "avg_ms": 13.33,
+     "p95_ms": 18.88,
+     "p99_ms": 21.16,
+     "worst_ms": 50.7,
+     "one_percent_low_fps": 27.8,
+     "wall_s": 2.07,
+     "generated": 212,
+     "meshed": 93,
+     "frames_over_20ms": 4
+    },
+    "settle": {
+     "frames": 606,
+     "avg_ms": 5.2,
+     "p95_ms": 16.52,
+     "p99_ms": 22.15,
+     "worst_ms": 43.38,
+     "one_percent_low_fps": 35.1,
+     "wall_s": 3.11,
+     "generated": 180,
+     "meshed": 299,
+     "frames_over_20ms": 11
+    },
+    "foliage": {
+     "frames": 11165,
+     "avg_ms": 1.07,
+     "p95_ms": 1.56,
+     "p99_ms": 1.91,
+     "worst_ms": 3.93,
+     "one_percent_low_fps": 461.2,
+     "wall_s": 12.0,
+     "generated": 0,
+     "meshed": 0,
+     "frames_over_20ms": 0
+    }
+   }
+  },
+  "perf-foliage-before": {
+   "scenario": "foliage",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 144,
+     "avg_ms": 17.59,
+     "p95_ms": 31.32,
+     "p99_ms": 37.73,
+     "worst_ms": 52.48,
+     "one_percent_low_fps": 22.2,
+     "wall_s": 2.53,
+     "generated": 201,
+     "meshed": 101,
+     "frames_over_20ms": 56
+    },
+    "settle": {
+     "frames": 326,
+     "avg_ms": 13.45,
+     "p95_ms": 28.55,
+     "p99_ms": 33.86,
+     "worst_ms": 49.9,
+     "one_percent_low_fps": 25.3,
+     "wall_s": 4.34,
+     "generated": 191,
+     "meshed": 291,
+     "frames_over_20ms": 109
+    },
+    "foliage": {
+     "frames": 10868,
+     "avg_ms": 1.1,
+     "p95_ms": 1.6,
+     "p99_ms": 1.98,
+     "worst_ms": 12.74,
+     "one_percent_low_fps": 424.6,
+     "wall_s": 12.0,
+     "generated": 0,
+     "meshed": 0,
+     "frames_over_20ms": 0
+    }
+   }
+  },
+  "perf-look-after": {
+   "scenario": "look",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 154,
+     "avg_ms": 13.29,
+     "p95_ms": 19.32,
+     "p99_ms": 23.0,
+     "worst_ms": 49.7,
+     "one_percent_low_fps": 27.4,
+     "wall_s": 2.05,
+     "generated": 212,
+     "meshed": 92,
+     "frames_over_20ms": 6
+    },
+    "settle": {
+     "frames": 635,
+     "avg_ms": 5.02,
+     "p95_ms": 16.93,
+     "p99_ms": 22.42,
+     "worst_ms": 43.17,
+     "one_percent_low_fps": 31.6,
+     "wall_s": 3.15,
+     "generated": 180,
+     "meshed": 300,
+     "frames_over_20ms": 9
+    },
+    "look": {
+     "frames": 7986,
+     "avg_ms": 1.25,
+     "p95_ms": 1.68,
+     "p99_ms": 2.07,
+     "worst_ms": 13.62,
+     "one_percent_low_fps": 403.1,
+     "wall_s": 10.0,
+     "generated": 0,
+     "meshed": 0,
+     "frames_over_20ms": 0
+    }
+   }
+  },
+  "perf-look-before": {
+   "scenario": "look",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 145,
+     "avg_ms": 17.27,
+     "p95_ms": 30.57,
+     "p99_ms": 37.73,
+     "worst_ms": 51.1,
+     "one_percent_low_fps": 22.5,
+     "wall_s": 2.5,
+     "generated": 201,
+     "meshed": 101,
+     "frames_over_20ms": 56
+    },
+    "settle": {
+     "frames": 325,
+     "avg_ms": 13.41,
+     "p95_ms": 27.69,
+     "p99_ms": 34.44,
+     "worst_ms": 52.23,
+     "one_percent_low_fps": 24.9,
+     "wall_s": 4.31,
+     "generated": 191,
+     "meshed": 291,
+     "frames_over_20ms": 108
+    },
+    "look": {
+     "frames": 7992,
+     "avg_ms": 1.25,
+     "p95_ms": 1.72,
+     "p99_ms": 2.01,
+     "worst_ms": 12.81,
+     "one_percent_low_fps": 438.0,
+     "wall_s": 10.0,
+     "generated": 0,
+     "meshed": 0,
+     "frames_over_20ms": 0
+    }
+   }
+  },
+  "perf-settle-after": {
+   "scenario": "settle",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 154,
+     "avg_ms": 13.39,
+     "p95_ms": 19.93,
+     "p99_ms": 23.27,
+     "worst_ms": 49.52,
+     "one_percent_low_fps": 27.4,
+     "wall_s": 2.06,
+     "generated": 212,
+     "meshed": 95,
+     "frames_over_20ms": 8
+    },
+    "settle": {
+     "frames": 778,
+     "avg_ms": 4.3,
+     "p95_ms": 16.18,
+     "p99_ms": 20.66,
+     "worst_ms": 44.22,
+     "one_percent_low_fps": 37.7,
+     "wall_s": 3.3,
+     "generated": 180,
+     "meshed": 297,
+     "frames_over_20ms": 10
+    }
+   }
+  },
+  "perf-settle-after2": {
+   "scenario": "settle",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 153,
+     "avg_ms": 13.17,
+     "p95_ms": 19.57,
+     "p99_ms": 20.72,
+     "worst_ms": 49.05,
+     "one_percent_low_fps": 28.4,
+     "wall_s": 2.02,
+     "generated": 212,
+     "meshed": 92,
+     "frames_over_20ms": 5
+    },
+    "settle": {
+     "frames": 821,
+     "avg_ms": 4.04,
+     "p95_ms": 15.8,
+     "p99_ms": 19.8,
+     "worst_ms": 43.48,
+     "one_percent_low_fps": 37.0,
+     "wall_s": 3.27,
+     "generated": 180,
+     "meshed": 300,
+     "frames_over_20ms": 8
+    }
+   }
+  },
+  "perf-settle-before": {
+   "scenario": "settle",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 143,
+     "avg_ms": 17.34,
+     "p95_ms": 31.08,
+     "p99_ms": 37.78,
+     "worst_ms": 49.55,
+     "one_percent_low_fps": 22.9,
+     "wall_s": 2.48,
+     "generated": 200,
+     "meshed": 101,
+     "frames_over_20ms": 54
+    },
+    "settle": {
+     "frames": 506,
+     "avg_ms": 8.9,
+     "p95_ms": 26.45,
+     "p99_ms": 29.89,
+     "worst_ms": 51.41,
+     "one_percent_low_fps": 28.0,
+     "wall_s": 4.45,
+     "generated": 192,
+     "meshed": 291,
+     "frames_over_20ms": 109
+    }
+   }
+  },
+  "perf-walk-after": {
+   "scenario": "walk",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 154,
+     "avg_ms": 13.27,
+     "p95_ms": 18.85,
+     "p99_ms": 21.42,
+     "worst_ms": 50.45,
+     "one_percent_low_fps": 27.2,
+     "wall_s": 2.04,
+     "generated": 212,
+     "meshed": 92,
+     "frames_over_20ms": 6
+    },
+    "settle": {
+     "frames": 629,
+     "avg_ms": 4.99,
+     "p95_ms": 16.74,
+     "p99_ms": 23.47,
+     "worst_ms": 43.38,
+     "one_percent_low_fps": 35.9,
+     "wall_s": 3.09,
+     "generated": 180,
+     "meshed": 300,
+     "frames_over_20ms": 15
+    },
+    "walk": {
+     "frames": 11325,
+     "avg_ms": 1.77,
+     "p95_ms": 4.7,
+     "p99_ms": 16.3,
+     "worst_ms": 28.13,
+     "one_percent_low_fps": 53.5,
+     "wall_s": 20.0,
+     "generated": 503,
+     "meshed": 1307,
+     "frames_over_20ms": 27
+    }
+   }
+  },
+  "perf-walk-after2": {
+   "scenario": "walk",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 153,
+     "avg_ms": 13.34,
+     "p95_ms": 19.91,
+     "p99_ms": 21.27,
+     "worst_ms": 49.9,
+     "one_percent_low_fps": 27.3,
+     "wall_s": 2.04,
+     "generated": 212,
+     "meshed": 92,
+     "frames_over_20ms": 8
+    },
+    "settle": {
+     "frames": 622,
+     "avg_ms": 5.05,
+     "p95_ms": 16.9,
+     "p99_ms": 20.28,
+     "worst_ms": 46.44,
+     "one_percent_low_fps": 34.8,
+     "wall_s": 3.1,
+     "generated": 180,
+     "meshed": 300,
+     "frames_over_20ms": 8
+    },
+    "walk": {
+     "frames": 11469,
+     "avg_ms": 1.74,
+     "p95_ms": 4.53,
+     "p99_ms": 16.32,
+     "worst_ms": 25.93,
+     "one_percent_low_fps": 53.4,
+     "wall_s": 20.0,
+     "generated": 503,
+     "meshed": 1305,
+     "frames_over_20ms": 29
+    }
+   }
+  },
+  "perf-walk-before": {
+   "scenario": "walk",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 144,
+     "avg_ms": 17.49,
+     "p95_ms": 30.68,
+     "p99_ms": 38.03,
+     "worst_ms": 49.28,
+     "one_percent_low_fps": 22.9,
+     "wall_s": 2.52,
+     "generated": 200,
+     "meshed": 101,
+     "frames_over_20ms": 56
+    },
+    "settle": {
+     "frames": 323,
+     "avg_ms": 13.48,
+     "p95_ms": 27.9,
+     "p99_ms": 32.13,
+     "worst_ms": 52.88,
+     "one_percent_low_fps": 24.9,
+     "wall_s": 4.3,
+     "generated": 192,
+     "meshed": 291,
+     "frames_over_20ms": 108
+    },
+    "walk": {
+     "frames": 5726,
+     "avg_ms": 3.49,
+     "p95_ms": 19.84,
+     "p99_ms": 28.46,
+     "worst_ms": 39.71,
+     "one_percent_low_fps": 31.9,
+     "wall_s": 20.0,
+     "generated": 492,
+     "meshed": 1164,
+     "frames_over_20ms": 283
+    }
+   }
+  },
+  "perf-water-after": {
+   "scenario": "water",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 154,
+     "avg_ms": 13.32,
+     "p95_ms": 20.08,
+     "p99_ms": 21.71,
+     "worst_ms": 50.05,
+     "one_percent_low_fps": 27.8,
+     "wall_s": 2.05,
+     "generated": 212,
+     "meshed": 93,
+     "frames_over_20ms": 9
+    },
+    "settle": {
+     "frames": 636,
+     "avg_ms": 5.02,
+     "p95_ms": 16.66,
+     "p99_ms": 22.24,
+     "worst_ms": 43.64,
+     "one_percent_low_fps": 32.7,
+     "wall_s": 3.15,
+     "generated": 180,
+     "meshed": 299,
+     "frames_over_20ms": 10
+    },
+    "water": {
+     "frames": 9666,
+     "avg_ms": 1.24,
+     "p95_ms": 1.74,
+     "p99_ms": 2.08,
+     "worst_ms": 4.26,
+     "one_percent_low_fps": 428.6,
+     "wall_s": 12.0,
+     "generated": 0,
+     "meshed": 0,
+     "frames_over_20ms": 0
+    }
+   }
+  },
+  "perf-water-before": {
+   "scenario": "water",
+   "seed": 17017,
+   "render_distance": 4,
+   "phases": {
+    "boot": {
+     "frames": 143,
+     "avg_ms": 17.46,
+     "p95_ms": 31.15,
+     "p99_ms": 38.53,
+     "worst_ms": 50.33,
+     "one_percent_low_fps": 22.5,
+     "wall_s": 2.5,
+     "generated": 200,
+     "meshed": 101,
+     "frames_over_20ms": 55
+    },
+    "settle": {
+     "frames": 323,
+     "avg_ms": 13.56,
+     "p95_ms": 28.64,
+     "p99_ms": 33.3,
+     "worst_ms": 53.38,
+     "one_percent_low_fps": 23.9,
+     "wall_s": 4.33,
+     "generated": 192,
+     "meshed": 291,
+     "frames_over_20ms": 108
+    },
+    "water": {
+     "frames": 9316,
+     "avg_ms": 1.29,
+     "p95_ms": 1.83,
+     "p99_ms": 2.23,
+     "worst_ms": 3.33,
+     "one_percent_low_fps": 406.3,
+     "wall_s": 12.0,
+     "generated": 0,
+     "meshed": 0,
+     "frames_over_20ms": 0
+    }
+   }
+  }
+ }
+}

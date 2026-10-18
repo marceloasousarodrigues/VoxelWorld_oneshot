@@ -3,7 +3,7 @@
 	"evidence": "offscreen Godot viewport PNG written from inside the running game scene; not a human visual inspection",
 	"eye": [
 		8.5,
-		71.6700057983398,
+		71.6203002929688,
 		8.5
 	],
 	"fluid": {
@@ -13,7 +13,7 @@
 		"pending": 0,
 		"seeded_chunks": 0
 	},
-	"fps_last_sample": 42.1056107790364,
+	"fps_last_sample": 40.9583223471167,
 	"godot_version": {
 		"build": "official",
 		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
@@ -26,40 +26,42 @@
 		"timestamp": 0
 	},
 	"look": [
-		38.0,
+		0.0,
 		-12.0
 	],
 	"mesher": {
-		"assemble_ms": 76.2680000000001,
+		"assemble_ms": 73.996,
 		"builds": 392,
-		"emit_ms": 1794.718,
+		"emit_ms": 1965.479,
 		"faces": 166074,
-		"fill_ms": 345.055,
-		"ms": 2215.129,
+		"fill_ms": 341.895,
+		"ms": 2316.053,
 		"triangles": 332148
 	},
 	"player": [
 		8.5,
-		70.0500030517578,
+		70.0002975463867,
 		8.5
 	],
 	"seed": 17017,
 	"streaming": {
+		"attach_ms_total": 2390.249,
 		"center": "(0, 4, 0)",
 		"faces": 166074,
 		"faces_hash": 6977993294663025454,
 		"generated": 392,
-		"generation_ms_total": 2852.543,
+		"generation_ms_total": 2938.951,
 		"loaded": 392,
-		"mesh_ms_total": 2215.129,
+		"mesh_ms_total": 2316.053,
 		"meshed": 392,
+		"meshes_in_flight": 0,
 		"queued": 0,
 		"render_radius": 4,
 		"unloaded": 0,
 		"vertical_radius": 4,
 		"views": 392,
 		"wanted": 392,
-		"worst_mesh_ms": 13.931
+		"worst_mesh_ms": 20.593
 	},
 	"window_size": [
 		1280,

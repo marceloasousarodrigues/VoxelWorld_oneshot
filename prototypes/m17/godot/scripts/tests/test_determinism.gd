@@ -28,13 +28,14 @@ func _setup() -> void:
 ## Streams one world to completion around a fixed focus point with the given
 ## per-frame budgets.  The streamer is attached to the scene root so it behaves
 ## exactly like the streamer in the running game.
-func _stream(radius: int, vertical: int, generation_budget: int, mesh_budget: int) -> ChunkStreamer:
+func _stream(radius: int, vertical: int, generation_budget: int, mesh_budget: int, threaded: bool = true) -> ChunkStreamer:
 	var world := VoxelWorld.new(17017)
 	var streamer := ChunkStreamer.new()
 	streamer.render_radius = radius
 	streamer.vertical_radius = vertical
 	streamer.generation_budget = generation_budget
 	streamer.mesh_budget = mesh_budget
+	streamer.threaded_meshing = threaded
 	streamer.focus_node = null
 	streamer.setup(world, _mesher)
 	# The engine must not drive the streamer itself: this test owns the frame loop.
@@ -44,9 +45,14 @@ func _stream(radius: int, vertical: int, generation_budget: int, mesh_budget: in
 	streamer.position = Vector3(8.5, 70.0, 8.5)
 	streamer.focus_at(streamer.position)
 	var guard := 0
-	while not streamer.is_settled() and guard < 4000:
+	while not streamer.is_settled() and guard < 30000:
 		streamer._process(0.016)
 		guard += 1
+		if threaded:
+			# A tight synchronous loop would starve the mesh worker, so give it a
+			# slice.  The real game calls `_process` once per frame, which already
+			# gives the worker the whole frame.
+			OS.delay_usec(200)
 	return streamer
 
 
@@ -94,6 +100,15 @@ func run(h: TestHarness) -> void:
 	h.eq(face_total, int(fine_report["faces"]), "the reported face total matches the per-chunk geometry")
 	h.eq(int(fine_report["unloaded"]), 0, "nothing was unloaded while filling a fixed focus")
 
+	# 1b) Off-thread meshing must produce exactly the same geometry as the
+	# synchronous path: the worker only ever sees a frozen input snapshot.
+	var threaded := _stream(3, 2, 8, 3, true)
+	var threaded_report := threaded.report()
+	h.eq(int(threaded_report["faces_hash"]), int(coarse_report["faces_hash"]),
+		"threaded meshing matches the synchronous geometry hash (%d vs %d faces)" % [int(threaded_report["faces"]), int(coarse_report["faces"])])
+	h.eq(int(threaded_report["faces"]), int(coarse_report["faces"]), "threaded meshing emits the same face total")
+	h.eq(int(threaded_report["meshes_in_flight"]), 0, "no mesh build is left in flight once settled")
+
 	# 3) Clearing the streamer releases geometry but keeps the world usable.
 	coarse.clear()
 	h.eq(coarse.loaded_count(), 0, "clear() drops every loaded chunk")
@@ -127,4 +142,5 @@ func run(h: TestHarness) -> void:
 	h.eq(fine.get_child_count(), int(fine_report["wanted"]), "every wanted chunk owns one view node")
 	_release(fine)
 	_release(coarse)
+	_release(threaded)
 	h.finish()

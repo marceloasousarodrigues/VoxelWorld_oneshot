@@ -31,6 +31,13 @@ const FACE_OFFSETS: Array[Vector3i] = [
 @export var generation_millisecond_budget := 6.0
 @export var mesh_budget := 3
 @export var mesh_millisecond_budget := 8.0
+## When true the expensive mesh build runs on a dedicated worker thread; the main
+## thread only snapshots the input (when a chunk's neighbours are final) and
+## attaches finished meshes.  Set false for the synchronous path used by tests.
+@export var threaded_meshing := true
+## Upper bound on submitted-but-unattached mesh jobs.  The worker builds one at a
+## time, so this only bounds the queue depth.
+@export var max_mesh_in_flight := 4
 ## When false a fresh chunk streams without generating collision geometry.
 @export var collision_enabled := true
 
@@ -43,7 +50,7 @@ var mesher: ChunkMesher
 var views: Dictionary = {}
 var stats := {
 	"generated": 0, "unloaded": 0, "meshed": 0, "faces": 0,
-	"mesh_ms": 0.0, "generation_ms": 0.0, "worst_mesh_ms": 0.0,
+	"mesh_ms": 0.0, "generation_ms": 0.0, "worst_mesh_ms": 0.0, "attach_ms": 0.0,
 	"center": Vector3i.ZERO, "wanted": 0, "queued": 0,
 }
 
@@ -58,14 +65,72 @@ var _queue: Dictionary = {}
 var _meshed: Dictionary = {}
 var _center := Vector3i(2147483647, 2147483647, 2147483647)
 var _active := false
+## Dedicated mesh worker: one job at a time, results handed back under a mutex.
+var _worker_thread: Thread = null
+var _worker_mesher: ChunkMesher = null
+var _worker_mutex := Mutex.new()
+var _worker_signal := Semaphore.new()
+var _worker_stopping := false
+var _job_queue: Array = []
+var _results: Array = []
+var _pending: Dictionary = {}
 
 
 func setup(target_world: VoxelWorld, chunk_mesher: ChunkMesher) -> void:
 	world = target_world
 	mesher = chunk_mesher
+	_start_worker()
 	world.chunk_created.connect(_on_chunk_created)
 	world.chunk_removed.connect(_on_chunk_removed)
 	_active = true
+
+
+func _start_worker() -> void:
+	if not threaded_meshing or mesher == null or _worker_thread != null:
+		return
+	_worker_mesher = ChunkMesher.new(mesher.library, mesher.materials)
+	_worker_stopping = false
+	_worker_thread = Thread.new()
+	_worker_thread.start(_worker_loop)
+
+
+func _exit_tree() -> void:
+	# The worker must never outlive the streamer (it reads a snapshot and its own
+	# mesher, but ownership has to be explicit for a clean teardown).
+	_shutdown_worker()
+
+
+## Stops the worker and waits for it, so no build is running afterwards.
+func _shutdown_worker() -> void:
+	if _worker_thread == null:
+		return
+	_worker_mutex.lock()
+	_worker_stopping = true
+	_worker_mutex.unlock()
+	_worker_signal.post()
+	_worker_thread.wait_to_finish()
+	_worker_thread = null
+	_worker_mesher = null
+	_job_queue.clear()
+	_results.clear()
+	_pending.clear()
+
+
+func _worker_loop() -> void:
+	while true:
+		_worker_signal.wait()
+		_worker_mutex.lock()
+		if _worker_stopping and _job_queue.is_empty():
+			_worker_mutex.unlock()
+			return
+		var job: Variant = _job_queue.pop_front() if not _job_queue.is_empty() else null
+		_worker_mutex.unlock()
+		if job == null:
+			continue
+		job["result"] = _worker_mesher.build_geometry(job["input"])
+		_worker_mutex.lock()
+		_results.append(job)
+		_worker_mutex.unlock()
 
 
 func _ready() -> void:
@@ -88,7 +153,7 @@ static func chunk_of(world_position: Vector3) -> Vector3i:
 func is_settled() -> bool:
 	if not _active:
 		return false
-	return _wanted.size() > 0 and _queue.is_empty() and world.chunks.size() >= _wanted.size()
+	return _wanted.size() > 0 and _queue.is_empty() and _pending.is_empty() and world.chunks.size() >= _wanted.size()
 
 
 ## True once every chunk within `radius` of the given position has been meshed at
@@ -110,6 +175,17 @@ func is_area_ready(world_position: Vector3, radius: int) -> bool:
 
 func loaded_count() -> int:
 	return world.chunks.size() if world != null else 0
+
+
+## Statistics of the mesher that actually built the geometry.  With threaded
+## meshing the builds happen on the worker mesher, so the main mesher's counters
+## stay at zero; reports should read this instead.  The main mesher's
+## `assemble_ms` (ArrayMesh upload + collision shape) is merged in.
+func mesher_stats() -> Dictionary:
+	var merged: Dictionary = (_worker_mesher.stats if _worker_mesher != null else mesher.stats).duplicate()
+	if mesher != null:
+		merged["assemble_ms"] = float(mesher.stats.get("assemble_ms", 0.0))
+	return merged
 
 
 func wanted_count() -> int:
@@ -134,6 +210,8 @@ func focus_at(world_position: Vector3) -> void:
 
 ## Drops every rendered view and every logical chunk.
 func clear() -> void:
+	_shutdown_worker()
+	_start_worker()
 	for coord: Vector3i in views.keys():
 		_destroy_view(coord)
 	for coord: Vector3i in world.chunks.keys():
@@ -152,6 +230,7 @@ func clear() -> void:
 func _process(_delta: float) -> void:
 	if not _active:
 		return
+	var frame_started := Time.get_ticks_usec()
 	var focus: Vector3 = _focus_position()
 	var center := chunk_of(focus)
 	if center != _center:
@@ -163,7 +242,12 @@ func _process(_delta: float) -> void:
 	stats["wanted"] = _wanted.size()
 	stats["queued"] = _queue.size()
 	_generate_batch()
-	_mesh_batch()
+	if threaded_meshing:
+		# Collect first so a free worker is available for this frame's submits.
+		_collect_mesh_batch()
+		_submit_mesh_batch(frame_started)
+	else:
+		_mesh_batch()
 
 
 ## Overridable hook so the game can stream around the player.
@@ -275,6 +359,8 @@ func _neighbours_final(coord: Vector3i) -> bool:
 
 
 func _mesh_batch() -> int:
+	# Synchronous path: unit tests and `threaded_meshing = false` call this
+	# directly so a single `_process` step meshes in place.
 	if _queue.is_empty():
 		return 0
 	var candidates: Array = _queue.keys()
@@ -299,12 +385,94 @@ func _mesh_batch() -> int:
 	return done
 
 
-## Rebuilds one chunk's render + collision geometry from logical data.
+## Rebuilds one chunk's render + collision geometry synchronously.
 func rebuild(coord: Vector3i) -> void:
 	var chunk: ChunkData = world.get_chunk(coord)
 	if chunk == null:
 		return
-	var result: Dictionary = mesher.build(chunk, world)
+	_apply_result(coord, mesher.build_geometry(mesher.capture_input(chunk, world)), chunk.mesh_revision)
+
+
+# --- threaded meshing -----------------------------------------------------
+#
+# ChunkMesher.build_input is several milliseconds of GDScript per chunk.  Running
+# it inside the frame was the reported frame-time spike, so the main thread only
+# captures an immutable input snapshot per candidate and submits it to a worker
+# thread; finished meshes are attached when they complete.  The submission is
+# still frame-budgeted (`mesh_budget`, `mesh_millisecond_budget`) and bounded by
+# `max_mesh_in_flight`, and every worker owns its own ChunkMesher so concurrent
+# builds never share scratch buffers.
+
+## Submits queued chunks whose neighbours are final to the worker queue.
+func _submit_mesh_batch(frame_started: int) -> void:
+	if _queue.is_empty() or _worker_thread == null:
+		return
+	if _pending.size() >= maxi(1, max_mesh_in_flight):
+		return
+	var candidates: Array = _queue.keys()
+	candidates.sort_custom(_nearer_first)
+	var submitted := 0
+	for coord: Vector3i in candidates:
+		if submitted >= maxi(0, mesh_budget):
+			break
+		if _pending.size() >= maxi(1, max_mesh_in_flight):
+			break
+		if not world.has_chunk(coord):
+			_queue.erase(coord)
+			continue
+		if not _neighbours_final(coord):
+			continue
+		# A coord with a build already in flight must not be submitted twice: the
+		# dirty scan re-adds it every frame until its result is attached.
+		if _pending.has(coord):
+			continue
+		var chunk: ChunkData = world.get_chunk(coord)
+		var input := _worker_mesher.capture_input(chunk, world)
+		_worker_mutex.lock()
+		_job_queue.append({"coord": coord, "input": input, "result": {}, "revision": chunk.mesh_revision})
+		_worker_mutex.unlock()
+		_worker_signal.post()
+		_pending[coord] = true
+		_queue.erase(coord)
+		submitted += 1
+		if float(Time.get_ticks_usec() - frame_started) / 1000.0 >= mesh_millisecond_budget:
+			break
+
+
+## Attaches every finished worker mesh.  Main thread only (touches the scene).
+func _collect_mesh_batch() -> int:
+	if _results.is_empty():
+		return 0
+	_worker_mutex.lock()
+	var finished: Array = _results
+	_results = []
+	_worker_mutex.unlock()
+	for job: Dictionary in finished:
+		var coord: Vector3i = job["coord"]
+		_pending.erase(coord)
+		if not world.has_chunk(coord):
+			_queue.erase(coord)
+			continue
+		_apply_result(coord, job["result"], int(job.get("revision", -1)))
+		# Keep the coordinate queued when the build turned out to be stale (a
+		# newer edit, or a change to its neighbour set, landed while it was in
+		# flight).  The dirty scan already re-added it this frame, so leaving it
+		# queued lets the submit pass below rebuild it immediately.
+		var chunk: ChunkData = world.get_chunk(coord)
+		if chunk == null or not chunk.mesh_dirty:
+			_queue.erase(coord)
+	return finished.size()
+
+
+## Builds the view nodes for a finished geometry and records its statistics.
+## `revision` is the chunk's dirty revision captured at submit time: the mesh
+## stays dirty when a newer edit landed while the worker was building, so the
+## edit is not lost.
+func _apply_result(coord: Vector3i, geometry: Dictionary, revision: int = -1) -> void:
+	var attach_started := Time.get_ticks_usec()
+	# The worker produced plain arrays; turn them into meshes here, on the main
+	# thread (engine resource creation).
+	var result: Dictionary = mesher.assemble(geometry)
 	var view := _ensure_view(coord)
 	_clear_view(view)
 	var mesh_ms := float(result.get("ms", 0.0))
@@ -338,10 +506,16 @@ func rebuild(coord: Vector3i) -> void:
 			shape.shape = collision.create_trimesh_shape()
 			body.add_child(shape)
 			view.add_child(body)
-	chunk.mesh_dirty = false
-	chunk.collision_dirty = false
+	var chunk: ChunkData = world.get_chunk(coord)
+	if chunk != null:
+		# Only clear the dirty flag when no edit happened while the mesh was being
+		# built; otherwise the chunk must be submitted again.
+		if revision < 0 or chunk.mesh_revision <= revision:
+			chunk.mesh_dirty = false
+			chunk.collision_dirty = false
 	_meshed[coord] = true
 	face_counts[coord] = int(result.get("faces", 0))
+	stats["attach_ms"] = float(stats["attach_ms"]) + float(Time.get_ticks_usec() - attach_started) / 1000.0
 
 
 # --- views ---------------------------------------------------------------
@@ -380,22 +554,30 @@ func _destroy_view(coord: Vector3i) -> void:
 
 func _on_chunk_created(coord: Vector3i) -> void:
 	_queue[coord] = true
-	# The new chunk exposes a border to every loaded neighbour, so their meshes
-	# are stale too.
+	# The new chunk changes the border every loaded neighbour culls against, so
+	# their meshes are stale too.  `mark_dirty()` (not just a queue entry) also
+	# bumps their revision, which discards any build already in flight for them:
+	# a build snapshotted before this chunk loaded would otherwise attach with
+	# the old border and clear the dirty flag.
 	for offset: Vector3i in FACE_OFFSETS:
-		var neighbour := coord + offset
-		if world.has_chunk(neighbour):
-			_queue[neighbour] = true
+		var neighbour: ChunkData = world.chunks.get(coord + offset, null)
+		if neighbour != null:
+			neighbour.mark_dirty()
+			_queue[coord + offset] = true
 
 
 func _on_chunk_removed(coord: Vector3i) -> void:
 	_destroy_view(coord)
 	_queue.erase(coord)
 	_meshed.erase(coord)
+	# Symmetric to creation: the removed chunk's border disappears, so every
+	# loaded neighbour must be rebuilt, and an in-flight build that still culled
+	# against the removed chunk has to be discarded.
 	for offset: Vector3i in FACE_OFFSETS:
-		var neighbour := coord + offset
-		if world.has_chunk(neighbour):
-			_queue[neighbour] = true
+		var neighbour: ChunkData = world.chunks.get(coord + offset, null)
+		if neighbour != null:
+			neighbour.mark_dirty()
+			_queue[coord + offset] = true
 
 
 # --- diagnostics ---------------------------------------------------------
@@ -416,6 +598,8 @@ func report() -> Dictionary:
 		"faces": int(stats["faces"]),
 		"faces_hash": faces_fingerprint(),
 		"mesh_ms_total": float(stats["mesh_ms"]),
+		"attach_ms_total": float(stats["attach_ms"]),
+		"meshes_in_flight": _pending.size(),
 		"worst_mesh_ms": float(stats["worst_mesh_ms"]),
 		"generation_ms_total": float(stats["generation_ms"]),
 	}

@@ -38,8 +38,14 @@ var creature_model
 var creature_nodes: Dictionary = {}
 var creature_root: Node3D
 var _creature_spawn_timer := 0.0
+var hostile_model
+var hostile_nodes: Dictionary = {}
+var hostile_root: Node3D
+var _hostile_spawn_timer := 0.0
 const CreatureNode = preload("res://scripts/game/passive_creature.gd")
 const CreatureModel = preload("res://scripts/core/passive_creatures.gd")
+const HostileNode = preload("res://scripts/game/hostile_creature.gd")
+const HostileModel = preload("res://scripts/core/hostile_creatures.gd")
 
 ## Seconds of breath left; drained while the player's head is under water.
 var breath := Survival.MAX_BREATH
@@ -76,6 +82,8 @@ var _options := {
 	"fly": false,
 	"open_crafting": false,
 	"creature_feedback_capture": false,
+	"spawn_hostiles": false,
+	"hostile_feedback_capture": false,
 	"sun_angle": Vector2(-48.0, -132.0),
 	"shots": [],
 	"quit_after": 0.0,
@@ -368,6 +376,11 @@ func _parse_arguments() -> void:
 				_options["open_crafting"] = true
 			"--creature-feedback-capture":
 				_options["creature_feedback_capture"] = true
+			"--spawn-hostiles":
+				_options["spawn_hostiles"] = true
+			"--hostile-feedback-capture":
+				_options["hostile_feedback_capture"] = true
+				_options["spawn_hostiles"] = true
 			"--hide-hud":
 				_options["hide_hud"] = true
 			"--fly":
@@ -461,6 +474,14 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	creature_root = Node3D.new()
 	creature_root.name = "PassiveCreatures"
 	add_child(creature_root)
+	hostile_model = HostileModel.new(seed_value)
+	hostile_nodes.clear()
+	_hostile_spawn_timer = 0.0
+	if is_instance_valid(hostile_root):
+		hostile_root.queue_free()
+	hostile_root = Node3D.new()
+	hostile_root.name = "HostileCreatures"
+	add_child(hostile_root)
 	fluid = FluidSim.new(world)
 	fluid.max_cells_per_tick = int(_options["fluid_cells_per_tick"])
 	fluid.max_milliseconds_per_tick = float(_options["fluid_budget_ms"])
@@ -595,6 +616,8 @@ func _enter_play(area_ready: bool) -> void:
 	_apply_hurt_option()
 	if bool(_options["creature_feedback_capture"]):
 		_spawn_creature_feedback_capture()
+	if bool(_options["hostile_feedback_capture"]):
+		_spawn_hostile_feedback_capture()
 
 
 ## Reproducible capture aid: place one legal boar in front of the player and
@@ -642,6 +665,51 @@ func _spawn_creature_feedback_capture() -> void:
 	hud.flash("Boar hurt (%d/%d)" % [CreatureModel.HIT_POINTS - 1, CreatureModel.HIT_POINTS], 30.0)
 
 
+## Reproducible capture aid: place one hostile grunt in front of the player,
+## hold it still and show the same hurt feedback a real player hit produces.
+func _spawn_hostile_feedback_capture() -> void:
+	for hostile: Node in hostile_nodes.values():
+		if is_instance_valid(hostile):
+			hostile.queue_free()
+	hostile_nodes.clear()
+	hostile_model.states.clear()
+	var chosen := Vector3i.ZERO
+	var found := false
+	var offsets := [0, -1, 1, -2, 2, -3, 3, -4, 4]
+	for distance in range(4, 9):
+		for offset: int in offsets:
+			var x := floori(player.global_position.x) + offset
+			var z := floori(player.global_position.z) - distance
+			var height := world.generator.height_at(x, z)
+			var foot := Vector3i(x, height + 1, z)
+			var head := foot + Vector3i(0, 1, 0)
+			if height <= WorldGen.SEA_LEVEL or not world.is_loaded(foot) or not world.is_loaded(head):
+				continue
+			if world.get_block(foot) == BlockDB.AIR and world.get_block(head) == BlockDB.AIR:
+				chosen = foot
+				found = true
+				break
+		if found:
+			break
+	if not found:
+		return
+	var hostile_state := {"id": 900002, "species": "grunt", "key": "capture-grunt",
+		"position": Vector3(chosen) + Vector3(0.5, 0.0, 0.5), "health": HostileModel.HIT_POINTS,
+		"alive": true}
+	hostile_model.states["capture-grunt"] = hostile_state.duplicate(true)
+	var hostile = HostileNode.new()
+	hostile.configure(hostile_state, world, player)
+	hostile_root.add_child(hostile)
+	hostile.set_physics_process(false)
+	hostile.rotation.y = PI
+	hostile_nodes[str(hostile_state.key)] = hostile
+	hostile.killed.connect(_on_hostile_killed)
+	player.look_yaw(0.0)
+	player.look_pitch(-12.0)
+	_on_creature_attacked(hostile)
+	hud.flash("Grunt hurt (%d/%d)" % [HostileModel.HIT_POINTS - 1, HostileModel.HIT_POINTS], 30.0)
+
+
 ## `--health=N` sets the starting health by dealing the difference, so a lethal
 ## value reaches the same death path as any other damage.
 func _apply_health_option() -> void:
@@ -672,6 +740,9 @@ func _pause() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.can_interact = false
 	player.velocity = Vector3.ZERO
+	# Freeze the body: the physics loop keeps reading WASD while the menu is up,
+	# so without this the player keeps moving (and falling) behind the pause menu.
+	player.set_physics_process(false)
 	menu.set_save_callback(_save_now)
 	menu.set_title_callback(_return_to_title)
 	menu.show_pause()
@@ -682,6 +753,7 @@ func _resume() -> void:
 		return
 	state = State.PLAYING
 	player.can_interact = true
+	player.set_physics_process(true)
 	menu.hide_menu()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -740,6 +812,7 @@ func _process(delta: float) -> void:
 				fluid.tick()
 			_update_survival(delta)
 			_update_creatures(delta)
+			_update_hostiles(delta)
 			_update_status()
 			if not bool(_options["capture"]) and _autosave_timer >= AUTOSAVE_SECONDS:
 				_autosave_timer = 0.0
@@ -1025,7 +1098,14 @@ func _update_creatures(delta: float) -> void:
 
 
 func _on_creature_attacked(creature) -> void:
-	if not is_instance_valid(creature) or not creature.is_in_group("passive_creature"):
+	if not is_instance_valid(creature):
+		return
+	if creature.is_in_group("hostile_creature"):
+		var hostile_drops: int = creature.apply_hit(1)
+		if hostile_drops <= 0:
+			hud.flash("Grunt hurt (%d/%d)" % [int(creature.state.health), HostileModel.HIT_POINTS], 1.0)
+		return
+	if not creature.is_in_group("passive_creature"):
 		return
 	var drops: int = creature.apply_hit(1)
 	if drops <= 0:
@@ -1039,6 +1119,78 @@ func _on_creature_killed(creature, drop_count: int = 1) -> void:
 	creature_nodes.erase(key)
 	creature.queue_free()
 	hud.flash("Boar down  +%d Oak Log%s" % [drop_count - leftover, "" if leftover == 0 else " (inventory full)"], 2.0)
+	hud.refresh()
+
+
+## Hostiles are a night/darkness threat: they spawn while the clock says night
+## (or when `--spawn-hostiles` forces them for a capture/integration run) and are
+## cleared at dawn.  Like the passive boars their state is transient (never
+## saved); on load the night spawner re-seeds a fresh population.
+func _hostiles_active() -> bool:
+	if bool(_options["spawn_hostiles"]):
+		return true
+	return clock != null and clock.is_night()
+
+
+func _update_hostiles(delta: float) -> void:
+	if hostile_model == null or hostile_root == null or player == null:
+		return
+	if not _hostiles_active():
+		# Dawn: retire the night's population a few per frame so it never stalls.
+		var retired := 0
+		for key: Variant in hostile_nodes.keys():
+			if retired >= 2:
+				break
+			var node: Node = hostile_nodes[key]
+			hostile_nodes.erase(key)
+			hostile_model.states.erase(str(key))
+			if is_instance_valid(node):
+				node.queue_free()
+			retired += 1
+		return
+	_hostile_spawn_timer -= delta
+	if _hostile_spawn_timer <= 0.0:
+		_hostile_spawn_timer = 2.0
+		var focus := Vector3i(floori(player.global_position.x), 0, floori(player.global_position.z))
+		var remaining: int = HostileModel.CAP - hostile_nodes.size()
+		if remaining > 0:
+			for state: Dictionary in hostile_model.spawn_candidates(focus, world, remaining, true):
+				var hostile = HostileNode.new()
+				hostile.configure(state, world, player)
+				hostile_root.add_child(hostile)
+				hostile_nodes[str(state.key)] = hostile
+				hostile.killed.connect(_on_hostile_killed)
+				hostile.attacked_player.connect(_on_hostile_attacked_player)
+	for key: Variant in hostile_nodes.keys():
+		var living: Node = hostile_nodes[key]
+		if is_instance_valid(living) and bool(living.state.get("alive", false)):
+			var updated: Dictionary = hostile_model.states.get(str(key), {}).duplicate(true)
+			updated["position"] = living.global_position
+			hostile_model.states[str(key)] = updated
+	var player_flat := Vector3(player.global_position.x, 0.0, player.global_position.z)
+	for key: Variant in hostile_model.prune(player_flat, 4):
+		var hostile: Node = hostile_nodes.get(str(key))
+		if hostile != null:
+			hostile_nodes.erase(str(key))
+			hostile.queue_free()
+
+
+func _on_hostile_attacked_player(amount: float) -> void:
+	if state != State.PLAYING:
+		return
+	_apply_impact_damage(amount, "grunt")
+
+
+func _on_hostile_killed(creature, drop_count: int = 1) -> void:
+	var leftover: int = inventory.add(HostileModel.DROP_ID, drop_count)
+	var key := str(creature.state.get("key", ""))
+	hostile_model.states.erase(key)
+	hostile_nodes.erase(key)
+	creature.queue_free()
+	hud.flash("Grunt down  +%d %s%s" % [
+		drop_count - leftover, BlockDB.name_of(HostileModel.DROP_ID),
+		"" if leftover == 0 else " (inventory full)",
+	], 2.0)
 	hud.refresh()
 
 
@@ -1184,7 +1336,7 @@ func _smoke_summary() -> void:
 		"clock_text": clock.clock_text() if clock != null else "",
 		"phase": clock.phase_name() if clock != null else "",
 		"fluid": fluid.stats() if fluid != null else {},
-		"mesher": mesher.stats,
+		"mesher": streamer.mesher_stats() if streamer != null else mesher.stats,
 		"edits": world.edits.size() if world != null else -1,
 		"inventory_used_slots": inventory.used_slots(),
 		"health": health.to_dictionary() if health != null else {},
@@ -1232,7 +1384,7 @@ func _write_capture_metrics() -> String:
 		"world_hash": world.fingerprint(),
 		"streaming": streamer.report(),
 		"fluid": fluid.stats(),
-		"mesher": mesher.stats,
+		"mesher": streamer.mesher_stats() if streamer != null else mesher.stats,
 	}, "\t") + "\n")
 	file.close()
 	return path

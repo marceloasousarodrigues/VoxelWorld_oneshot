@@ -18,6 +18,7 @@ const MODULES := [
 	"res://scripts/tests/test_mesh_winding.gd",
 	"res://scripts/tests/test_fixture_contract.gd",
 	"res://scripts/tests/test_edits.gd",
+	"res://scripts/tests/test_edit_rebuild.gd",
 	"res://scripts/tests/test_persistence.gd",
 	"res://scripts/tests/test_raycast.gd",
 	"res://scripts/tests/test_fluid.gd",
@@ -27,6 +28,7 @@ const MODULES := [
 	"res://scripts/tests/test_health.gd",
 	"res://scripts/tests/test_survival.gd",
 	"res://scripts/tests/test_creatures.gd",
+	"res://scripts/tests/test_hostiles.gd",
 ]
 
 const WATCHDOG_SECONDS := 300.0
@@ -53,7 +55,10 @@ func _on_watchdog() -> void:
 func _run_all() -> void:
 	for path: String in MODULES:
 		var script: Variant = load(path)
-		if script == null:
+		# A module that fails to parse comes back as a non-instantiable GDScript;
+		# calling `new()` on it aborts the whole runner and hangs the suite, so
+		# detect it here and report a normal failure instead.
+		if script == null or not (script is GDScript) or not (script as GDScript).can_instantiate():
 			harness.check(false, "loads %s" % path)
 			continue
 		var module: Variant = (script as GDScript).new()

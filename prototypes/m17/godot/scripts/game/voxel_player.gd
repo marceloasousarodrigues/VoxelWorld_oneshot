@@ -338,7 +338,7 @@ func _creature_in_front() -> Node3D:
 	if hit.is_empty():
 		return null
 	var body: Object = hit.get("collider")
-	if body is Node3D and body.is_in_group("passive_creature"):
+	if body is Node3D and (body.is_in_group("passive_creature") or body.is_in_group("hostile_creature")):
 		var block_distance := reach
 		if _hit.get("hit", false):
 			block_distance = float(_hit.get("distance", reach))

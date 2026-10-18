@@ -181,4 +181,29 @@ func run(h: TestHarness) -> void:
 	var fresh_result := fresh.build(lone, world10b)
 	h.eq(int(reused_result["faces"]), int(fresh_result["faces"]), "a reused mesher matches a freshly created one")
 
+	# 11) Threaded meshing correctness: `capture_input` must freeze the voxel
+	# state.  The streamer snapshots on the main thread and builds on a worker, so
+	# an edit made after the snapshot must not change that snapshot's geometry --
+	# and the next snapshot must see it.
+	var world11 := VoxelWorld.new(17017)
+	var snapshot_chunk := _make_chunk(world11, Vector3i.ZERO)
+	snapshot_chunk.blocks[ChunkData.cell_index(15, 8, 8)] = BlockDB.STONE
+	var snapshot_neighbour := _make_chunk(world11, Vector3i(1, 0, 0))
+	snapshot_neighbour.blocks[ChunkData.cell_index(0, 8, 8)] = BlockDB.STONE
+	var frozen := _mesher.capture_input(snapshot_chunk, world11)
+	var frozen_faces := int(_mesher.build_geometry(frozen)["faces"])
+	h.eq(frozen_faces, 5, "the snapshot build culls against the loaded neighbour")
+	# Remove the neighbour block after the snapshot was taken.
+	snapshot_neighbour.blocks[ChunkData.cell_index(0, 8, 8)] = BlockDB.AIR
+	var frozen_again := int(_mesher.build_geometry(frozen)["faces"])
+	h.eq(frozen_again, frozen_faces, "an edit after the snapshot does not change the snapshot's geometry")
+	var recaptured := int(_mesher.build_geometry(_mesher.capture_input(snapshot_chunk, world11))["faces"])
+	h.eq(recaptured, 6, "a fresh snapshot reflects the edit")
+
+	# The chunk's dirty revision advances with every mark_dirty(), which is what
+	# lets the streamer refuse to clear a dirty flag when an edit raced the build.
+	var revision_before := snapshot_chunk.mesh_revision
+	snapshot_chunk.mark_dirty()
+	h.eq(snapshot_chunk.mesh_revision, revision_before + 1, "mark_dirty advances the mesh revision")
+
 	h.finish()

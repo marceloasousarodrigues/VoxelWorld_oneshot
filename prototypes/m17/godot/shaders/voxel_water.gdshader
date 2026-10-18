@@ -19,8 +19,8 @@ void fragment() {
 	float frame_a = mod(floor(cycle), frames);
 	float frame_b = mod(frame_a + 1.0, frames);
 	float blend = fract(cycle);
-	vec4 tex_a = texture(atlas, vec3(UV, UV2.x + frame_a + 0.5));
-	vec4 tex_b = texture(atlas, vec3(UV, UV2.x + frame_b + 0.5));
+	vec4 tex_a = texture(atlas, vec3(UV, UV2.x + frame_a));
+	vec4 tex_b = texture(atlas, vec3(UV, UV2.x + frame_b));
 	vec4 tex = mix(tex_a, tex_b, blend);
 
 	// Gentle geometric ripple so the surface is not a perfectly flat plane.

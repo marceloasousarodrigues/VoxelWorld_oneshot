@@ -46,6 +46,12 @@ Run the automated tests (headless; the exit code is the result):
 & 'C:\Godot\...\Godot_v4.7.2-stable_mono_win64.exe' --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
 ```
 
+Measure frame times (windowed; one scripted activity per run, JSON report in `results/godot/`):
+
+```powershell
+& 'C:\Godot\...\Godot_v4.7.2-stable_mono_win64.exe' --path prototypes/m17/godot --script res://scripts/tests/run_perf.gd -- --straight-to-game --seed=17017 --scenario=walk --label=perf-walk
+```
+
 The `...` is a recorded local machine path, not a portable one; set `$godot` to
 another Godot 4.7.2 executable location if needed.
 
