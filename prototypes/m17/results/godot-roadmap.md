@@ -15,7 +15,8 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 - [x] Godot project that opens, runs and renders (4.7.2-stable, windowed run verified)
 - [x] 16³ chunk storage, logical voxels authoritative, chunk↔world coordinate conversion with floor semantics
-- [x] Central block definitions (34 blocks: terrain, ores, wood, glass, decoration, crafting table)
+- [x] Central block definitions (35 blocks: terrain, ores, wood, glass, decoration, crafting
+      table, furnace) + `core/item_db.gd` for the 26 non-block items (2026-10-19)
 - [x] Face-culled chunk meshing, five render layers, no per-voxel engine objects
 - [x] Deterministic terrain generation (seed 17017): height field, biomes, caves, ores, trees, decoration
 - [x] Chunk streaming with per-frame generation/meshing budgets and neighbour-aware culling
@@ -30,7 +31,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (785 assertions, verified 2026-10-18) + runtime integration harness (68 assertions, verified 2026-10-18) + headless determinism fingerprint
+- [x] Automated test suite (973 assertions, verified 2026-10-19) + runtime integration harness (109 assertions, verified 2026-10-19) + headless determinism fingerprint
 - [x] Frame-time benchmark harness (`scripts/tests/run_perf.gd`): six scripted activities, per-frame
       timings and streaming counters, before/after JSON reports (verified 2026-10-16)
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
@@ -44,14 +45,34 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [ ] Full inventory interface (only the hotbar row is visible; no drag & drop, no overflow page)
 - [x] Collecting drops into the inventory (mining adds the drop; inventory-full feedback)
 - [x] Placing items consumes them
-- [x] Crafting recipes (data model + rules + tests) — `core/crafting.gd`: 5 fixed
-      recipes, atomic `craft` (AIR output rejected, capacity judged against the
-      post-consumption state), `can_craft`/`available_recipes`; all five inputs are
-      obtainable (clay generation fixed — see backlog)
-- [x] Crafting interface — `game/crafting_panel.gd`, opened with C; `crafting-ui.png` inspected
-- [ ] Tools, tool tiers and durability
-- [x] Health and damage (fall damage and drowning; hostile damage is Phase C)
-- [ ] Hunger / survival settings
+- [x] Crafting recipes — `core/crafting.gd`: a **32-recipe, data-driven catalogue** in five
+      categories (Basics, Building, Tools, Smelting, Food) with shaped *and* shapeless
+      definitions, ingredient/output quantities, station requirements and a fuel cost.
+      `craft`/`craft_many` are atomic across a batch; `missing`, `craftable_count` and
+      `can_craft_times` back the interface; `match_grid` implements real shape semantics. A
+      meta-test proves every recipe output is reachable from mining drops and other recipes
+      (2026-10-19)
+- [x] Crafting interface — `game/crafting_panel.gd`, opened with C: category filters, a
+      scrollable list, output icons, have/need ingredient counts, per-row status
+      (ready / missing x more Y / needs Crafting Table / inventory full) and Craft + x5
+      buttons disabled exactly when the craft cannot happen. `crafting-panel.png` and
+      `crafting-panel-tools.png` inspected (2026-10-19)
+- [x] Crafting stations: the recipe's `station` must exist **in the world**
+      (`Crafting.best_station` scans loaded voxels for a crafting table or furnace); a furnace
+      also serves table recipes, and smelting needs the furnace plus one coal of fuel per
+      craft. New `FURNACE` block id 34 (2026-10-19)
+- [x] Items, tools, tool tiers and durability (2026-10-19) — new `core/item_db.gd` extends the
+      id space with 26 non-block items (materials, food, 16 tools in four tiers) while keeping
+      block ids unchanged; `Inventory` gained per-slot durability, `wear()` that clears broken
+      tools, and a real per-slot stack cap of 64. Crafted tools work in gameplay: tiers set
+      mining speed, durability is spent per block and per creature hit, and the HUD shows a
+      durability bar plus `20 / 60` readout
+- [x] Mining hardness and tool requirements (2026-10-19) — holding the break action mines
+      progressively (`ItemDB.break_seconds`, shown on a HUD progress bar); an inadequate tool
+      still breaks the block but yields nothing and the HUD says which tool was needed; ores
+      drop lumps/crystals instead of ore blocks, and leaves/grass have deterministic chance
+      drops (apple, wheat)
+- [ ] Hunger / survival settings (food items, values and the golden apple already exist)
 - [x] Environmental feedback (hurt flash, bounded reversible camera shake; particles not included)
 - [x] Death and respawn (death screen and valid spawn; no creature combat in this increment)
 - [x] Configuration screen (render distance, sensitivity, vsync) — `core/game_settings.gd`
@@ -99,8 +120,11 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       world seed and current player neighborhood on load; dead-creature drops are placed
       directly in the existing persistent inventory. Save format remains VERSION 3.
 - [ ] Weather or environmental variation
-- [ ] Exploration incentives: caves, ores and landmarks are generated but unrewarded
-      (no ore→tool progression yet)
+- [x] Exploration incentives (2026-10-19): ores now feed real progression — coal fuels the
+      furnace, iron ore (needs a stone pickaxe) smelts into ingots for iron tools, gold lumps
+      make the golden apple and diamond ore (needs an iron pickaxe) makes the top tool tier.
+      The reward for caving is a strictly better tool chain, and `test_crafting.gd` proves
+      every recipe is reachable from mining alone
 
 ## Phase D — Structures and settlements
 
@@ -171,6 +195,13 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       report, and gained `--sync-generation` for single-machine A/B runs
 - [x] Save format versioning: VERSION 3 accepts versions 1..3 (adds health and breath;
       v1/v2 fields remain optional); unknown versions are still quarantined
+- [x] Inventory payload validation was not atomic (2026-10-19): `Inventory.from_dictionary`
+      wrote entries as it validated them, so a malformed save could half-apply the hotbar, and
+      `SaveManager.apply` mutated the world before it noticed. Both now validate into scratch
+      storage first and reject the payload before any live state changes; `durability` rides in
+      the same dictionary with no format break
+- [x] Dead `BlockDB.placeable` array removed (2026-10-19): placement is now decided by
+      `ItemDB.is_block()`/`placeable_block()`, which knows about non-block items
 - [x] Remove temporary diagnostics (`M17_OPTIONS`, `_probe_surface.gd`)
 - [x] Passive creatures decided ground from the procedural generator (`height_at` /
       `_surface_block`) instead of the live world, so a mined ground block still looked

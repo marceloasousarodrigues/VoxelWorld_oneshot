@@ -164,6 +164,24 @@
       "source": "voxel_textures/MINETEST_TEXTURES/default_dry_grass.png",
       "width": 128
     },
+    "furnace_side": {
+      "description": "FURNACE side",
+      "file": "default_furnace_side.png",
+      "height": 128,
+      "key": "furnace_side",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_furnace_side.png",
+      "width": 128
+    },
+    "furnace_top": {
+      "description": "FURNACE top/bottom",
+      "file": "default_furnace_top.png",
+      "height": 128,
+      "key": "furnace_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_furnace_top.png",
+      "width": 128
+    },
     "glass": {
       "description": "GLASS",
       "file": "default_glass.png",
@@ -217,6 +235,231 @@
       "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
       "source": "voxel_textures/MINETEST_TEXTURES/default_mineral_iron.png",
       "width": 128
+    },
+    "item_apple": {
+      "description": "APPLE icon",
+      "file": "default_apple.png",
+      "height": 64,
+      "key": "item_apple",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_apple.png",
+      "width": 64
+    },
+    "item_bread": {
+      "description": "BREAD icon",
+      "file": "farming_bread.png",
+      "height": 64,
+      "key": "item_bread",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/farming_bread.png",
+      "width": 64
+    },
+    "item_coal": {
+      "description": "COAL icon",
+      "file": "default_coal_lump.png",
+      "height": 64,
+      "key": "item_coal",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_coal_lump.png",
+      "width": 64
+    },
+    "item_diamond": {
+      "description": "DIAMOND icon",
+      "file": "default_diamond.png",
+      "height": 64,
+      "key": "item_diamond",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_diamond.png",
+      "width": 64
+    },
+    "item_gold_lump": {
+      "description": "GOLD_LUMP icon",
+      "file": "default_gold_lump.png",
+      "height": 64,
+      "key": "item_gold_lump",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_gold_lump.png",
+      "width": 64
+    },
+    "item_iron_ingot": {
+      "description": "IRON_INGOT icon (the pack draws iron as 'steel')",
+      "file": "default_steel_ingot.png",
+      "height": 64,
+      "key": "item_iron_ingot",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_steel_ingot.png",
+      "width": 64
+    },
+    "item_iron_lump": {
+      "description": "IRON_LUMP icon (raw ore)",
+      "file": "default_iron_lump.png",
+      "height": 64,
+      "key": "item_iron_lump",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_iron_lump.png",
+      "width": 64
+    },
+    "item_stick": {
+      "description": "STICK icon",
+      "file": "default_stick.png",
+      "height": 128,
+      "key": "item_stick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_stick.png",
+      "width": 128
+    },
+    "item_tool_diamond_axe": {
+      "description": "DIAMOND AXE icon",
+      "file": "default_tool_diamondaxe.png",
+      "height": 128,
+      "key": "item_tool_diamond_axe",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_diamondaxe.png",
+      "width": 128
+    },
+    "item_tool_diamond_pick": {
+      "description": "DIAMOND PICKAXE icon",
+      "file": "default_tool_diamondpick.png",
+      "height": 128,
+      "key": "item_tool_diamond_pick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_diamondpick.png",
+      "width": 128
+    },
+    "item_tool_diamond_shovel": {
+      "description": "DIAMOND SHOVEL icon",
+      "file": "default_tool_diamondshovel.png",
+      "height": 128,
+      "key": "item_tool_diamond_shovel",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_diamondshovel.png",
+      "width": 128
+    },
+    "item_tool_diamond_sword": {
+      "description": "DIAMOND SWORD icon",
+      "file": "default_tool_diamondsword.png",
+      "height": 128,
+      "key": "item_tool_diamond_sword",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_diamondsword.png",
+      "width": 128
+    },
+    "item_tool_iron_axe": {
+      "description": "IRON AXE icon",
+      "file": "default_tool_steelaxe.png",
+      "height": 128,
+      "key": "item_tool_iron_axe",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_steelaxe.png",
+      "width": 128
+    },
+    "item_tool_iron_pick": {
+      "description": "IRON PICKAXE icon (the pack draws iron as 'steel')",
+      "file": "default_tool_steelpick.png",
+      "height": 128,
+      "key": "item_tool_iron_pick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_steelpick.png",
+      "width": 128
+    },
+    "item_tool_iron_shovel": {
+      "description": "IRON SHOVEL icon",
+      "file": "default_tool_steelshovel.png",
+      "height": 128,
+      "key": "item_tool_iron_shovel",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_steelshovel.png",
+      "width": 128
+    },
+    "item_tool_iron_sword": {
+      "description": "IRON SWORD icon",
+      "file": "default_tool_steelsword.png",
+      "height": 128,
+      "key": "item_tool_iron_sword",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_steelsword.png",
+      "width": 128
+    },
+    "item_tool_stone_axe": {
+      "description": "STONE AXE icon",
+      "file": "default_tool_stoneaxe.png",
+      "height": 128,
+      "key": "item_tool_stone_axe",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_stoneaxe.png",
+      "width": 128
+    },
+    "item_tool_stone_pick": {
+      "description": "STONE PICKAXE icon",
+      "file": "default_tool_stonepick.png",
+      "height": 128,
+      "key": "item_tool_stone_pick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_stonepick.png",
+      "width": 128
+    },
+    "item_tool_stone_shovel": {
+      "description": "STONE SHOVEL icon",
+      "file": "default_tool_stoneshovel.png",
+      "height": 128,
+      "key": "item_tool_stone_shovel",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_stoneshovel.png",
+      "width": 128
+    },
+    "item_tool_stone_sword": {
+      "description": "STONE SWORD icon",
+      "file": "default_tool_stonesword.png",
+      "height": 128,
+      "key": "item_tool_stone_sword",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_stonesword.png",
+      "width": 128
+    },
+    "item_tool_wood_axe": {
+      "description": "WOODEN AXE icon",
+      "file": "default_tool_woodaxe.png",
+      "height": 128,
+      "key": "item_tool_wood_axe",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_woodaxe.png",
+      "width": 128
+    },
+    "item_tool_wood_pick": {
+      "description": "WOODEN PICKAXE icon",
+      "file": "default_tool_woodpick.png",
+      "height": 128,
+      "key": "item_tool_wood_pick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_woodpick.png",
+      "width": 128
+    },
+    "item_tool_wood_shovel": {
+      "description": "WOODEN SHOVEL icon",
+      "file": "default_tool_woodshovel.png",
+      "height": 128,
+      "key": "item_tool_wood_shovel",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_woodshovel.png",
+      "width": 128
+    },
+    "item_tool_wood_sword": {
+      "description": "WOODEN SWORD icon",
+      "file": "default_tool_woodsword.png",
+      "height": 128,
+      "key": "item_tool_wood_sword",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/default_tool_woodsword.png",
+      "width": 128
+    },
+    "item_wheat": {
+      "description": "WHEAT icon",
+      "file": "farming_wheat.png",
+      "height": 64,
+      "key": "item_wheat",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "voxel_textures/MINETEST_TEXTURES/farming_wheat.png",
+      "width": 64
     },
     "mossy_cobble": {
       "description": "MOSSY_COBBLESTONE",

@@ -81,6 +81,37 @@ TEXTURES: dict[str, tuple[str, str, str]] = {
     "deco_grass_5": (f"{MINETEST}/default_grass_5.png", MINETEST_LICENSE, "grass tuft decoration"),
     "deco_dry_grass": (f"{MINETEST}/default_dry_grass_1.png", MINETEST_LICENSE, "dry grass tuft decoration"),
     "deco_jungle_grass": (f"{MINETEST}/default_junglegrass.png", MINETEST_LICENSE, "tall grass tuft decoration"),
+    # --- furnace (a crafting station block) --------------------------------
+    "furnace_side": (f"{MINETEST}/default_furnace_side.png", MINETEST_LICENSE, "FURNACE side"),
+    "furnace_top": (f"{MINETEST}/default_furnace_top.png", MINETEST_LICENSE, "FURNACE top/bottom"),
+    # --- item icons (materials, food and tools; not block faces) -----------
+    # The Minetest pack ships one icon per item; these are the same pack as the
+    # block textures above, so they add no new licence obligation.
+    "item_stick": (f"{MINETEST}/default_stick.png", MINETEST_LICENSE, "STICK icon"),
+    "item_coal": (f"{MINETEST}/default_coal_lump.png", MINETEST_LICENSE, "COAL icon"),
+    "item_iron_lump": (f"{MINETEST}/default_iron_lump.png", MINETEST_LICENSE, "IRON_LUMP icon (raw ore)"),
+    "item_iron_ingot": (f"{MINETEST}/default_steel_ingot.png", MINETEST_LICENSE, "IRON_INGOT icon (the pack draws iron as 'steel')"),
+    "item_gold_lump": (f"{MINETEST}/default_gold_lump.png", MINETEST_LICENSE, "GOLD_LUMP icon"),
+    "item_diamond": (f"{MINETEST}/default_diamond.png", MINETEST_LICENSE, "DIAMOND icon"),
+    "item_wheat": (f"{MINETEST}/farming_wheat.png", MINETEST_LICENSE, "WHEAT icon"),
+    "item_apple": (f"{MINETEST}/default_apple.png", MINETEST_LICENSE, "APPLE icon"),
+    "item_bread": (f"{MINETEST}/farming_bread.png", MINETEST_LICENSE, "BREAD icon"),
+    "item_tool_wood_pick": (f"{MINETEST}/default_tool_woodpick.png", MINETEST_LICENSE, "WOODEN PICKAXE icon"),
+    "item_tool_wood_axe": (f"{MINETEST}/default_tool_woodaxe.png", MINETEST_LICENSE, "WOODEN AXE icon"),
+    "item_tool_wood_shovel": (f"{MINETEST}/default_tool_woodshovel.png", MINETEST_LICENSE, "WOODEN SHOVEL icon"),
+    "item_tool_wood_sword": (f"{MINETEST}/default_tool_woodsword.png", MINETEST_LICENSE, "WOODEN SWORD icon"),
+    "item_tool_stone_pick": (f"{MINETEST}/default_tool_stonepick.png", MINETEST_LICENSE, "STONE PICKAXE icon"),
+    "item_tool_stone_axe": (f"{MINETEST}/default_tool_stoneaxe.png", MINETEST_LICENSE, "STONE AXE icon"),
+    "item_tool_stone_shovel": (f"{MINETEST}/default_tool_stoneshovel.png", MINETEST_LICENSE, "STONE SHOVEL icon"),
+    "item_tool_stone_sword": (f"{MINETEST}/default_tool_stonesword.png", MINETEST_LICENSE, "STONE SWORD icon"),
+    "item_tool_iron_pick": (f"{MINETEST}/default_tool_steelpick.png", MINETEST_LICENSE, "IRON PICKAXE icon (the pack draws iron as 'steel')"),
+    "item_tool_iron_axe": (f"{MINETEST}/default_tool_steelaxe.png", MINETEST_LICENSE, "IRON AXE icon"),
+    "item_tool_iron_shovel": (f"{MINETEST}/default_tool_steelshovel.png", MINETEST_LICENSE, "IRON SHOVEL icon"),
+    "item_tool_iron_sword": (f"{MINETEST}/default_tool_steelsword.png", MINETEST_LICENSE, "IRON SWORD icon"),
+    "item_tool_diamond_pick": (f"{MINETEST}/default_tool_diamondpick.png", MINETEST_LICENSE, "DIAMOND PICKAXE icon"),
+    "item_tool_diamond_axe": (f"{MINETEST}/default_tool_diamondaxe.png", MINETEST_LICENSE, "DIAMOND AXE icon"),
+    "item_tool_diamond_shovel": (f"{MINETEST}/default_tool_diamondshovel.png", MINETEST_LICENSE, "DIAMOND SHOVEL icon"),
+    "item_tool_diamond_sword": (f"{MINETEST}/default_tool_diamondsword.png", MINETEST_LICENSE, "DIAMOND SWORD icon"),
 }
 
 # Animated strips are excluded from the texture array (uniform size requirement)

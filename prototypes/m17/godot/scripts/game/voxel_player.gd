@@ -17,7 +17,13 @@ signal fly_changed(enabled: bool)
 ## fell.  The player never decides what that costs; the game layer applies the
 ## survival rule.
 signal landed(fall_distance: float)
-signal creature_attacked(creature: Node3D)
+signal creature_attacked(creature: Node3D, damage: int)
+## Emitted when a block was broken but its drop needed a tool the player was not
+## holding (`required_tool` is an `ItemDB.Tool` value).  The block still breaks;
+## this is only the explanation for the missing drop.
+signal harvest_failed(block_id: int, required_tool: int)
+## Emitted when the held tool spent its last durability.
+signal tool_broken(item_id: int)
 
 const REACH := 6.0
 const BODY_HEIGHT := 1.8
@@ -52,6 +58,11 @@ var _break_cooldown := 0.0
 var _place_cooldown := 0.0
 var _hit: Dictionary = {"hit": false}
 var _last_reported_key := ""
+## Progressive mining: the cell being mined, and how far along it is (0..1).
+## Holding the break action keeps accumulating; changing the target restarts.
+var _mining_cell := Vector3i.ZERO
+var _mining_ratio := 0.0
+var _mining_active := false
 ## Fall tracking: the highest point of the current airborne arc, and whether the
 ## body is currently airborne.  A teleport resets both so a jump-cut never
 ## registers as a fall.
@@ -181,11 +192,13 @@ func _process(delta: float) -> void:
 	_update_shake(delta)
 	_update_target()
 	if not can_interact or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		_reset_mining()
 		return
-	if Input.is_action_pressed("break_block") and _break_cooldown <= 0.0:
-		_break_cooldown = repeat_interval
-		break_target()
-	elif Input.is_action_pressed("place_block") and _place_cooldown <= 0.0:
+	if Input.is_action_pressed("break_block"):
+		mine_step(delta)
+	else:
+		_reset_mining()
+	if Input.is_action_pressed("place_block") and _place_cooldown <= 0.0:
 		_place_cooldown = repeat_interval
 		place_selected()
 
@@ -305,10 +318,72 @@ func target() -> Dictionary:
 
 # --- interaction ---------------------------------------------------------
 
+## Held-button mining.  The block takes `ItemDB.break_seconds(block, held)` to
+## break, so hardness and the held tool both matter; the progress bar in the HUD
+## reads `mining_ratio()`.
+func _update_mining(delta: float) -> void:
+	var creature := _creature_in_front()
+	if creature != null:
+		# LMB keeps its creature-attack role; a creature in the crosshair wins
+		# over the block behind it, exactly as the single-click path does.
+		_reset_mining()
+		if _break_cooldown <= 0.0:
+			_break_cooldown = repeat_interval
+			_attack(creature)
+		return
+	var hit := target()
+	if not hit.get("hit", false):
+		_reset_mining()
+		return
+	var cell: Vector3i = hit["block"]
+	var block_id: int = hit["block_id"]
+	if not BlockDB.is_breakable(block_id):
+		_reset_mining()
+		if _break_cooldown <= 0.0:
+			_break_cooldown = repeat_interval * 3.0
+			interaction_failed.emit("%s cannot be mined" % BlockDB.name_of(block_id))
+		return
+	if not _mining_active or cell != _mining_cell:
+		_mining_cell = cell
+		_mining_ratio = 0.0
+		_mining_active = true
+	var held := _held_item()
+	var seconds := ItemDB.break_seconds(block_id, held)
+	_mining_ratio = clampf(_mining_ratio + delta / seconds, 0.0, 1.0)
+	if _mining_ratio >= 1.0:
+		_mining_ratio = 0.0
+		_mining_active = false
+		_finish_break(cell, block_id)
+
+
+## Mining progress of the current target, 0..1 (0 when not mining).
+func mining_ratio() -> float:
+	return _mining_ratio if _mining_active else 0.0
+
+
+## One step of held-button mining.  `_process` calls this while the break action
+## is held; tests and scripted captures call it directly, because a headless run
+## cannot report a captured mouse.
+func mine_step(delta: float) -> void:
+	_update_mining(delta)
+
+
+func _reset_mining() -> void:
+	_mining_active = false
+	_mining_ratio = 0.0
+
+
+func _held_item() -> int:
+	return inventory.selected_item() if inventory != null else BlockDB.AIR
+
+
+## Instantly breaks the targeted block (tests, diagnostics and scripted
+## captures).  Normal play goes through `_update_mining`, which honours hardness
+## and the held tool.
 func break_target() -> bool:
 	var creature_hit := _creature_in_front()
 	if creature_hit != null:
-		creature_attacked.emit(creature_hit)
+		_attack(creature_hit)
 		return true
 	var hit := target()
 	if not hit.get("hit", false):
@@ -319,12 +394,45 @@ func break_target() -> bool:
 	if not BlockDB.is_breakable(block_id):
 		interaction_failed.emit("%s cannot be mined" % BlockDB.name_of(block_id))
 		return false
+	return _finish_break(cell, block_id)
+
+
+## Removes the block, works out its drop (tool rules + deterministic bonus drops),
+## spends tool durability and reports the outcome.
+func _finish_break(cell: Vector3i, block_id: int) -> bool:
 	if not world.set_block(cell, BlockDB.AIR):
 		interaction_failed.emit("That block is outside the loaded world")
 		return false
-	block_broken.emit(cell, block_id, BlockDB.drop_of(block_id))
+	var held := _held_item()
+	var drop := BlockDB.NO_DROP
+	if ItemDB.harvestable(block_id, held):
+		drop = ItemDB.drop_for_block(block_id)
+		if drop == BlockDB.NO_DROP:
+			drop = ItemDB.bonus_drop(block_id, cell.x, cell.y, cell.z)
+	else:
+		harvest_failed.emit(block_id, ItemDB.required_tool(block_id))
+	_wear_held(held)
+	block_broken.emit(cell, block_id, drop)
 	_update_target()
 	return true
+
+
+## Applies one hit to a creature, scaled by the held item's attack damage, and
+## spends tool durability.  Returns the damage dealt.
+func _attack(creature: Node3D) -> int:
+	var held := _held_item()
+	var damage := maxi(1, int(round(ItemDB.attack_damage(held))))
+	_wear_held(held)
+	creature_attacked.emit(creature, damage)
+	return damage
+
+
+func _wear_held(held: int) -> void:
+	if inventory == null or not ItemDB.is_tool_item(held):
+		return
+	var item_id := inventory.slots[inventory.selected]
+	if inventory.wear(inventory.selected, 1):
+		tool_broken.emit(item_id)
 
 
 ## Passive creature attacks share LMB with mining; the nearer physical target wins.
@@ -354,9 +462,13 @@ func place_selected() -> bool:
 		return false
 	if inventory == null:
 		return false
-	var block_id := inventory.selected_block()
-	if block_id == BlockDB.AIR:
-		interaction_failed.emit("Hotbar slot is empty")
+	var item_id := inventory.selected_item()
+	var block_id := ItemDB.placeable_block(item_id)
+	if block_id == BlockDB.NO_DROP:
+		if item_id == BlockDB.AIR:
+			interaction_failed.emit("Hotbar slot is empty")
+		else:
+			interaction_failed.emit("%s is not a placeable block" % ItemDB.name_of(item_id))
 		return false
 	var normal: Vector3i = hit["normal"]
 	var cell: Vector3i = hit["block"] + normal

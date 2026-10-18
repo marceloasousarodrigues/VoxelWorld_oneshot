@@ -40,6 +40,9 @@ var _breath_fill: ColorRect
 var _hurt: ColorRect
 var _hurt_timer := 0.0
 var _hurt_strength := 0.55
+var _durability_bars: Array[ColorRect] = []
+var _mining_root: Control
+var _mining_fill: ColorRect
 
 
 func setup(player_inventory: Inventory, texture_library: TextureLibrary) -> void:
@@ -82,6 +85,43 @@ func _build() -> void:
 	_debug = _build_label(Vector2(18, 128), 13, Color(0.85, 0.95, 1.0, 0.78))
 	_build_hotbar()
 	_build_vitals()
+	_build_mining_bar()
+
+
+## A thin progress bar just under the crosshair, shown while a block is being
+## mined.  Hardness and the held tool decide how fast it fills.
+func _build_mining_bar() -> void:
+	_mining_root = Control.new()
+	_mining_root.name = "MiningProgress"
+	_mining_root.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_mining_root.offset_left = -60
+	_mining_root.offset_right = 60
+	_mining_root.offset_top = 26
+	_mining_root.offset_bottom = 32
+	_mining_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mining_root.visible = false
+	add_child(_mining_root)
+	var background := ColorRect.new()
+	background.color = Color(0.03, 0.04, 0.06, 0.7)
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mining_root.add_child(background)
+	_mining_fill = ColorRect.new()
+	_mining_fill.color = Color(0.96, 0.89, 0.62, 0.95)
+	_mining_fill.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_mining_fill.offset_right = 0
+	_mining_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mining_root.add_child(_mining_fill)
+
+
+## Shows the mining progress (0..1); 0 hides the bar.
+func set_mining_progress(ratio: float) -> void:
+	if _mining_root == null:
+		return
+	var value := clampf(ratio, 0.0, 1.0)
+	_mining_root.visible = value > 0.0
+	if value > 0.0:
+		_mining_fill.size = Vector2(120.0 * value, 6.0)
 
 
 ## A full-screen red tint that pulses on damage.  It is a HUD child drawn first,
@@ -261,6 +301,17 @@ func _build_slot(index: int) -> void:
 	count.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(count)
 	_counts.append(count)
+	# A thin durability bar along the bottom of tool slots; hidden for everything
+	# else.  Sits above the icon but inside the slot border.
+	var wear := ColorRect.new()
+	wear.name = "Durability"
+	wear.color = Color(0.42, 0.88, 0.45, 0.95)
+	wear.position = Vector2(4, SLOT_SIZE - 7)
+	wear.size = Vector2(SLOT_SIZE - 8, 3)
+	wear.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wear.visible = false
+	panel.add_child(wear)
+	_durability_bars.append(wear)
 
 
 # --- state ---------------------------------------------------------------
@@ -270,24 +321,49 @@ func refresh() -> void:
 		return
 	for index in Inventory.HOTBAR_SIZE:
 		var panel := _slots[index]
-		var block_id := inventory.slots[index]
+		var item_id := inventory.slots[index]
 		var count := inventory.counts[index]
-		panel.add_theme_stylebox_override("panel", _slot_style(index == inventory.selected, block_id != BlockDB.AIR))
-		_icons[index].texture = _icon_for(block_id)
-		_icons[index].modulate = Color(1, 1, 1, 1.0 if block_id != BlockDB.AIR else 0.15)
+		panel.add_theme_stylebox_override("panel", _slot_style(index == inventory.selected, item_id != BlockDB.AIR))
+		_icons[index].texture = _icon_for(item_id)
+		var tint := ItemDB.icon_tint(item_id)
+		_icons[index].modulate = Color(tint.r, tint.g, tint.b, 1.0 if item_id != BlockDB.AIR else 0.15)
 		_counts[index].text = "" if count <= 1 else str(count)
-	var selected_block := inventory.selected_block()
-	_selected_label.text = "" if selected_block == BlockDB.AIR \
-		else "%s   (slot %d)" % [BlockDB.name_of(selected_block), inventory.selected + 1]
-	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  LMB mine  ·  RMB build  ·  C craft  ·  O settings\n" \
+		_refresh_durability(index, item_id)
+	var item_id := inventory.selected_item()
+	if item_id == BlockDB.AIR:
+		_selected_label.text = ""
+	else:
+		var text := ItemDB.name_of(item_id)
+		var max_wear := ItemDB.max_durability(item_id)
+		if max_wear > 0:
+			text += "   %d / %d" % [inventory.durability_of(inventory.selected), max_wear]
+		_selected_label.text = "%s   (slot %d)" % [text, inventory.selected + 1]
+	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  hold LMB mine  ·  RMB build/eat  ·  C craft  ·  O settings\n" \
 		+ "1-9 select  ·  F fly  ·  F5 save  ·  F9 load  ·  F3 debug  ·  Esc pause"
 
 
-func _icon_for(block_id: int) -> Texture2D:
-	if block_id == BlockDB.AIR or library == null or block_id >= BlockDB.COUNT:
+func _refresh_durability(index: int, item_id: int) -> void:
+	if index < 0 or index >= _durability_bars.size():
+		return
+	var bar := _durability_bars[index]
+	var maximum := ItemDB.max_durability(item_id)
+	if maximum <= 0:
+		bar.visible = false
+		return
+	var ratio := clampf(float(inventory.durability_of(index)) / float(maximum), 0.0, 1.0)
+	bar.visible = true
+	bar.size = Vector2(maxf(0.0, (SLOT_SIZE - 8) * ratio), 3)
+	bar.color = Color(0.42, 0.88, 0.45, 0.95) if ratio > 0.35 \
+		else (Color(0.95, 0.78, 0.25, 0.95) if ratio > 0.15 else Color(0.92, 0.30, 0.26, 0.95))
+
+
+func _icon_for(item_id: int) -> Texture2D:
+	if item_id == BlockDB.AIR or library == null:
 		return null
-	var keys: PackedStringArray = BlockDB.face_keys[block_id]
-	return library.icon(keys[BlockDB.FACE_PY])
+	var key := ItemDB.icon_key(item_id)
+	if key.is_empty():
+		return null
+	return library.icon(key)
 
 
 func _slot_style(selected: bool, occupied: bool) -> StyleBoxFlat:

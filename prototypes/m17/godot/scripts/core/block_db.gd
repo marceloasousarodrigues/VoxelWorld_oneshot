@@ -47,8 +47,9 @@ const JUNGLE_GRASS := 30
 const FERN := 31
 const DRY_SHRUB := 32
 const CRAFTING_TABLE := 33
+const FURNACE := 34
 
-const COUNT := 34
+const COUNT := 35
 
 # --- render layers ---------------------------------------------------------
 const LAYER_OPAQUE := 0
@@ -78,7 +79,6 @@ static var hardness: PackedFloat32Array = PackedFloat32Array()
 static var face_keys: Array = []
 static var drops: PackedInt32Array = PackedInt32Array()
 static var light_emission: PackedByteArray = PackedByteArray()
-static var placeable: PackedByteArray = PackedByteArray()
 
 
 static func _static_init() -> void:
@@ -118,11 +118,11 @@ static func _static_init() -> void:
 		["Fern", BlockDB.LAYER_DECO, 0, 0, 0, 0, 0.05, BlockDB.NO_DROP, ["deco_grass_5", "deco_grass_2", "deco_grass_1"]],
 		["Dry Shrub", BlockDB.LAYER_DECO, 0, 0, 0, 0, 0.05, BlockDB.NO_DROP, ["deco_dry_grass", "deco_dry_grass", "deco_dry_grass"]],
 		["Crafting Table", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.CRAFTING_TABLE, ["planks", "planks", "planks"]],
+		["Furnace", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 3.5, BlockDB.FURNACE, ["furnace_top", "furnace_side", "furnace_top"]],
 	]
 	if definitions.size() != COUNT:
 		push_error("BlockDB: definition table has %d rows, expected %d" % [definitions.size(), COUNT])
 	for definition: Array in definitions:
-		var block_id := names.size()
 		names.append(str(definition[0]))
 		render_layers.append(int(definition[1]))
 		solid.append(int(definition[2]))
@@ -132,8 +132,6 @@ static func _static_init() -> void:
 		hardness.append(float(definition[6]))
 		drops.append(int(definition[7]))
 		face_keys.append(_expand_faces(definition[8]))
-		# Air, water and decoration are never part of the selectable block palette.
-		placeable.append(1 if block_id in [GRASS, DIRT, STONE, SAND, PLANKS, GLASS, BRICK, CRAFTING_TABLE] else 0)
 
 
 static func _expand_faces(triple: Array) -> PackedStringArray:

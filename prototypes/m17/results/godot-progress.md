@@ -1056,6 +1056,144 @@ Limitations: no settings file migration/versioning yet; only the three listed se
 exposed (shadows, fog and vertical radius remain CLI-only); verification is scripted, not a
 human click-through.
 
+## M17 Priority 3: items, tools, mining and a real crafting system (2026-10-19)
+
+The crafting system was five fixed recipes over block-only inventory slots.  It is now a
+catalogue of **32 recipes** across five categories, gated by two placeable stations, with a
+**tool and material item namespace**, item durability, hardness- and tool-driven mining, and a
+crafting interface built for repeated use.  This is the largest gameplay increment of M17 so
+far; it is one savepoint because the pieces are not separable (tools need the item namespace,
+mining needs the tool rules, the catalogue needs both).
+
+### 1. Item namespace (`scripts/core/item_db.gd`, new)
+
+- Item ids are a superset of block ids: `0 .. BlockDB.COUNT-1` **are** the block ids, so every
+  block lookup, face texture, mesh layer and saved edit keeps working unchanged.  Ids above
+  that are 26 non-block items: `Stick`, `Coal`, `Iron Lump`, `Iron Ingot`, `Gold Lump`,
+  `Diamond`, `Wheat`, `Apple`, `Bread`, `Golden Apple` and four tool classes (pickaxe, axe,
+  shovel, sword) in four tiers (wood, stone, iron, diamond).
+- Per item: name, atlas icon key, stack size, tool class, tier, mining speed, durability,
+  attack damage, food/heal value, icon tint, placeability.
+- Mining rules live here too: `break_seconds(block, held)` (hardness x 0.5 s, divided by the
+  tool speed; the wrong tool is never slower than a hand, a sword is 1.5x), `harvestable()`
+  (stone family needs a pickaxe; iron ore needs stone+, gold/diamond need iron+, obsidian needs
+  diamond), `drop_for_block()` (ores drop lumps/crystals, not ore blocks) and `bonus_drop()`
+  (leaves sometimes carry an apple, tall grass sometimes wheat - a pure function of the world
+  position, so a replayed world mines identically).
+
+### 2. Inventory: durability, stack cap, atomic load (`scripts/game/inventory.gd`)
+
+- New `durability` array; `wear(slot, amount)` spends a tool's durability and clears the slot
+  when it breaks; `add(item, count, tool_durability)` never merges tools and respects
+  `ItemDB.max_stack` (64 for blocks and materials) - which is what makes the inventory
+  genuinely fill up and the "inventory full" paths reachable.
+- `from_dictionary` is now **atomic**: the payload is validated into scratch arrays and only
+  committed when every entry is legal, so a malformed save cannot half-apply.
+- `clear_slot()` and `remove_from_slot()` added; `selected_item()` (any item) alongside
+  `selected_block()` (only when it is placeable).
+- The starter kit is 16 per stack instead of 64: with a per-slot cap a full kit would leave a
+  new player unable to pick up their first mining drop.
+
+### 3. Crafting engine (`scripts/core/crafting.gd`, rewritten)
+
+- Data-driven catalogue: each recipe has an `id`, a `category` (Basics, Building, Tools,
+  Smelting, Food), a `station` (`hand` / `table` / `furnace`), either an ingredient dictionary
+  or a 3x3 `pattern` + `key`, an output with a count, and - for smelting - a `fuel` cost.
+- 32 recipes: log-to-planks and planks-to-sticks basics, crafting table, furnace; cobblestone,
+  stone brick, sandstone, glass, brick; **all sixteen tools** (wood from planks, stone from
+  cobblestone, iron from smelted ingots, diamond) as real shaped recipes; four smelting
+  recipes that need a furnace and burn one coal each; bread from wheat and the golden apple.
+- Shaped recipes declare the shape and `ingredients()` derives the multiset from it, so the
+  two can never disagree; `match_grid()` implements the real shape semantics (trim + offset,
+  no mirroring) and is tested even though the interface offers the ingredients as a list.
+- Stations are blocks in the world: `best_station(world, center, radius)` scans loaded voxels,
+  and a furnace also serves as a work surface so a player never has to carry both.
+- `craft`/`craft_many` are atomic across the whole batch (ingredients, fuel, station and the
+  output's room *after* consumption, all checked on a scratch copy of the stack counts with
+  the 64 cap respected) - the check the old `_has_room_after` would have got wrong under the
+  new stack cap.  `missing()` explains a shortfall, `craftable_count()` reports how many the
+  ingredients allow, `can_craft_times()` answers for a batch.
+
+### 4. Crafting interface (`scripts/game/crafting_panel.gd`, rewritten)
+
+- Category filter buttons, a scrollable recipe list, and per row: the output icon, its count,
+  a status line (`ready` / `missing 2 more Sand` / `needs Crafting Table` / `inventory full`)
+  with red/amber colouring, the ingredient list as `have/need`, and **Craft** plus **x5**
+  buttons that are disabled exactly when that craft (or batch) cannot happen.
+- The header shows the station the *world* currently provides; the footer counts how many
+  recipes are ready.  `press_craft()` activates the real buttons so the integration test
+  drives the same code path a mouse click does.
+
+### 5. Mining, drops and durability through the player
+
+- `voxel_player.gd`: holding the break action mines **progressively**; the block takes
+  `ItemDB.break_seconds()` to break and a progress bar appears under the crosshair.  Changing
+  the target restarts the progress.  `break_target()` stays as the instant path used by tests
+  and diagnostics.
+- Drops now depend on the held tool: an inadequate tool still breaks the block but yields
+  nothing and emits `harvest_failed` (the HUD explains "Stone needs a Pickaxe to drop
+  anything"); the right tool yields the item drop and spends one durability, and the tool
+  breaking emits `tool_broken` ("Your Wooden Pickaxe broke").
+- Creature hits scale with the held item's attack damage and share the same durability spend.
+- Placement accepts only block items ("Coal is not a placeable block").
+
+### 6. HUD (`game_hud.gd`)
+
+Item icons for every item (with an optional tint - the golden apple reuses the apple art),
+per-slot durability bars that turn amber and then red, the selected-item line showing
+`Wooden Pickaxe  20 / 60  (slot 1)`, and the mining progress bar.
+
+### 7. Assets and persistence
+
+- The furnace block (id 34) and 26 item icons were added from the **same in-repo Minetest
+  `default` pack** already vendored by M12/M14 - no downloads, no new licence obligations;
+  `tools/import_textures.py` and `ASSET_MANIFEST.md` were extended (67 keys now).
+- `SaveManager` still writes the inventory as one dictionary, so durability rides along with
+  no format break; `apply()` and `_sanitise()` now validate the inventory payload *before*
+  mutating the world, the clock or the player, and reject it as invalid instead of applying
+  half of it.
+
+### Tests and evidence
+
+- New `scripts/tests/test_items.gd` (namespace integrity, icon resolution, tool tiers and
+  ordering, break times, harvest requirements, ore/bonus drops, food values, stack cap, full
+  inventory, durability wear/break, atomic serialisation with legacy payloads).
+- `scripts/tests/test_crafting.gd` rewritten for the catalogue: integrity (unique ids, valid
+  stations/categories/outputs), **reachability** (every recipe is producible from mining drops
+  and other recipes - this is what keeps the progression honest), shaped vs shapeless and
+  `match_grid`, fifteen validation rejections, station gating, fuel consumption, batch
+  crafting, `craftable_count`, atomicity (including the case the stack cap makes possible: a
+  stack with 2 room and no free slot refuses a 4-item output without consuming anything), and
+  the available-recipes copy contract.
+- `scripts/tests/run_integration.gd` gained **37 assertions** (72 -> 109) that drive the real
+  scene: a placed table/furnace becomes the station, the panel's own Craft and x5 buttons
+  craft, the iron smelt consumes its coal, a worked column mines progressively (one frame
+  breaks nothing; holding breaks it), a bare hand gets no stone drop and is told it needs a
+  pickaxe, and a wooden pickaxe lasts exactly two blocks and then breaks.
+- Unit **973 assertions**, exit 0, 0 bytes stderr (was 785).  Integration **109 assertions**,
+  exit 0, 0 bytes stderr.  Headless smoke unchanged: `world_hash=441363152919021799`,
+  `faces=166074`, `faces_hash=6977993294663025454`.
+- Windowed captures inspected: `crafting-panel.png` (the kit loadout: ready / missing /
+  needs-Crafting-Table / inventory-full rows, "4 of 32 recipes ready"), `crafting-panel-tools.png`
+  (the `--tools` loadout: every row correctly unaffordable, 0 of 32 ready) and `tools-hud.png`
+  (four tiers of tools with durability bars, the `Wooden Pickaxe 20 / 60` readout, cobblestone,
+  sticks, ingots, coal and an apple in the hotbar).
+- New `--tools` capture diagnostic (a deterministic nine-slot loadout) so the item HUD can be
+  inspected without a scripted mining session.
+
+### Limitations
+
+- Mining has no visual crack overlay on the block; the progress is on the HUD bar only.
+- The crafting interface matches recipes by ingredient multiset (the shaped definition and
+  `match_grid` are real and tested, but there is no drag-and-drop 3x3 grid).
+- Smelting is menu-driven per craft (one coal per item); there is no furnace fuel queue or
+  timed burn.
+- No eating yet: food items exist and have values, but hunger and consumption arrive in the
+  next increment.
+- Verification is scripted through the real scene and windowed captures; no human
+  keyboard/mouse play-through was performed.
+
+
 ## M17 Priority 1: background chunk generation (2026-10-18, continued)
 
 The roadmap's remaining streaming-hitch item. Chunk **generation** was still the one

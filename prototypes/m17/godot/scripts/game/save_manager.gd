@@ -165,8 +165,21 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 		return {"ok": false, "error": "the saved breath is invalid"}
 	if health != null and not health_data.is_empty():
 		health.from_dictionary(health_data)
+	var inventory_payload: Dictionary = data.get("inventory", {})
+	if inventory != null and not inventory_payload.is_empty():
+		# Probe on a scratch copy first: `Inventory.from_dictionary` is atomic for
+		# the inventory itself, but this apply also mutates the world and the
+		# player, so a bad payload must be rejected before any of that happens.
+		if not Inventory.new().from_dictionary(inventory_payload):
+			return {"ok": false, "error": "the saved inventory is invalid"}
+	if player != null and not (data["player"] as Dictionary).is_empty():
+		var player_state: Dictionary = data["player"]
+		var saved_position: Array = player_state["position"]
+		if saved_position.size() < 3:
+			return {"ok": false, "error": "the saved player position is invalid"}
+	var edits := data["blocks"] as Array
 	var block_edits: Dictionary = {}
-	for row: Array in data["blocks"]:
+	for row: Array in edits:
 		block_edits[Vector3i(int(row[0]), int(row[1]), int(row[2]))] = int(row[3])
 	var fluid_edits: Dictionary = {}
 	var fluid_sources: Dictionary = {}
@@ -178,8 +191,8 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 	world.load_edits(block_edits, fluid_edits, fluid_sources)
 	if clock != null and data.has("clock"):
 		clock.from_dictionary(data["clock"] as Dictionary)
-	if inventory != null and data.has("inventory") and not (data["inventory"] as Dictionary).is_empty():
-		inventory.from_dictionary(data["inventory"])
+	if inventory != null and not inventory_payload.is_empty():
+		inventory.from_dictionary(inventory_payload)
 	if player != null and not (data["player"] as Dictionary).is_empty():
 		var state: Dictionary = data["player"]
 		var position: Array = state["position"]
@@ -217,6 +230,10 @@ func _sanitise(data: Dictionary) -> Variant:
 	var inventory_state: Variant = data.get("inventory", {})
 	if typeof(inventory_state) != TYPE_DICTIONARY:
 		last_error = "inventory is not an object"
+		return null
+	if not (inventory_state as Dictionary).is_empty() \
+			and not Inventory.new().from_dictionary(inventory_state as Dictionary):
+		last_error = "the saved inventory is invalid"
 		return null
 	var clock_state: Variant = data.get("clock", {})
 	if typeof(clock_state) != TYPE_DICTIONARY:

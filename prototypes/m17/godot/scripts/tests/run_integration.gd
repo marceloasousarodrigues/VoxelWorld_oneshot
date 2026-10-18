@@ -295,6 +295,21 @@ func _main() -> void:
 	player.look_yaw(0.0)
 	player.look_pitch(-70.0)
 
+	# The loot tests may have left a material in the selected slot.  A material is
+	# never placeable, and the build checks below need a block selected.
+	_game.inventory.select(0)
+	_check(not ItemDB.is_block(_game.inventory.selected_item()),
+		"a material (or empty slot) is not a placeable item")
+	_check(not player.place_selected(), "place_selected() refuses to place a non-block item")
+	var block_slot := -1
+	for index in Inventory.HOTBAR_SIZE:
+		if ItemDB.is_block(_game.inventory.slots[index]):
+			block_slot = index
+			break
+	_check(block_slot >= 0, "the hotbar still holds a placeable block")
+	_game.inventory.select(block_slot)
+	_check(ItemDB.is_block(_game.inventory.selected_item()), "a block is selected for the build checks")
+
 	# Forward movement.
 	var before: Vector3 = player.global_position
 	Input.action_press("move_forward")
@@ -501,6 +516,9 @@ func _main() -> void:
 	_check(not _game.settings_panel.is_open(), "the settings panel closes")
 	_check(_game.streamer.render_radius == original_distance, "the restored render distance applies back")
 
+	# --- Crafting through the real interface and the world station ---------
+	await _crafting_and_mining_section()
+
 	if _failures.is_empty():
 		print("M17_INTEGRATION_PASS %d assertions" % _passes)
 		quit(0)
@@ -509,3 +527,156 @@ func _main() -> void:
 			print("M17_INTEGRATION_FAILURE %s" % failure)
 		print("M17_INTEGRATION_FAIL %d failures, %d passes" % [_failures.size(), _passes])
 		quit(1)
+
+
+## Crafting and mining through the real scene: the station is taken from the
+## world, the panel's own Craft button drives the craft, and the mining rule
+## (hardness, tool speed, tool requirement, durability) is exercised through the
+## real player controller.
+func _crafting_and_mining_section() -> void:
+	var player: Node = _game.player
+	var inventory: Inventory = _game.inventory
+	# The hotbar is a fixed size and the kit fills it; free two slots so the
+	# crafting ingredients and the loot below actually fit.
+	inventory.clear_slot(0)
+	inventory.clear_slot(1)
+	player.flying = true
+	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.look_yaw(0.0)
+	player.look_pitch(-89.0)
+	for i in range(2):
+		await process_frame
+
+	# The station is a block in the world, not a menu flag.
+	var table_cell := Vector3i(8, 72, 8)
+	_check(_game.world.is_loaded(table_cell), "the station cell is loaded")
+	_game.world.set_block(table_cell, BlockDB.CRAFTING_TABLE)
+	var feet := Vector3i(floori(player.global_position.x), floori(player.global_position.y),
+		floori(player.global_position.z))
+	_check(Crafting.best_station(_game.world, feet, 4) == Crafting.STATION_TABLE,
+		"a placed crafting table becomes the player's station")
+	inventory.add(BlockDB.COBBLESTONE, 8)
+	inventory.add(ItemDB.STICK, 4)
+	_game._open_crafting()
+	await process_frame
+	_check(_game.crafting.is_open(), "the crafting panel opens")
+	_check(not player.can_interact, "the crafting panel disables player interaction")
+	_check(_game.crafting.station() == Crafting.STATION_TABLE, "the panel receives the world station")
+	_check(_game.crafting.row_count() == Crafting.recipes().size(), "the panel lists every recipe")
+	_check(_game.crafting.row_enabled("stone_axe"), "an affordable table recipe is enabled")
+	_check(not _game.crafting.row_enabled("iron_pickaxe"), "an unaffordable recipe stays disabled")
+	_check(_game.crafting.row_status("iron_pickaxe").contains("missing"),
+		"the disabled row explains the missing ingredient")
+
+	var cobble_before := inventory.count_of(BlockDB.COBBLESTONE)
+	_check(_game.crafting.press_craft("stone_axe"), "the panel's real Craft button activates")
+	await process_frame
+	_check(inventory.count_of(ItemDB.STONE_AXE) == 1, "the craft produced a stone axe in the inventory")
+	_check(inventory.count_of(BlockDB.COBBLESTONE) == cobble_before - 3,
+		"the craft consumed exactly the recipe's cobblestone")
+	var axe_slot := inventory.slots.find(ItemDB.STONE_AXE)
+	_check(axe_slot >= 0 and inventory.durability_of(axe_slot) == ItemDB.max_durability(ItemDB.STONE_AXE),
+		"the crafted tool arrives at full durability")
+
+	# The batch button performs five crafts.
+	inventory.add(BlockDB.PLANKS, 10)
+	var planks_before := inventory.count_of(BlockDB.PLANKS)
+	var sticks_before := inventory.count_of(ItemDB.STICK)
+	_check(_game.crafting.press_craft("sticks", true), "the batch button crafts five times")
+	await process_frame
+	_check(inventory.count_of(BlockDB.PLANKS) == planks_before - 10,
+		"the batch consumed ten planks")
+	_check(inventory.count_of(ItemDB.STICK) == sticks_before + 20,
+		"the batch produced twenty sticks")
+
+	# Smelting needs the furnace station, which this world does not have yet.
+	_check(not _game.crafting.row_enabled("iron_ingot"), "smelting is refused without a furnace")
+	_check(_game.crafting.row_status("iron_ingot").contains("Furnace"),
+		"the smelting row explains the missing furnace")
+	_game.world.set_block(Vector3i(9, 72, 8), BlockDB.FURNACE)
+	_game.crafting.set_station(_game._current_station())
+	inventory.clear_slot(5)
+	inventory.clear_slot(8)
+	inventory.add(ItemDB.IRON_LUMP, 1)
+	inventory.add(ItemDB.COAL, 1)
+	_check(_game.crafting.station() == Crafting.STATION_FURNACE, "a placed furnace becomes the station")
+	_check(_game.crafting.row_enabled("iron_ingot"), "the furnace unlocks smelting")
+	_check(_game.crafting.press_craft("iron_ingot"), "the furnace smelts through the panel")
+	await process_frame
+	_check(inventory.count_of(ItemDB.IRON_INGOT) == 1, "the smelted ingot is in the inventory")
+	_check(inventory.count_of(ItemDB.COAL) == 0, "the smelt consumed the coal fuel")
+
+	_game._close_crafting()
+	await process_frame
+	_check(not _game.crafting.is_open(), "the crafting panel closes")
+
+	# --- Mining rules through the real player ------------------------------
+	# A clean column so the first solid voxel below the player is the one under
+	# test, whatever the terrain does nearby.
+	var mine_cell := Vector3i(10, 70, 10)
+	_game.world.set_block(Vector3i(10, 69, 10), BlockDB.STONE)
+	_game.world.set_block(Vector3i(10, 72, 10), BlockDB.AIR)
+	_game.world.set_block(Vector3i(10, 71, 10), BlockDB.AIR)
+	_game.world.set_block(mine_cell, BlockDB.STONE)
+	player.teleport_to(Vector3(mine_cell) + Vector3(0.5, 3.0, 0.5))
+	player.look_yaw(0.0)
+	player.look_pitch(-89.0)
+	for i in range(2):
+		await process_frame
+	var target: Dictionary = player.target()
+	_check(target.get("hit", false) and Vector3i(target["block"]) == mine_cell,
+		"the stone block above the player is targeted")
+	# A bare hand: the block breaks, but it does not drop.
+	var block_slot := inventory.slots.find(BlockDB.STONE)
+	inventory.select(block_slot)
+	var harvest_failed := [false]
+	player.harvest_failed.connect(func(_block_id: int, _tool: int) -> void: harvest_failed[0] = true)
+	var cobble_from_hand := inventory.count_of(BlockDB.COBBLESTONE)
+	player.mine_step(0.1)
+	_check(player.mining_ratio() > 0.0, "holding the mine action starts a progressive break")
+	_check(int(_game.world.get_block(mine_cell)) != BlockDB.AIR,
+		"a tenth of a second does not break stone by hand")
+	var hand_seconds := ItemDB.break_seconds(BlockDB.STONE, BlockDB.AIR)
+	var steps := 0
+	var step_limit := int(hand_seconds * 10.0) + 10
+	while int(_game.world.get_block(mine_cell)) != BlockDB.AIR and steps < step_limit:
+		player.mine_step(0.1)
+		steps += 1
+	_check(int(_game.world.get_block(mine_cell)) == BlockDB.AIR,
+		"holding the mine action breaks the stone (%d steps)" % steps)
+	_check(harvest_failed[0], "a bare hand is told the block needs a pickaxe")
+	_check(inventory.count_of(BlockDB.COBBLESTONE) == cobble_from_hand,
+		"a bare hand gets no drop from stone")
+
+	# A pickaxe is faster, yields the drop and wears out.
+	_check(ItemDB.break_seconds(BlockDB.STONE, ItemDB.WOOD_PICKAXE) < hand_seconds,
+		"a pickaxe breaks stone faster than a bare hand")
+	inventory.clear_slot(7)
+	inventory.clear_slot(8)
+	inventory.add(ItemDB.WOOD_PICKAXE, 1, 2)
+	var pick_slot := inventory.slots.find(ItemDB.WOOD_PICKAXE)
+	_check(pick_slot >= 0, "the pickaxe was added to the hotbar")
+	inventory.select(pick_slot)
+	var tool_broken := [false]
+	player.tool_broken.connect(func(_item: int) -> void: tool_broken[0] = true)
+	var drops_before := inventory.count_of(BlockDB.COBBLESTONE)
+	for use in 2:
+		_game.world.set_block(mine_cell, BlockDB.STONE)
+		for i in range(2):
+			await process_frame
+		player.mine_step(0.1)
+		steps = 0
+		while int(_game.world.get_block(mine_cell)) != BlockDB.AIR and steps < 40:
+			player.mine_step(0.1)
+			steps += 1
+		_check(int(_game.world.get_block(mine_cell)) == BlockDB.AIR,
+			"the pickaxe breaks the stone (use %d)" % (use + 1))
+	_check(inventory.count_of(BlockDB.COBBLESTONE) == drops_before + 2,
+		"each pickaxe use produced its stone drop")
+	_check(tool_broken[0], "the wooden pickaxe breaks after its last use")
+	_check(inventory.is_empty(pick_slot), "the broken tool freed its slot")
+
+	player.look_pitch(0.0)
+	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	for i in range(2):
+		await process_frame

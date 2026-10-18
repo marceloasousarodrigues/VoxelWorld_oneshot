@@ -279,6 +279,8 @@ func _build_nodes() -> void:
 	player.fly_changed.connect(_on_fly_changed)
 	player.landed.connect(_on_landed)
 	player.creature_attacked.connect(_on_creature_attacked)
+	player.harvest_failed.connect(_on_harvest_failed)
+	player.tool_broken.connect(_on_tool_broken)
 
 
 func _build_ui() -> void:
@@ -308,7 +310,7 @@ func _build_ui() -> void:
 	crafting = CraftingPanel.new()
 	crafting.name = "CraftingPanel"
 	crafting_layer.add_child(crafting)
-	crafting.setup(inventory)
+	crafting.setup(inventory, library)
 	crafting.crafted.connect(_on_crafted)
 
 	# The settings panel shares the crafting layer height, just above it, so both
@@ -400,6 +402,11 @@ func _parse_arguments() -> void:
 				_options["open_crafting"] = true
 			"--open-settings":
 				_options["open_settings"] = true
+			"--tools":
+				# Diagnostic: one tool of each tier plus materials and food, so a
+				# capture can show the item icons, durability bars and the HUD
+				# without a scripted mining session.
+				_options["tools"] = true
 			"--creature-feedback-capture":
 				_options["creature_feedback_capture"] = true
 			"--spawn-hostiles":
@@ -524,6 +531,8 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	streamer.stats["mesh_ms"] = 0.0
 
 	inventory.give_starter_kit()
+	if bool(_options.get("tools", false)):
+		_give_diagnostic_tools()
 
 	var spawn_column := _find_spawn_column()
 	var eye_guess := world.generator.height_at(spawn_column.x, spawn_column.y)
@@ -584,6 +593,24 @@ func _find_submersion_spot() -> Vector3:
 		return Vector3(8.5, float(WorldGen.SEA_LEVEL) - 4.0, 8.5)
 	# Feet two blocks above the sea floor: the eye sits well under the surface.
 	return Vector3(best.x + 0.5, float(best_height) + 2.0, best.y + 0.5)
+
+
+## Diagnostic loadout for captures and manual checks (`--tools`): one tool per
+## tier (each part-worn, so the durability bars show), a build material, the
+## crafting materials and food, in exactly the nine hotbar slots so the capture is
+## deterministic.
+func _give_diagnostic_tools() -> void:
+	for index in Inventory.HOTBAR_SIZE:
+		inventory.clear_slot(index)
+	inventory.add(ItemDB.WOOD_PICKAXE, 1, 20)
+	inventory.add(ItemDB.STONE_AXE, 1, 60)
+	inventory.add(ItemDB.IRON_SHOVEL, 1, 150)
+	inventory.add(ItemDB.DIAMOND_SWORD, 1, ItemDB.max_durability(ItemDB.DIAMOND_SWORD))
+	inventory.add(BlockDB.COBBLESTONE, 32)
+	inventory.add(ItemDB.STICK, 32)
+	inventory.add(ItemDB.IRON_INGOT, 4)
+	inventory.add(ItemDB.COAL, 8)
+	inventory.add(ItemDB.APPLE, 6)
 
 
 ## Picks a pleasant spawn: a land column near the origin that is above sea level.
@@ -844,6 +871,8 @@ func _process(delta: float) -> void:
 			_update_creatures(delta)
 			_update_hostiles(delta)
 			_update_status()
+			if hud != null and player != null:
+				hud.set_mining_progress(player.mining_ratio())
 			if not bool(_options["capture"]) and _autosave_timer >= AUTOSAVE_SECONDS:
 				_autosave_timer = 0.0
 				_save_silently("autosave")
@@ -1055,11 +1084,26 @@ func _open_crafting() -> void:
 		return
 	if settings_panel != null and settings_panel.is_open():
 		settings_panel.close()
+	# Which stations the player can use right now: any crafting table (or
+	# furnace) block that is loaded within a few blocks of the player.
+	crafting.set_station(_current_station())
 	crafting.open()
 	# While the panel is open the mouse drives the interface instead of the
 	# world, so the player must not break or place blocks.
 	player.can_interact = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+## The best crafting station in the player's surroundings.  Deliberately a small
+## radius: the station is a place in the world, not a menu toggle.
+func _current_station() -> String:
+	if world == null or player == null:
+		return Crafting.STATION_HAND
+	var feet := Vector3i(
+		floori(player.global_position.x),
+		floori(player.global_position.y),
+		floori(player.global_position.z))
+	return Crafting.best_station(world, feet, 4)
 
 
 func _close_crafting() -> void:
@@ -1073,11 +1117,18 @@ func _close_crafting() -> void:
 
 func _on_crafted(result: Dictionary) -> void:
 	if bool(result.get("ok", false)):
-		hud.flash("Crafted %d %s" % [
-			int(result.get("output_count", 0)), BlockDB.name_of(int(result.get("output", BlockDB.AIR))),
+		var crafted_count := int(result.get("crafted", 1))
+		var total := int(result.get("output_count", 0)) * crafted_count
+		hud.flash("Crafted %d %s%s" % [
+			total, ItemDB.name_of(int(result.get("output", BlockDB.AIR))),
+			"" if crafted_count <= 1 else " (%d crafts)" % crafted_count,
 		], 2.4)
 	else:
 		hud.flash(str(result.get("reason", "Cannot craft")), 2.4)
+	# The station can change while the panel is open (the player cannot move, but
+	# a robot/paste could), and the affordability of every row just changed.
+	if crafting != null and crafting.is_open():
+		crafting.set_station(_current_station())
 	hud.refresh()
 
 
@@ -1182,7 +1233,7 @@ func _on_block_broken(world_position: Vector3i, block_id: int, drop: int) -> voi
 	var collected := ""
 	if drop != BlockDB.NO_DROP:
 		var leftover := inventory.add(drop, 1)
-		collected = "  +1 %s" % BlockDB.name_of(drop) if leftover == 0 else "  (inventory full)"
+		collected = "  +1 %s" % ItemDB.name_of(drop) if leftover == 0 else "  (inventory full)"
 	hud.flash("Mined %s at (%d, %d, %d)%s" % [BlockDB.name_of(block_id), world_position.x, world_position.y, world_position.z, collected], 1.6)
 
 
@@ -1220,19 +1271,30 @@ func _update_creatures(delta: float) -> void:
 			creature.queue_free()
 
 
-func _on_creature_attacked(creature) -> void:
+func _on_creature_attacked(creature, damage: int = 1) -> void:
 	if not is_instance_valid(creature):
 		return
 	if creature.is_in_group("hostile_creature"):
-		var hostile_drops: int = creature.apply_hit(1)
+		var hostile_drops: int = creature.apply_hit(damage)
 		if hostile_drops <= 0:
 			hud.flash("Grunt hurt (%d/%d)" % [int(creature.state.health), HostileModel.HIT_POINTS], 1.0)
 		return
 	if not creature.is_in_group("passive_creature"):
 		return
-	var drops: int = creature.apply_hit(1)
+	var drops: int = creature.apply_hit(damage)
 	if drops <= 0:
 		hud.flash("Boar hurt (%d/%d)" % [int(creature.state.health), CreatureModel.HIT_POINTS], 1.0)
+
+
+## The block broke, but its drop needed a tool class the player was not holding.
+func _on_harvest_failed(block_id: int, required_tool: int) -> void:
+	hud.flash("%s needs a %s to drop anything" % [
+		BlockDB.name_of(block_id), ItemDB.tool_name(required_tool)], 1.8)
+
+
+func _on_tool_broken(item_id: int) -> void:
+	hud.flash("Your %s broke" % ItemDB.name_of(item_id), 2.2)
+	hud.refresh()
 
 
 func _on_creature_killed(creature, drop_count: int = 1) -> void:
@@ -1311,7 +1373,7 @@ func _on_hostile_killed(creature, drop_count: int = 1) -> void:
 	hostile_nodes.erase(key)
 	creature.queue_free()
 	hud.flash("Grunt down  +%d %s%s" % [
-		drop_count - leftover, BlockDB.name_of(HostileModel.DROP_ID),
+		drop_count - leftover, ItemDB.name_of(HostileModel.DROP_ID),
 		"" if leftover == 0 else " (inventory full)",
 	], 2.0)
 	hud.refresh()

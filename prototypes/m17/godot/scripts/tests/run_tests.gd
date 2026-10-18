@@ -12,6 +12,7 @@ extends SceneTree
 const MODULES := [
 	"res://scripts/tests/test_coordinates.gd",
 	"res://scripts/tests/test_block_db.gd",
+	"res://scripts/tests/test_items.gd",
 	"res://scripts/tests/test_textures.gd",
 	"res://scripts/tests/test_generation.gd",
 	"res://scripts/tests/test_mesher.gd",

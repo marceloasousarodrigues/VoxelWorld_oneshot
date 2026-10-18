@@ -20,7 +20,7 @@ const HIT_POINTS := 4
 const ATTACK_RANGE := 1.7
 const ATTACK_DAMAGE := 2.0
 const ATTACK_INTERVAL := 1.2
-const DROP_ID := BlockDB.COAL_ORE
+const DROP_ID := ItemDB.COAL
 const DROP_COUNT := 1
 
 var seed_value: int
