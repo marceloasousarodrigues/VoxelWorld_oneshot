@@ -54,6 +54,10 @@ const SETTINGS_PATH := "user://voxelworld_settings.cfg"
 
 ## Seconds of breath left; drained while the player's head is under water.
 var breath := Survival.MAX_BREATH
+## Hunger: 0..Survival.MAX_HUNGER, plus the accumulating exhaustion that costs a
+## point of it.  Saved with the world (VERSION 4).
+var hunger := Survival.MAX_HUNGER
+var exhaustion := 0.0
 
 var sun: DirectionalLight3D
 var environment_node: WorldEnvironment
@@ -281,6 +285,7 @@ func _build_nodes() -> void:
 	player.creature_attacked.connect(_on_creature_attacked)
 	player.harvest_failed.connect(_on_harvest_failed)
 	player.tool_broken.connect(_on_tool_broken)
+	player.eat_requested.connect(_on_eat_requested)
 
 
 func _build_ui() -> void:
@@ -407,6 +412,10 @@ func _parse_arguments() -> void:
 				# capture can show the item icons, durability bars and the HUD
 				# without a scripted mining session.
 				_options["tools"] = true
+			"--hunger":
+				# Diagnostic: start with a specific hunger value so a capture can
+				# show a partly empty hunger bar.
+				_options["hunger"] = clampf(value.to_float(), 0.0, Survival.MAX_HUNGER)
 			"--creature-feedback-capture":
 				_options["creature_feedback_capture"] = true
 			"--spawn-hostiles":
@@ -494,6 +503,8 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	_update_sky()
 	health.revive()
 	breath = Survival.MAX_BREATH
+	hunger = Survival.MAX_HUNGER
+	exhaustion = 0.0
 	_invulnerable = 0.0
 	_seconds_since_damage = 0.0
 	_last_damage_source = ""
@@ -533,6 +544,8 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	inventory.give_starter_kit()
 	if bool(_options.get("tools", false)):
 		_give_diagnostic_tools()
+	if _options.has("hunger"):
+		hunger = float(_options["hunger"])
 
 	var spawn_column := _find_spawn_column()
 	var eye_guess := world.generator.height_at(spawn_column.x, spawn_column.y)
@@ -548,8 +561,11 @@ func _start_world(seed_value: int, save: Variant) -> void:
 		else:
 			if float(applied["breath"]) >= 0.0:
 				breath = float(applied["breath"])
+			if float(applied.get("hunger", -1.0)) >= 0.0:
+				hunger = float(applied["hunger"])
 			streamer.focus_at(player.global_position)
 			hud.flash("Loaded %d block edits and %d fluid changes" % [int(applied["block_edits"]), int(applied["fluid_edits"])], 5.0)
+	hud.set_hunger(hunger, Survival.MAX_HUNGER)
 	_apply_override_position()
 	player.set_process(true)
 	var loading := "Generating world"
@@ -884,8 +900,9 @@ func _process(delta: float) -> void:
 		_update_capture(delta)
 
 
-## Per-frame survival: drowning while submerged, natural regeneration otherwise,
-## and the breath readout.  Falls are event-driven (`player.landed`).
+## Per-frame survival: drowning while submerged, hunger from what the player is
+## doing, starvation damage at zero hunger, and fed regeneration.  Falls are
+## event-driven (`player.landed`).
 func _update_survival(delta: float) -> void:
 	if health == null:
 		return
@@ -896,10 +913,58 @@ func _update_survival(delta: float) -> void:
 	breath = step["breath"]
 	if float(step["damage"]) > 0.0:
 		_damage(float(step["damage"]), "drowning")
-	var regen: Dictionary = Survival.regen_step(health.health, health.max_health, _seconds_since_damage, delta)
+
+	# Hunger: movement and jumping build exhaustion; every full budget costs a
+	# point and an empty bar starves the body down to its health floor.
+	var hunger_step: Dictionary = Survival.hunger_step(hunger, exhaustion, _activity_exhaustion(), delta)
+	hunger = hunger_step["hunger"]
+	exhaustion = hunger_step["exhaustion"]
+	var starve := Survival.starvation_damage(hunger, health.health, delta)
+	if starve > 0.0:
+		_damage(starve, "starvation")
+
+	var regen: Dictionary = Survival.regen_step(health.health, health.max_health,
+		_seconds_since_damage, delta, hunger, exhaustion)
+	exhaustion = regen["exhaustion"]
 	if float(regen["healed"]) > 0.0:
 		health.heal(float(regen["healed"]))
 	hud.set_breath(breath, Survival.MAX_BREATH, submerged or breath < Survival.MAX_BREATH - 0.001)
+	hud.set_hunger(hunger, Survival.MAX_HUNGER)
+
+
+## Exhaustion per second for what the player is doing right now.
+func _activity_exhaustion() -> float:
+	if player == null:
+		return float(Survival.ACTIVITY_EXHAUSTION["idle"])
+	if player.flying:
+		return float(Survival.ACTIVITY_EXHAUSTION["idle"])
+	var horizontal := Vector2(player.velocity.x, player.velocity.z).length()
+	if horizontal < 0.3:
+		return float(Survival.ACTIVITY_EXHAUSTION["idle"])
+	if horizontal >= player.move_speed * 1.2:
+		return float(Survival.ACTIVITY_EXHAUSTION["sprint"])
+	return float(Survival.ACTIVITY_EXHAUSTION["walk"])
+
+
+## Right-click with food in hand.  A full body refuses (so the item is not
+## destroyed for nothing); otherwise the food fills hunger and may heal.
+func _on_eat_requested(item_id: int) -> void:
+	if inventory == null:
+		return
+	var effect: Dictionary = Survival.food_effect(hunger, ItemDB.food_value(item_id), ItemDB.heal_value(item_id))
+	if not bool(effect["improved"]):
+		hud.flash("%s would be wasted — you are not hungry" % ItemDB.name_of(item_id), 1.6)
+		return
+	hunger = effect["hunger"]
+	exhaustion = maxf(0.0, exhaustion - Survival.EXHAUSTION_PER_HUNGER)
+	var healed := 0.0
+	if float(effect["heal"]) > 0.0 and health != null:
+		healed = health.heal(float(effect["heal"]))
+	inventory.take_from_slot(inventory.selected)
+	hud.set_hunger(hunger, Survival.MAX_HUNGER)
+	hud.flash("Ate %s%s" % [ItemDB.name_of(item_id),
+		"" if healed <= 0.0 else "  +%d health" % int(round(healed))], 1.8)
+	hud.refresh()
 
 
 # =========================================================================
@@ -977,6 +1042,8 @@ func _respawn() -> void:
 		return
 	health.revive()
 	breath = Survival.MAX_BREATH
+	hunger = Survival.MAX_HUNGER
+	exhaustion = 0.0
 	_invulnerable = 0.0
 	_seconds_since_damage = 0.0
 	_last_damage_source = ""
@@ -1396,7 +1463,7 @@ func _on_fly_changed(enabled: bool) -> void:
 # =========================================================================
 
 func _save_now() -> void:
-	var written := saves.write(world, player, inventory, clock, health, breath)
+	var written := saves.write(world, player, inventory, clock, health, breath, hunger)
 	if written:
 		hud.flash("Saved %d block edits to %s" % [world.edits.size(), ProjectSettings.globalize_path(saves.save_path())], 4.0)
 		print("M17_GAME_SAVED path=%s block_edits=%d fluid_edits=%d" % [
@@ -1408,7 +1475,7 @@ func _save_now() -> void:
 
 
 func _save_silently(reason: String) -> void:
-	if saves.write(world, player, inventory, clock, health, breath):
+	if saves.write(world, player, inventory, clock, health, breath, hunger):
 		print("M17_GAME_AUTOSAVE reason=%s block_edits=%d" % [reason, world.edits.size()])
 	else:
 		push_error("M17_GAME_AUTOSAVE_FAILED %s" % saves.last_error)
@@ -1425,6 +1492,9 @@ func _reload_now() -> void:
 		return
 	if float(applied["breath"]) >= 0.0:
 		breath = float(applied["breath"])
+	if float(applied.get("hunger", -1.0)) >= 0.0:
+		hunger = float(applied["hunger"])
+		exhaustion = 0.0
 	streamer.focus_at(player.global_position)
 	hud.refresh()
 	hud.flash("Reloaded save (%d block edits)" % int(applied["block_edits"]), 4.0)
@@ -1526,6 +1596,7 @@ func _smoke_summary() -> void:
 		"inventory_used_slots": inventory.used_slots(),
 		"health": health.to_dictionary() if health != null else {},
 		"breath": breath,
+		"hunger": {"hunger": hunger, "exhaustion": exhaustion},
 	}))
 	print("M17_RENDER_STATS draw_calls=%d primitives=%d objects=%d" % [
 		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),

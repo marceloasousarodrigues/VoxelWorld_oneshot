@@ -18,6 +18,10 @@ signal fly_changed(enabled: bool)
 ## survival rule.
 signal landed(fall_distance: float)
 signal creature_attacked(creature: Node3D, damage: int)
+## Emitted when the player uses the build action while holding food.  The game
+## layer decides whether eating is worth it (a full body refuses) and consumes the
+## item; the player never mutates the inventory itself.
+signal eat_requested(item_id: int)
 ## Emitted when a block was broken but its drop needed a tool the player was not
 ## holding (`required_tool` is an `ItemDB.Tool` value).  The block still breaks;
 ## this is only the explanation for the missing drop.
@@ -456,13 +460,18 @@ func _creature_in_front() -> Node3D:
 
 
 func place_selected() -> bool:
+	if inventory == null:
+		return false
+	var item_id := inventory.selected_item()
+	if ItemDB.is_food(item_id):
+		# Right-click eats when food is held; the game decides and consumes.  This
+		# works while looking at the sky, so it does not need a target.
+		eat_requested.emit(item_id)
+		return true
 	var hit := target()
 	if not hit.get("hit", false):
 		interaction_failed.emit("Nothing to build against")
 		return false
-	if inventory == null:
-		return false
-	var item_id := inventory.selected_item()
 	var block_id := ItemDB.placeable_block(item_id)
 	if block_id == BlockDB.NO_DROP:
 		if item_id == BlockDB.AIR:

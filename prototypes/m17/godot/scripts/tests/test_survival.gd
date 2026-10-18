@@ -74,4 +74,68 @@ func run(h: TestHarness) -> void:
 	h.approx(Survival.regen_step(0.0, 20.0, 100.0, 1.0)["healed"], 0.0, 1e-9, "a dead body does not regenerate")
 	h.approx(Survival.regen_step(10.0, 20.0, 100.0, 0.0)["healed"], 0.0, 1e-9, "a zero-length step regenerates nothing")
 
+	# --- hunger: the exhaustion budget --------------------------------------
+	h.eq(Survival.MAX_HUNGER, 20.0, "a full hunger bar is 20")
+	var hunger_full := Survival.hunger_step(Survival.MAX_HUNGER, 0.0, Survival.ACTIVITY_EXHAUSTION["idle"], 1.0)
+	h.approx(hunger_full["hunger"], Survival.MAX_HUNGER, 1e-9, "a full hunger bar stays full while idle")
+	h.approx(hunger_full["exhaustion"], Survival.ACTIVITY_EXHAUSTION["idle"], 1e-9,
+		"idling still builds a little exhaustion")
+
+	# A full exhaustion budget loses exactly one hunger point.
+	var spend := Survival.hunger_step(20.0, Survival.EXHAUSTION_PER_HUNGER, 0.0, 1.0)
+	h.approx(spend["hunger"], 19.0, 1e-9, "a full exhaustion budget costs exactly one hunger point")
+	h.approx(spend["exhaustion"], 0.0, 1e-9, "the spent exhaustion is consumed")
+
+	# Sprinting drains faster than walking, and both faster than standing still.
+	h.greater(float(Survival.ACTIVITY_EXHAUSTION["sprint"]), float(Survival.ACTIVITY_EXHAUSTION["walk"]),
+		"sprinting builds exhaustion faster than walking")
+	h.greater(float(Survival.ACTIVITY_EXHAUSTION["walk"]), float(Survival.ACTIVITY_EXHAUSTION["idle"]),
+		"walking builds exhaustion faster than idling")
+	var sprinted := Survival.hunger_step(20.0, 0.0, Survival.ACTIVITY_EXHAUSTION["sprint"], 60.0)
+	h.less(sprinted["hunger"], 20.0, "a minute of sprinting costs at least one hunger point")
+
+	# Hunger never goes negative and a zero-length step changes nothing.
+	h.approx(Survival.hunger_step(0.0, 0.0, 0.0, 1.0)["hunger"], 0.0, 1e-9, "hunger stops at zero")
+	h.approx(Survival.hunger_step(10.0, 0.0, 0.0, 0.0)["hunger"], 10.0, 1e-9, "a zero-length step changes no hunger")
+	h.approx(Survival.hunger_step(30.0, 0.0, 0.0, 1.0)["hunger"], Survival.MAX_HUNGER, 1e-9,
+		"an over-full hunger bar is clamped")
+
+	# --- hunger: starvation --------------------------------------------------
+	h.approx(Survival.starvation_damage(10.0, 20.0, 1.0), 0.0, 1e-9, "a fed player takes no starvation damage")
+	h.approx(Survival.starvation_damage(0.0, 20.0, 1.0), Survival.STARVE_DAMAGE_PER_SECOND, 1e-9,
+		"an empty hunger bar costs health every second")
+	h.approx(Survival.starvation_damage(0.0, 20.0, 4.0), 1.0, 1e-6, "starvation damage scales with elapsed time")
+	h.approx(Survival.starvation_damage(0.0, Survival.STARVE_HEALTH_FLOOR, 4.0), 0.0, 1e-9,
+		"starvation cannot take the last point of health")
+	h.approx(Survival.starvation_damage(0.0, Survival.STARVE_HEALTH_FLOOR + 0.5, 4.0), 0.5, 1e-6,
+		"starvation stops exactly at the floor")
+	h.approx(Survival.starvation_damage(0.0, 20.0, 0.0), 0.0, 1e-9, "a zero-length step starves nobody")
+
+	# --- hunger: eating ------------------------------------------------------
+	var snack := Survival.food_effect(Survival.MAX_HUNGER, 4.0, 0.0)
+	h.approx(snack["hunger"], Survival.MAX_HUNGER, 1e-9, "eating at full hunger wastes the food")
+	h.check(not bool(snack["improved"]), "eating at full hunger is not an improvement")
+	var meal := Survival.food_effect(10.0, 6.0, 0.0)
+	h.approx(meal["hunger"], 16.0, 1e-9, "food adds its value to hunger")
+	h.check(bool(meal["improved"]), "eating while hungry is an improvement")
+	var healing_meal := Survival.food_effect(4.0, 10.0, 4.0)
+	h.approx(healing_meal["hunger"], 14.0, 1e-9, "the golden apple fills ten hunger points")
+	h.approx(healing_meal["heal"], 4.0, 1e-9, "the golden apple also heals")
+	var capped_meal := Survival.food_effect(19.0, 10.0, 2.0)
+	h.approx(capped_meal["hunger"], Survival.MAX_HUNGER, 1e-9, "eating cannot overfill hunger")
+	h.check(bool(capped_meal["improved"]), "a partly wasted meal is still an improvement")
+	h.approx(Survival.food_effect(10.0, 0.0, 0.0)["hunger"], 10.0, 1e-9, "a non-food item feeds nobody")
+	h.check(not bool(Survival.food_effect(10.0, 0.0, 0.0)["improved"]), "a non-food item is not edible")
+
+	# --- hunger: fed regeneration -------------------------------------------
+	var unfed := Survival.regen_step(10.0, 20.0, 100.0, 1.0, 0.0, 0.0)
+	h.approx(unfed["healed"], 0.0, 1e-9, "a starving body does not regenerate")
+	var fed := Survival.regen_step(10.0, 20.0, 100.0, 1.0, Survival.MAX_HUNGER, 0.0)
+	h.approx(fed["healed"], Survival.REGEN_PER_SECOND, 1e-9, "a fed body regenerates")
+	h.greater(float(fed["exhaustion"]), 0.0, "regenerating burns hunger")
+	var hungry := Survival.regen_step(10.0, 20.0, 100.0, 1.0, Survival.MIN_REGEN_HUNGER - 0.1, 0.0)
+	h.approx(hungry["healed"], 0.0, 1e-9, "a very hungry body does not regenerate")
+	h.approx(Survival.regen_step(10.0, 20.0, 100.0, 1.0, -1.0, 0.0)["healed"], Survival.REGEN_PER_SECOND, 1e-9,
+		"without hunger tracking the old regeneration rule still applies")
+
 	h.finish()

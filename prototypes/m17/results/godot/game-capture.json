@@ -13,7 +13,7 @@
 		"pending": 0,
 		"seeded_chunks": 0
 	},
-	"fps_last_sample": 38.8879526974351,
+	"fps_last_sample": 60.0,
 	"godot_version": {
 		"build": "official",
 		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
@@ -30,12 +30,12 @@
 		-12.0
 	],
 	"mesher": {
-		"assemble_ms": 68.506,
+		"assemble_ms": 68.417,
 		"builds": 392,
-		"emit_ms": 1943.126,
+		"emit_ms": 1937.666,
 		"faces": 166074,
-		"fill_ms": 386.186000000001,
-		"ms": 2337.233,
+		"fill_ms": 382.135,
+		"ms": 2327.479,
 		"triangles": 332148
 	},
 	"player": [
@@ -45,16 +45,16 @@
 	],
 	"seed": 17017,
 	"streaming": {
-		"attach_ms_total": 3326.557,
+		"attach_ms_total": 3353.489,
 		"center": "(0, 4, 0)",
 		"faces": 166074,
 		"faces_hash": 6977993294663025454,
 		"generated": 392,
 		"generation_in_flight": 0,
-		"generation_ms_total": 485.508,
-		"generation_worker_ms": 2678.085,
+		"generation_ms_total": 466.273,
+		"generation_worker_ms": 2587.023,
 		"loaded": 392,
-		"mesh_ms_total": 2337.233,
+		"mesh_ms_total": 2327.479,
 		"meshed": 392,
 		"meshes_in_flight": 0,
 		"queued": 0,
@@ -63,7 +63,7 @@
 		"vertical_radius": 4,
 		"views": 392,
 		"wanted": 392,
-		"worst_mesh_ms": 15.687
+		"worst_mesh_ms": 15.577
 	},
 	"window_size": [
 		1280,

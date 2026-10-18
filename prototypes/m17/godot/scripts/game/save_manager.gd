@@ -17,7 +17,11 @@ const FORMAT := "voxelworld.godot.save"
 ## 1: block/fluid edits, player, inventory.  2: adds the day/night clock.
 ## 3: adds player health and breath.  Version 1 and 2 saves still load: every
 ## newer field is optional and falls back to a default.
-const VERSION := 3
+## 1: block/fluid edits, player, inventory.  2: adds the day/night clock.
+## 3: adds player health and breath.  4: adds hunger.  Version 1..3 saves still
+## load: every field a version did not know about is optional and keeps its
+## default (a legacy save simply starts with a full hunger bar).
+const VERSION := 4
 const DEFAULT_DIRECTORY := "user://saves"
 const DEFAULT_NAME := "world.json"
 
@@ -44,7 +48,7 @@ func ensure_directory() -> bool:
 
 
 func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null,
-		health: Health = null, breath: float = -1.0) -> Dictionary:
+		health: Health = null, breath: float = -1.0, hunger: float = -1.0) -> Dictionary:
 	var block_edits: Array = []
 	for position: Vector3i in world.edits:
 		block_edits.append([position.x, position.y, position.z, int(world.edits[position])])
@@ -82,17 +86,18 @@ func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory,
 		"clock": clock.to_dictionary() if clock != null else {},
 		"health": health.to_dictionary() if health != null else {},
 		"breath": breath,
+		"hunger": hunger,
 		"blocks": block_edits,
 		"fluid": fluid_edits,
 	}
 
 
 func write(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null,
-		health: Health = null, breath: float = -1.0) -> bool:
+		health: Health = null, breath: float = -1.0, hunger: float = -1.0) -> bool:
 	last_error = ""
 	if not ensure_directory():
 		return false
-	var payload := to_dictionary(world, player, inventory, clock, health, breath)
+	var payload := to_dictionary(world, player, inventory, clock, health, breath, hunger)
 	var path := save_path()
 	var temporary := path + ".tmp"
 	var file := FileAccess.open(temporary, FileAccess.WRITE)
@@ -163,6 +168,9 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 	var breath := float(data.get("breath", -1.0))
 	if int(data.get("version", 0)) >= 3 and (breath < 0.0 or breath > Survival.MAX_BREATH):
 		return {"ok": false, "error": "the saved breath is invalid"}
+	var hunger := float(data.get("hunger", -1.0))
+	if int(data.get("version", 0)) >= 4 and (hunger < 0.0 or hunger > Survival.MAX_HUNGER):
+		return {"ok": false, "error": "the saved hunger is invalid"}
 	if health != null and not health_data.is_empty():
 		health.from_dictionary(health_data)
 	var inventory_payload: Dictionary = data.get("inventory", {})
@@ -201,7 +209,8 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 		player.look_pitch(rad_to_deg(float(state.get("pitch", 0.0))))
 		if bool(state.get("flying", false)) and not player.flying:
 			player.toggle_fly()
-	return {"ok": true, "error": "", "block_edits": block_edits.size(), "fluid_edits": fluid_edits.size(), "breath": breath}
+	return {"ok": true, "error": "", "block_edits": block_edits.size(), "fluid_edits": fluid_edits.size(),
+		"breath": breath, "hunger": hunger}
 
 
 # --- validation ----------------------------------------------------------
@@ -253,6 +262,13 @@ func _sanitise(data: Dictionary) -> Variant:
 	if version >= 3 and (float(breath_value) < 0.0 or float(breath_value) > Survival.MAX_BREATH):
 		last_error = "breath is outside the valid range"
 		return null
+	var hunger_value: Variant = data.get("hunger", -1.0)
+	if typeof(hunger_value) != TYPE_FLOAT and typeof(hunger_value) != TYPE_INT:
+		last_error = "hunger is not a number"
+		return null
+	if version >= 4 and (float(hunger_value) < 0.0 or float(hunger_value) > Survival.MAX_HUNGER):
+		last_error = "hunger is outside the valid range"
+		return null
 	return {
 		"seed": seed_value,
 		"player": player_state,
@@ -260,6 +276,7 @@ func _sanitise(data: Dictionary) -> Variant:
 		"clock": clock_state,
 		"health": health_state,
 		"breath": float(breath_value),
+		"hunger": float(hunger_value),
 		"blocks": rows,
 		"fluid": fluid,
 		"version": version,

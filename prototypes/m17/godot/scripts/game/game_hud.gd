@@ -13,6 +13,9 @@ const ICON_MARGIN := 5
 ## Health / breath readout, bottom-left above the control hint.
 const HEALTH_BAR := Vector2(240, 16)
 const BREATH_BAR := Vector2(180, 10)
+## The hunger bar sits beside the health bar on the same row.
+const HUNGER_BAR := Vector2(180, 16)
+const HEALTH_ROW_WIDTH := 260.0
 const HURT_FLASH_SECONDS := 0.5
 
 var inventory: Inventory
@@ -34,6 +37,9 @@ var _debug_visible := true
 var _health_label: Label
 var _health_fill: ColorRect
 var _health_text := ""
+var _hunger_label: Label
+var _hunger_fill: ColorRect
+var _hunger_text := ""
 var _breath_root: Control
 var _breath_label: Label
 var _breath_fill: ColorRect
@@ -178,7 +184,6 @@ func _build_vitals() -> void:
 	_breath_label = _make_label(15, Color(0.82, 0.93, 1.0, 0.95))
 	_breath_label.position = Vector2.ZERO
 	_breath_root.add_child(_breath_label)
-
 	var breath_bg := ColorRect.new()
 	breath_bg.color = Color(0.02, 0.05, 0.09, 0.72)
 	breath_bg.position = Vector2(0, BREATH_BAR.y + 8)
@@ -191,6 +196,34 @@ func _build_vitals() -> void:
 	_breath_fill.size = BREATH_BAR
 	_breath_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_breath_root.add_child(_breath_fill)
+
+	# Hunger sits on the same row as health, to its right.
+	var hunger_root := Control.new()
+	hunger_root.name = "HungerPanel"
+	hunger_root.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	hunger_root.offset_left = 18 + HEALTH_ROW_WIDTH
+	hunger_root.offset_top = -142
+	hunger_root.offset_right = 18 + HEALTH_ROW_WIDTH + HUNGER_BAR.x
+	hunger_root.offset_bottom = -78
+	hunger_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(hunger_root)
+
+	_hunger_label = _make_label(15, Color(1.0, 0.92, 0.78, 0.95))
+	_hunger_label.position = Vector2.ZERO
+	hunger_root.add_child(_hunger_label)
+
+	var hunger_bg := ColorRect.new()
+	hunger_bg.color = Color(0.09, 0.06, 0.02, 0.72)
+	hunger_bg.position = Vector2(0, HUNGER_BAR.y + 8)
+	hunger_bg.size = HUNGER_BAR
+	hunger_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hunger_root.add_child(hunger_bg)
+	_hunger_fill = ColorRect.new()
+	_hunger_fill.color = Color(0.85, 0.62, 0.24)
+	_hunger_fill.position = hunger_bg.position
+	_hunger_fill.size = HUNGER_BAR
+	_hunger_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hunger_root.add_child(_hunger_fill)
 
 
 func _build_crosshair() -> Control:
@@ -407,6 +440,25 @@ func set_breath(current: float, maximum: float, visible: bool) -> void:
 ## Current health readout text (used by diagnostics).
 func health_text() -> String:
 	return _health_text
+
+
+## Updates the hunger readout.  An empty bar turns red, which is the signal that
+## starvation damage has started.
+func set_hunger(current: float, maximum: float) -> void:
+	if _hunger_label == null:
+		return
+	_hunger_text = "HUNGER  %d / %d" % [int(ceil(current)), int(maximum)]
+	_hunger_label.text = _hunger_text
+	var ratio := 0.0 if maximum <= 0.0 else clampf(current / maximum, 0.0, 1.0)
+	_hunger_fill.size = Vector2(HUNGER_BAR.x * ratio, HUNGER_BAR.y)
+	_hunger_fill.color = Color(0.85, 0.62, 0.24) if ratio > 0.0 else Color(0.9, 0.25, 0.2)
+	_hunger_label.add_theme_color_override("font_color",
+		Color(1.0, 0.92, 0.78, 0.95) if ratio > 0.0 else Color(1.0, 0.55, 0.5, 0.98))
+
+
+## Current hunger readout text (used by diagnostics).
+func hunger_text() -> String:
+	return _hunger_text
 
 
 ## Flashes the red damage overlay.  `strength` is the peak alpha.

@@ -31,7 +31,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (973 assertions, verified 2026-10-19) + runtime integration harness (109 assertions, verified 2026-10-19) + headless determinism fingerprint
+- [x] Automated test suite (1017 assertions, verified 2026-10-19) + runtime integration harness (125 assertions, verified 2026-10-19) + headless determinism fingerprint
 - [x] Frame-time benchmark harness (`scripts/tests/run_perf.gd`): six scripted activities, per-frame
       timings and streaming counters, before/after JSON reports (verified 2026-10-16)
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
@@ -72,7 +72,12 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       still breaks the block but yields nothing and the HUD says which tool was needed; ores
       drop lumps/crystals instead of ore blocks, and leaves/grass have deterministic chance
       drops (apple, wheat)
-- [ ] Hunger / survival settings (food items, values and the golden apple already exist)
+- [x] Hunger and survival settings (2026-10-19) — `Survival.hunger_step`/`starvation_damage`/
+      `food_effect` plus fed `regen_step`: a 20-point bar, an exhaustion budget spent by
+      idling/walking/sprinting, starvation damage that stops at a 1-health floor, and eating by
+      right-click (a full body refuses rather than wasting the item, the golden apple heals
+      too). HUD hunger bar; save VERSION 4 persists it. Longer/shorter food effects, saturation
+      and food poisoning are not implemented
 - [x] Environmental feedback (hurt flash, bounded reversible camera shake; particles not included)
 - [x] Death and respawn (death screen and valid spawn; no creature combat in this increment)
 - [x] Configuration screen (render distance, sensitivity, vsync) — `core/game_settings.gd`
@@ -193,8 +198,8 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       harness's pre-boot `VSYNC_DISABLED`. `run_perf.gd` now re-asserts vsync-off/max-fps
       after boot and before each phase, records `vsync_mode`/`max_fps`/`threaded_*` in the
       report, and gained `--sync-generation` for single-machine A/B runs
-- [x] Save format versioning: VERSION 3 accepts versions 1..3 (adds health and breath;
-      v1/v2 fields remain optional); unknown versions are still quarantined
+- [x] Save format versioning: VERSION 4 accepts versions 1..4 (adds hunger; v1-v3 fields remain
+      optional); unknown versions are still quarantined
 - [x] Inventory payload validation was not atomic (2026-10-19): `Inventory.from_dictionary`
       wrote entries as it validated them, so a malformed save could half-apply the hotbar, and
       `SaveManager.apply` mutated the world before it noticed. Both now validate into scratch

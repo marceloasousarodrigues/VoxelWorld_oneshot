@@ -518,6 +518,7 @@ func _main() -> void:
 
 	# --- Crafting through the real interface and the world station ---------
 	await _crafting_and_mining_section()
+	await _hunger_section()
 
 	if _failures.is_empty():
 		print("M17_INTEGRATION_PASS %d assertions" % _passes)
@@ -680,3 +681,73 @@ func _crafting_and_mining_section() -> void:
 	player.teleport_to(Vector3(8.5, 74.0, 8.5))
 	for i in range(2):
 		await process_frame
+
+
+## Hunger and eating through the real game: the drain is driven by the game's own
+## survival step, eating is the real right-click path, starvation respects its
+## health floor and a fed body regenerates.
+func _hunger_section() -> void:
+	var player: Node = _game.player
+	var inventory: Inventory = _game.inventory
+	player.flying = true
+	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	for i in range(2):
+		await process_frame
+
+	_check(is_equal_approx(_game.hunger, Survival.MAX_HUNGER) or _game.hunger <= Survival.MAX_HUNGER,
+		"the game tracks a hunger value within range")
+	_check(_game.hud.hunger_text().begins_with("HUNGER"),
+		"the HUD shows a hunger readout (%s)" % _game.hud.hunger_text())
+
+	# Eating at full hunger is refused rather than wasting the item.
+	inventory.clear_slot(0)
+	_check(inventory.add(ItemDB.APPLE, 3) == 0, "apples fit in the freed slot")
+	var apple_slot := inventory.slots.find(ItemDB.APPLE)
+	inventory.select(apple_slot)
+	_game.hunger = Survival.MAX_HUNGER
+	var apples_before := inventory.count_of(ItemDB.APPLE)
+	_check(player.place_selected(), "right-click with food in hand is handled")
+	_check(inventory.count_of(ItemDB.APPLE) == apples_before, "a full body refuses to waste the food")
+
+	# Eating while hungry works through the real player path.
+	_game.hunger = 8.0
+	_check(player.place_selected(), "right-click eats while hungry")
+	_check(inventory.count_of(ItemDB.APPLE) == apples_before - 1, "the eaten apple was consumed")
+	_check(is_equal_approx(_game.hunger, 12.0), "the apple restored four hunger points")
+
+	# The golden apple heals as well, and refills hunger.
+	inventory.clear_slot(0)
+	inventory.add(ItemDB.GOLDEN_APPLE, 1)
+	inventory.select(0)
+	_game.hunger = 2.0
+	_game.health.set_health(10.0)
+	var healed_before: float = _game.health.health
+	_check(player.place_selected(), "the golden apple is eaten")
+	_check(_game.hunger >= 12.0, "the golden apple restores ten hunger points (%.1f)" % _game.hunger)
+	_check(_game.health.health > healed_before, "the golden apple heals the player")
+
+	# Starvation drains health but never takes the last point.
+	_game.hunger = 0.0
+	_game.health.set_health(6.0)
+	_game._seconds_since_damage = 0.0
+	for i in range(400):
+		await process_frame
+		if _game.health.health <= Survival.STARVE_HEALTH_FLOOR + 0.01:
+			break
+	_check(_game.health.health < 6.0, "an empty hunger bar starves the player")
+	_check(_game.health.health >= Survival.STARVE_HEALTH_FLOOR - 0.001,
+		"starvation stops at its health floor (%.2f)" % _game.health.health)
+	_check(not _game.health.is_dead(), "starvation does not kill the player")
+
+	# Feeding the body restores health again after the regeneration delay.
+	_game.hunger = Survival.MAX_HUNGER
+	_game._seconds_since_damage = Survival.REGEN_DELAY_SECONDS + 0.1
+	var before_regen: float = _game.health.health
+	_game._update_survival(1.0)
+	_check(_game.health.health > before_regen, "a fed body regenerates again")
+	_check(_game.exhaustion >= 0.0, "regeneration accounted for its hunger cost")
+
+	_game.health.set_health(_game.health.max_health)
+	_game.hunger = Survival.MAX_HUNGER
+	_game.exhaustion = 0.0
+	player.flying = false

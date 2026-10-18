@@ -1056,6 +1056,75 @@ Limitations: no settings file migration/versioning yet; only the three listed se
 exposed (shadows, fog and vertical radius remain CLI-only); verification is scripted, not a
 human click-through.
 
+## M17 Priority 4: hunger, eating and fed regeneration (2026-10-19)
+
+The survival loop had health, drowning and fall damage, and food items existed with values,
+but nothing consumed them.  Hunger is now a real system that makes the food chain meaningful.
+
+### Rules (`scripts/core/survival.gd`)
+
+- A 20-point hunger bar (like health) plus an accumulating **exhaustion** budget:
+  every `EXHAUSTION_PER_HUNGER` (4.0) of exhaustion costs one hunger point, and activity
+  builds it at `idle 0.004 / walk 0.02 / sprint 0.08` per second (`ACTIVITY_EXHAUSTION`).
+  `hunger_step()` is a pure function of hunger, exhaustion, the current drain rate and delta.
+- **Starvation**: at zero hunger the body loses `0.25` health per second, but never below a
+  `STARVE_HEALTH_FLOOR` of 1, so starvation is a pressure, not a death trap.
+- **Fed regeneration**: the existing heal-after-8-seconds rule now only applies when hunger is
+  at least `MIN_REGEN_HUNGER` (6) and healing itself burns hunger
+  (`REGEN_EXHAUSTION_PER_SECOND`).  That closes the loop: eating pays for health.  The
+  `hunger`/`exhaustion` parameters default to "not tracked", so the previous behaviour is
+  unchanged for callers that do not pass them.
+- `food_effect()` returns the new hunger value, the health a food restores and whether the meal
+  would be an improvement at all.
+
+### Gameplay
+
+- `game.gd` tracks `hunger`/`exhaustion`, derives the drain rate from what the player is doing
+  (flying, standing, walking, sprinting) and runs the starvation and fed-regeneration steps in
+  the same per-frame survival pass as drowning.
+- **Eating is right-click** with food in hand (the same action as building), which is why the
+  HUD hint now reads "RMB build/eat".  A full body refuses and says so instead of destroying
+  the item; otherwise the item is consumed, hunger fills and the golden apple also heals.
+  Eating works while looking at the sky (no block target needed).
+- Respawning restores a full hunger bar; the death path is otherwise unchanged.
+- HUD: a hunger bar beside the health bar (`HUNGER 7 / 20`), which turns red at zero.
+
+### Persistence
+
+- Save `VERSION 4` adds `hunger`.  Versions 1-3 still load: a missing/legacy hunger is the
+  `-1` sentinel and the game keeps a full bar.  A current-version hunger outside
+  `[0, Survival.MAX_HUNGER]` is rejected and the save quarantined, like breath.
+
+### Tests and evidence
+
+- `test_survival.gd` gained 32 assertions: the exhaustion budget and its per-activity rates,
+  clamping, starvation damage and its health floor, `food_effect` (values, capping, waste,
+  non-food) and fed regeneration (unfed bodies do not heal, healing burns hunger, and the
+  no-hunger default keeps the old rule).
+- `test_persistence.gd` covers the v4 hunger round-trip, the v1/v2/v3 legacy paths (each
+  reporting no hunger) and quarantine for out-of-range hunger and for an inventory holding an
+  unknown item id (the new atomic inventory validation).
+- `run_integration.gd` gained **16 assertions** (109 -> 125): the HUD readout, eating at full
+  hunger being refused without consuming, a real right-click eating an apple for four points,
+  the golden apple refilling hunger and healing through the real `Health` model, an empty bar
+  starving the player down to the floor without killing them, and a fed body regenerating
+  again after the delay.
+- Unit **1017 assertions**, exit 0, 0 bytes stderr.  Integration **125 assertions**, exit 0,
+  0 bytes stderr.  Smoke unchanged (`world_hash=441363152919021799`, `faces=166074`,
+  `faces_hash=6977993294663025454`) and now reports
+  `"hunger":{"hunger":20.0,"exhaustion":0.09...}`.
+- Windowed capture `hunger-hud.png` (`--capture --tools --hunger=7`) inspected: the health bar
+  and the partially filled gold hunger bar side by side, reading `HUNGER 7 / 20`, with the
+  tool hotbar below.
+
+### Limitations
+
+- Hunger only drops through the exhaustion budget and regenerating; there is no saturation
+  layer, no "eat when nearly full" preference and no food-poisoning/raw-food concept.
+- Starvation deliberately cannot kill, so the survival pressure is soft.
+- Verification is scripted through the real scene plus the capture; no human play-through.
+
+
 ## M17 Priority 3: items, tools, mining and a real crafting system (2026-10-19)
 
 The crafting system was five fixed recipes over block-only inventory slots.  It is now a
