@@ -31,7 +31,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (1017 assertions, verified 2026-10-19) + runtime integration harness (125 assertions, verified 2026-10-19) + headless determinism fingerprint
+- [x] Automated test suite (1062 assertions, verified 2026-10-19) + runtime integration harness (153 assertions, verified 2026-10-19) + headless determinism fingerprint
 - [x] Frame-time benchmark harness (`scripts/tests/run_perf.gd`): six scripted activities, per-frame
       timings and streaming counters, before/after JSON reports (verified 2026-10-16)
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
@@ -42,7 +42,16 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 - [x] Inventory data model (9 slots, block id + count, serialisable)
 - [x] Visible hotbar with real block icons, selection, counts and tooltip
-- [ ] Full inventory interface (only the hotbar row is visible; no drag & drop, no overflow page)
+- [x] Full inventory interface (2026-10-19) — `game/inventory_panel.gd` +
+      `game/inventory_slot.gd`, opened with I (or `--open-inventory`): nine readable slots with
+      counts and durability bars, click-to-carry and real Godot drag & drop (both call
+      `Inventory.move_slot`/`take_stack`/`put_stack`, so a move cannot duplicate or lose items),
+      a carrying slot, and an item facts pane (kind, block hardness/drop/required tool, stack
+      cap, held count, tool tier/speed/attack/durability, food value, the recipe that makes it
+      and every recipe that uses it). Mutual exclusion with the crafting and settings panels;
+      Escape closes it before pausing. `inventory-panel.png` inspected. There is still one
+      nine-slot row (no second page) and the drag path is verified through the same model call
+      the drop handler makes, not by synthetic OS mouse drags
 - [x] Collecting drops into the inventory (mining adds the drop; inventory-full feedback)
 - [x] Placing items consumes them
 - [x] Crafting recipes — `core/crafting.gd`: a **32-recipe, data-driven catalogue** in five

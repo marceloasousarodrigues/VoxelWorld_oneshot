@@ -234,6 +234,98 @@ func select(index: int) -> bool:
 	return true
 
 
+## Swaps two slots completely (item, count and durability).  Used by the
+## inventory interface's drag & drop.
+func swap_slots(a: int, b: int) -> bool:
+	if a == b or a < 0 or b < 0 or a >= HOTBAR_SIZE or b >= HOTBAR_SIZE:
+		return false
+	var item_a := slots[a]
+	var count_a := counts[a]
+	var wear_a := durability[a]
+	slots[a] = slots[b]
+	counts[a] = counts[b]
+	durability[a] = durability[b]
+	slots[b] = item_a
+	counts[b] = count_a
+	durability[b] = wear_a
+	changed.emit()
+	return true
+
+
+## Moves what it can from one slot to another: a matching stack is topped up
+## (respecting the stack cap) and the remainder stays behind, otherwise the two
+## slots are swapped.  Returns true when the inventory changed.
+func move_slot(from: int, to: int) -> bool:
+	if from == to or from < 0 or to < 0 or from >= HOTBAR_SIZE or to >= HOTBAR_SIZE:
+		return false
+	if is_empty(from):
+		return false
+	if not is_empty(to) and slots[to] == slots[from] and ItemDB.max_stack(slots[from]) > 1:
+		var room := maxi(0, ItemDB.max_stack(slots[from]) - counts[to])
+		var moved := mini(room, counts[from])
+		if moved <= 0:
+			return false
+		counts[to] += moved
+		counts[from] -= moved
+		if counts[from] <= 0:
+			_clear_slot(from)
+		changed.emit()
+		return true
+	return swap_slots(from, to)
+
+
+## Takes a whole stack out of a slot.  Returns
+## `{ "item": id, "count": n, "durability": w }`, or an empty dictionary when the
+## slot is empty or the index is out of range.
+func take_stack(index: int) -> Dictionary:
+	if is_empty(index):
+		return {}
+	var stack := {"item": slots[index], "count": counts[index], "durability": durability[index]}
+	_clear_slot(index)
+	changed.emit()
+	return stack
+
+
+## Puts a carried stack into a slot.  Returns whatever the caller must still hold:
+## the part that did not fit, or the stack the slot displaced (a swap).  An empty
+## dictionary means the slot absorbed everything.
+##
+##   - an empty slot takes up to the stack cap;
+##   - a matching stack is topped up first;
+##   - a slot holding something else is swapped, and that stack comes back.
+func put_stack(index: int, stack: Dictionary) -> Dictionary:
+	if index < 0 or index >= HOTBAR_SIZE or stack.is_empty():
+		return stack
+	var item_id := int(stack.get("item", BlockDB.AIR))
+	var amount := int(stack.get("count", 0))
+	if item_id == BlockDB.AIR or amount <= 0 or not ItemDB.is_valid(item_id):
+		return stack
+	var capacity := maxi(1, ItemDB.max_stack(item_id))
+	var wear := clampi(int(stack.get("durability", _initial_durability(item_id))),
+		0, maxi(0, ItemDB.max_durability(item_id)))
+	if is_empty(index):
+		var placed := mini(capacity, amount)
+		slots[index] = item_id
+		counts[index] = placed
+		durability[index] = wear
+		changed.emit()
+		return {} if placed >= amount else {"item": item_id, "count": amount - placed, "durability": wear}
+	if slots[index] == item_id and capacity > 1:
+		var room := maxi(0, capacity - counts[index])
+		var placed := mini(room, amount)
+		if placed <= 0:
+			return stack
+		counts[index] += placed
+		changed.emit()
+		return {} if placed >= amount else {"item": item_id, "count": amount - placed, "durability": wear}
+	var displaced := {"item": slots[index], "count": counts[index], "durability": durability[index]}
+	slots[index] = item_id
+	counts[index] = mini(capacity, amount)
+	durability[index] = wear
+	changed.emit()
+	return displaced
+
+
 func used_slots() -> int:
 	var used := 0
 	for index in HOTBAR_SIZE:

@@ -307,4 +307,93 @@ func run(h: TestHarness) -> void:
 	_test_full_inventory(h)
 	_test_durability(h)
 	_test_serialisation(h)
+	_test_slot_moves(h)
 	h.finish()
+
+
+### Slot moves (the inventory interface's drag & drop model) -----------------
+
+func _test_slot_moves(h: TestHarness) -> void:
+	# Swapping two occupied slots exchanges item, count and durability.
+	var inventory := Inventory.new()
+	inventory.add(BlockDB.STONE, 5)
+	inventory.add(ItemDB.WOOD_PICKAXE, 1, 17)
+	h.check(inventory.swap_slots(0, 1), "swapping two occupied slots reports a change")
+	h.eq(inventory.slots[0], ItemDB.WOOD_PICKAXE, "the tool moved to the first slot")
+	h.eq(inventory.counts[0], 1, "the tool kept its count")
+	h.eq(inventory.durability_of(0), 17, "the tool kept its durability")
+	h.eq(inventory.slots[1], BlockDB.STONE, "the block moved to the second slot")
+	h.eq(inventory.counts[1], 5, "the block kept its count")
+	h.check(not inventory.swap_slots(0, 0), "swapping a slot with itself does nothing")
+	h.check(not inventory.swap_slots(-1, 0), "an out-of-range swap does nothing")
+
+	# Moving onto an empty slot is a plain move.
+	var moved := inventory.move_slot(0, 5)
+	h.check(moved, "moving a stack into an empty slot reports a change")
+	h.eq(inventory.slots[5], ItemDB.WOOD_PICKAXE, "the tool arrived in the empty slot")
+	h.check(inventory.is_empty(0), "the source slot is now empty")
+	h.eq(inventory.durability_of(5), 17, "the moved tool kept its durability")
+
+	# Moving onto a matching stack merges what fits and leaves the rest behind.
+	var merge := Inventory.new()
+	merge.add(BlockDB.STONE, 60)
+	merge.add(BlockDB.STONE, 10)
+	h.check(merge.move_slot(0, 1), "moving onto a matching stack reports a change")
+	h.eq(merge.slots[0], BlockDB.STONE, "the partial stack stays in its slot")
+	h.eq(merge.counts[0], 6, "only the overflow beyond the stack cap stayed behind")
+	h.eq(merge.counts[1], 64, "the target stack was topped up to the cap")
+	h.eq(merge.count_of(BlockDB.STONE), 70, "the merge conserved the items")
+
+	# Moving a different item onto an occupied slot swaps instead.
+	var swap := Inventory.new()
+	swap.add(BlockDB.DIRT, 3)
+	swap.add(BlockDB.SAND, 7)
+	h.check(swap.move_slot(0, 1), "moving onto a different item reports a change")
+	h.eq(swap.slots[0], BlockDB.SAND, "the two stacks swapped")
+	h.eq(swap.slots[1], BlockDB.DIRT, "both stacks survived the swap")
+
+	# Tools never merge with each other.
+	var tools := Inventory.new()
+	tools.add(ItemDB.STONE_AXE, 1, 30)
+	tools.add(ItemDB.STONE_AXE, 1, 90)
+	h.check(tools.move_slot(0, 1), "moving a tool onto another tool reports a change")
+	h.eq(tools.durability_of(0), 90, "the tools swapped instead of merging")
+	h.eq(tools.durability_of(1), 30, "both tools kept their own durability")
+
+	# take_stack / put_stack round-trip, with the leftover reported.
+	var carried := tools.take_stack(0)
+	h.eq(int(carried.get("item", -1)), ItemDB.STONE_AXE, "take_stack returns the item")
+	h.eq(int(carried.get("count", 0)), 1, "take_stack returns the count")
+	h.eq(int(carried.get("durability", -1)), 90, "take_stack returns the durability")
+	h.check(tools.is_empty(0), "take_stack empties the slot")
+	h.check(tools.take_stack(0).is_empty(), "taking from an empty slot returns nothing")
+	h.check(tools.take_stack(99).is_empty(), "taking from a bad index returns nothing")
+
+	var leftover: Dictionary = tools.put_stack(4, {"item": BlockDB.COBBLESTONE, "count": 8, "durability": 0})
+	h.check(leftover.is_empty(), "putting a stack into an empty slot leaves no leftover")
+	h.eq(tools.counts[4], 8, "the stack landed in the slot")
+	h.eq(tools.slots[4], BlockDB.COBBLESTONE, "the right item landed in the slot")
+
+	var big: Dictionary = tools.put_stack(5, {"item": BlockDB.COBBLESTONE, "count": 70, "durability": 0})
+	h.eq(int(big.get("count", -1)), 6, "putting more than the cap returns the overflow")
+	h.eq(tools.counts[5], 64, "the slot filled to the cap")
+
+	# A different item displaces the target stack, which comes back to the caller.
+	var displaced: Dictionary = tools.put_stack(5, {"item": BlockDB.GRAVEL, "count": 3, "durability": 0})
+	h.eq(int(displaced.get("item", -1)), BlockDB.COBBLESTONE, "the displaced stack is handed back")
+	h.eq(int(displaced.get("count", -1)), 64, "the displaced stack kept its count")
+	h.eq(tools.slots[5], BlockDB.GRAVEL, "the new stack took the slot")
+	h.eq(tools.counts[5], 3, "the new stack kept its count")
+
+	# A full matching stack returns the whole carried stack (nowhere to put it).
+	h.eq(tools.put_stack(5, {"item": BlockDB.GRAVEL, "count": 64, "durability": 0}).get("count", -1), 3,
+		"topping the gravel stack up to its cap returns the surplus of the second put")
+	h.eq(tools.counts[5], 64, "the gravel stack is now full")
+	var onto_full := tools.put_stack(5, {"item": BlockDB.GRAVEL, "count": 2, "durability": 0})
+	h.eq(int(onto_full.get("count", -1)), 2, "a full matching stack returns the whole stack")
+	h.eq(int(onto_full.get("item", -1)), BlockDB.GRAVEL, "the returned stack is the same item")
+	h.eq(tools.counts[5], 64, "the target stack was not touched")
+
+	h.eq(int(tools.put_stack(99, {"item": BlockDB.SAND, "count": 1, "durability": 0}).get("count", -1)), 1,
+		"putting into a bad index returns the whole stack")
+	h.eq(tools.take_stack(4).size(), 3, "take_stack returns a complete stack dictionary")

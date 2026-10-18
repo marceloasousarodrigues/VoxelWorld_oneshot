@@ -31,6 +31,7 @@ var inventory: Inventory
 var hud: GameHUD
 var menu: MainMenu
 var crafting: CraftingPanel
+var inventory_panel: InventoryPanel
 var settings_panel: SettingsPanelNode
 var death_screen: DeathScreen
 var saves: SaveManager
@@ -90,6 +91,7 @@ var _options := {
 	"hide_hud": false,
 	"fly": false,
 	"open_crafting": false,
+	"open_inventory": false,
 	"open_settings": false,
 	"creature_feedback_capture": false,
 	"spawn_hostiles": false,
@@ -330,6 +332,13 @@ func _build_ui() -> void:
 	settings_panel.setup(settings)
 	settings_panel.setting_changed.connect(_on_setting_changed)
 
+	# The inventory interface shares the crafting layer height: only one of the
+	# three panels is ever open, and they close each other.
+	inventory_panel = InventoryPanel.new()
+	inventory_panel.name = "InventoryPanel"
+	crafting_layer.add_child(inventory_panel)
+	inventory_panel.setup(inventory, library)
+
 	# The death screen sits above the HUD and the crafting panel but below the
 	# menu (20), and owns the screen while the player is dead.
 	var death_layer := CanvasLayer.new()
@@ -405,6 +414,8 @@ func _parse_arguments() -> void:
 				_options["straight_to_game"] = true
 			"--open-crafting":
 				_options["open_crafting"] = true
+			"--open-inventory":
+				_options["open_inventory"] = true
 			"--open-settings":
 				_options["open_settings"] = true
 			"--tools":
@@ -480,6 +491,8 @@ func _show_title() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if crafting != null and crafting.is_open():
 		crafting.close()
+	if inventory_panel != null and inventory_panel.is_open():
+		inventory_panel.close()
 	if death_screen != null and death_screen.is_open():
 		death_screen.hide_death()
 	menu.set_title_callback(_return_to_title)
@@ -494,6 +507,8 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	menu.hide_menu()
 	if crafting != null and crafting.is_open():
 		crafting.close()
+	if inventory_panel != null and inventory_panel.is_open():
+		inventory_panel.close()
 	state = State.LOADING
 	_loading_seconds = 0.0
 	_play_seconds = 0.0
@@ -678,6 +693,8 @@ func _enter_play(area_ready: bool) -> void:
 		hud.flash("VoxelWorld — seed %d" % world.world_seed, 4.0)
 	if bool(_options["open_crafting"]):
 		_open_crafting()
+	if bool(_options["open_inventory"]):
+		_open_inventory()
 	if bool(_options["open_settings"]):
 		_open_settings()
 	print("M17_GAME_READY seed=%d player=%s chunks=%d views=%d meshed=%d" % [
@@ -809,6 +826,8 @@ func _pause() -> void:
 		settings_panel.close()
 	if crafting != null and crafting.is_open():
 		crafting.close()
+	if inventory_panel != null and inventory_panel.is_open():
+		inventory_panel.close()
 	state = State.PAUSED
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.can_interact = false
@@ -1026,6 +1045,8 @@ func _enter_dead() -> void:
 		return
 	if crafting != null and crafting.is_open():
 		crafting.close()
+	if inventory_panel != null and inventory_panel.is_open():
+		inventory_panel.close()
 	state = State.DEAD
 	player.velocity = Vector3.ZERO
 	player.can_interact = false
@@ -1100,7 +1121,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		# the on-screen Respawn button is pressed.
 		return
 	if event.is_action_pressed("release_mouse"):
-		if state == State.PLAYING and settings_panel != null and settings_panel.is_open():
+		if state == State.PLAYING and inventory_panel != null and inventory_panel.is_open():
+			# Escape closes the inventory before it would pause the game.
+			_close_inventory()
+		elif state == State.PLAYING and settings_panel != null and settings_panel.is_open():
 			# Escape closes the settings panel before it would pause the game.
 			_close_settings()
 		elif state == State.PLAYING and crafting != null and crafting.is_open():
@@ -1121,7 +1145,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_settings()
 		elif event.is_action_pressed("open_crafting"):
 			_toggle_crafting()
-		elif (settings_panel != null and settings_panel.is_open()) or (crafting != null and crafting.is_open()):
+		elif event.is_action_pressed("open_inventory"):
+			_toggle_inventory()
+		elif (settings_panel != null and settings_panel.is_open()) \
+				or (crafting != null and crafting.is_open()) \
+				or (inventory_panel != null and inventory_panel.is_open()):
 			# The open overlay owns the mouse; ignore gameplay input.
 			pass
 		elif event.is_action_pressed("toggle_fly"):
@@ -1212,11 +1240,50 @@ func _toggle_settings() -> void:
 		_open_settings()
 
 
+# =========================================================================
+# Inventory interface
+# =========================================================================
+
+func _toggle_inventory() -> void:
+	if inventory_panel == null:
+		return
+	if inventory_panel.is_open():
+		_close_inventory()
+	else:
+		_open_inventory()
+
+
+func _open_inventory() -> void:
+	if inventory_panel == null or state != State.PLAYING:
+		return
+	# The three overlays are mutually exclusive: opening one closes the others.
+	if crafting != null and crafting.is_open():
+		crafting.close()
+	if inventory_panel != null and inventory_panel.is_open():
+		inventory_panel.close()
+	if settings_panel != null and settings_panel.is_open():
+		settings_panel.close()
+	inventory_panel.open()
+	player.can_interact = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _close_inventory() -> void:
+	if inventory_panel == null:
+		return
+	inventory_panel.close()
+	if state == State.PLAYING:
+		player.can_interact = true
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
 func _open_settings() -> void:
 	if settings_panel == null or state != State.PLAYING:
 		return
 	if crafting != null and crafting.is_open():
 		crafting.close()
+	if inventory_panel != null and inventory_panel.is_open():
+		inventory_panel.close()
 	settings_panel.open()
 	player.can_interact = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

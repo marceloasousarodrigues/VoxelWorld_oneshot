@@ -1124,6 +1124,69 @@ but nothing consumed them.  Hunger is now a real system that makes the food chai
 - Starvation deliberately cannot kill, so the survival pressure is soft.
 - Verification is scripted through the real scene plus the capture; no human play-through.
 
+## M17 Phase B completion: the full inventory interface (2026-10-19)
+
+The last unchecked Phase B item ("only the hotbar row is visible; no drag & drop").  The
+inventory now has a real interface, and the item model gained the slot operations an interface
+needs.
+
+### Model (`scripts/game/inventory.gd`)
+
+- `swap_slots(a, b)` exchanges item, count **and** durability.
+- `move_slot(from, to)` tops up a matching stack (respecting the 64 cap, leaving the remainder
+  behind) and otherwise swaps — the operation Godot's drag & drop drop handler performs.
+- `take_stack(index)` / `put_stack(index, stack)` are the click-to-carry primitives.  `put_stack`
+  returns exactly what the caller must still hold (the part that did not fit, or the stack a
+  swap displaced) so a move can never duplicate or lose an item.
+- `clear_slot(index)` is public.
+
+### Interface (`scripts/game/inventory_panel.gd`, `inventory_slot.gd`, both new)
+
+- `InventorySlot` draws one slot (icon, count, durability bar with the same green/amber/red
+  thresholds as the HUD, slot number) and implements both interactions: a left click reports
+  intent, and it is a real Godot drag source/target (`_get_drag_data`/`_can_drop_data`/
+  `_drop_data`).  The dragged stack is drawn as a preview but stays in the model until the drop,
+  so cancelling a drag cannot lose an item.
+- `InventoryPanel` shows nine readable slots in a grid, a "carrying" slot with the picked-up
+  stack, and an item facts pane for the focused slot: kind (block / material / food / tool),
+  block hardness and whether it is solid, its drop, the tool class and tier it needs, stack cap,
+  how many are held, tool tier/mining speed/attack/remaining durability and how many blocks that
+  is good for, food value and healing, the recipe that makes it and every recipe that uses it
+  (via `Crafting`).  Closing with a carried stack puts it back rather than dropping it.
+- `focus_slot(index)` selects a slot (and mirrors it into the hotbar selection).
+
+### Game integration
+
+- New `open_inventory` action on **I**; `--open-inventory` for captures.  The three overlays
+  (crafting, inventory, settings) are mutually exclusive — opening one closes the others — and
+  Escape closes the inventory before it would pause.  The HUD hint now lists "I inventory".
+
+### Tests and evidence
+
+- `test_items.gd` gained slot-move coverage: swap (including durability), move into an empty
+  slot, merge with a remainder, swap-on-different-item, tools never merging, `take_stack` on
+  empty/bad indices, `put_stack` into an empty slot, over the cap (overflow returned), onto a
+  full matching stack, and the swap returning the displaced stack.
+- `run_integration.gd` gained **28 assertions** (125 -> 153): the panel opens and takes the
+  mouse, shows every slot, a stack is picked up / refused twice / dropped through the panel's
+  own handlers with the count conserved, the drag & drop drop handler swaps slots, a tool keeps
+  its durability through a move, the details pane names the selected item and reports its
+  durability, mining speed and recipe uses, and closing with a carried stack puts it back.
+- Unit **1062 assertions**, integration **153 assertions**, both exit 0 with 0 bytes stderr.
+  Smoke unchanged (`world_hash=441363152919021799`, `faces_hash=6977993294663025454`).
+- Windowed capture `inventory-panel.png` (`--capture --tools --open-inventory`) inspected: the
+  nine slots with icons, counts and durability bars, the selected slot highlighted, the
+  carrying row, and the facts pane reading "Wooden Pickaxe / Wooden tool (Pickaxe) / Stack: 1 /
+  Held: 1 / Tool tier: Wooden / Mining speed: 2.0x / Attack: 2 / Durability: 20 / 60 / Blocks
+  left: about 20 / Made by: 3 Planks + 2 Stick → 1 Wooden Pickaxe · Crafting Table".
+
+### Limitations
+
+- There is one nine-slot row, so there is no second page or overflow area (the fixed hotbar is
+  the whole inventory by design); stack reordering is the interface's main job.
+- Verification is scripted; the drag & drop code path is exercised through the same
+  `move_slot` call the drop handler makes, not by synthesising OS-level mouse drags.
+
 
 ## M17 Priority 3: items, tools, mining and a real crafting system (2026-10-19)
 

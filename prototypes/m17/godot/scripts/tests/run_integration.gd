@@ -520,6 +520,9 @@ func _main() -> void:
 	await _crafting_and_mining_section()
 	await _hunger_section()
 
+	# --- Inventory interface: slots, stack moves and item details ----------
+	await _inventory_section()
+
 	if _failures.is_empty():
 		print("M17_INTEGRATION_PASS %d assertions" % _passes)
 		quit(0)
@@ -751,3 +754,67 @@ func _hunger_section() -> void:
 	_game.hunger = Survival.MAX_HUNGER
 	_game.exhaustion = 0.0
 	player.flying = false
+
+
+## The inventory interface through the real scene: it opens, the mouse and
+## interaction follow it, stacks move between slots through the panel's own
+## handlers, and the item facts pane explains what is selected.
+func _inventory_section() -> void:
+	var player: Node = _game.player
+	var inventory: Inventory = _game.inventory
+	var panel: InventoryPanel = _game.inventory_panel
+	_game._open_inventory()
+	await process_frame
+	_check(panel.is_open(), "the inventory panel opens")
+	_check(not player.can_interact, "the inventory panel disables player interaction")
+	_check(panel.slot_count() == Inventory.HOTBAR_SIZE, "the panel shows every hotbar slot")
+
+	# Move a stack between two slots through the panel's click path.
+	inventory.clear_slot(0)
+	inventory.clear_slot(4)
+	_check(inventory.put_stack(0, {"item": BlockDB.GRAVEL, "count": 12, "durability": 0}).is_empty(),
+		"the first slot holds gravel for the move test")
+	_check(inventory.slots[0] == BlockDB.GRAVEL, "the first slot holds the gravel stack")
+	_check(panel.pick_up(0), "clicking a slot picks the stack up")
+	_check(inventory.is_empty(0), "the picked-up stack left its slot")
+	_check(int(panel.carried().get("count", 0)) == 12, "the carried stack kept its count")
+	_check(not panel.pick_up(1), "a second pick-up is refused while a stack is carried")
+	_check(panel.put_down(4), "clicking another slot drops the carried stack there")
+	_check(int(inventory.count_of(BlockDB.GRAVEL)) == 12, "the items survived the move")
+	_check(inventory.slots[4] == BlockDB.GRAVEL and inventory.counts[4] == 12,
+		"the stack arrived in the destination slot")
+	_check(panel.carried().is_empty(), "nothing is left carried after a complete drop")
+
+	# The drag & drop path calls the same model move.
+	var moved := panel.swap(4, 5)
+	_check(moved, "the panel can swap two slots (the drag & drop drop handler)")
+	_check(inventory.slots[5] == BlockDB.GRAVEL, "the swap moved the gravel stack")
+
+	# A tool keeps its durability through a move and is described in the panel.
+	inventory.clear_slot(6)
+	inventory.clear_slot(7)
+	inventory.put_stack(6, {"item": ItemDB.IRON_PICKAXE, "count": 1, "durability": 100})
+	panel.focus_slot(6)
+	_check(panel.detail_text().contains("Iron Pickaxe"), "the detail pane names the selected tool")
+	_check(panel.detail_text().contains("Durability"), "the detail pane reports tool durability")
+	_check(panel.detail_text().contains("Mining speed"), "the detail pane reports the mining speed")
+	_check(panel.pick_up(6), "the tool can be picked up")
+	_check(panel.put_down(7), "the tool can be put down")
+	_check(inventory.slots[7] == ItemDB.IRON_PICKAXE, "the tool arrived in the new slot")
+	_check(inventory.durability_of(7) == 100, "the moved tool kept its durability")
+	_check(not ItemDB.is_tool_item(BlockDB.STONE), "a block is still not a tool")
+
+	# A block's detail pane reports its drop and what it is used in.
+	inventory.clear_slot(8)
+	inventory.put_stack(8, {"item": BlockDB.OAK_LOG, "count": 3, "durability": 0})
+	panel.focus_slot(8)
+	_check(panel.detail_text().contains("Oak Log"), "the detail pane names the selected block")
+	_check(panel.detail_text().contains("Used in"), "the detail pane lists the recipes that use it")
+
+	# Closing with a carried stack must never lose it.
+	var logs_before := inventory.count_of(BlockDB.OAK_LOG)
+	_check(panel.pick_up(8), "a stack can be carried when the panel closes")
+	panel.close()
+	await process_frame
+	_check(not panel.is_open(), "the inventory panel closes")
+	_check(inventory.count_of(BlockDB.OAK_LOG) == logs_before, "closing with a carried stack puts it back")

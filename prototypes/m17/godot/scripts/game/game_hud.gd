@@ -371,7 +371,7 @@ func refresh() -> void:
 		if max_wear > 0:
 			text += "   %d / %d" % [inventory.durability_of(inventory.selected), max_wear]
 		_selected_label.text = "%s   (slot %d)" % [text, inventory.selected + 1]
-	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  hold LMB mine  ·  RMB build/eat  ·  C craft  ·  O settings\n" \
+	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  hold LMB mine  ·  RMB build/eat  ·  C craft  ·  I inventory  ·  O settings\n" \
 		+ "1-9 select  ·  F fly  ·  F5 save  ·  F9 load  ·  F3 debug  ·  Esc pause"
 
 
