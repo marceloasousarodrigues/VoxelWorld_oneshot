@@ -240,12 +240,16 @@ func _test_crafting_table(h: TestHarness) -> void:
 	h.eq(table.inventory.total_of(BlockDB.PLANKS), 0, "all four planks were consumed")
 	h.eq(table.inventory.count_at(StationModel.TABLE_OUTPUT_SLOT), 1, "the result sits in the result slot")
 
-	# Matching is per cell: four planks stacked in one cell are not the recipe,
-	# because the grid holds one item per cell (as in Minecraft).
+	# Shapeless matching is quantity-aware: four planks stacked in one cell are
+	# the same recipe ingredients as four planks spread across cells.
 	table.inventory.insert(0, {"item": BlockDB.PLANKS, "count": 4})
-	h.check((table.matched_recipe() as Dictionary).is_empty(),
-		"four planks stacked in one cell do not match the recipe")
-	table.inventory.clear_slot(0)
+	h.eq(str(table.matched_recipe().get("id", "")), "crafting_table",
+		"four planks stacked in one cell still match the shapeless recipe")
+	var stacked_craft: Dictionary = table.craft_grid()
+	h.check(bool(stacked_craft["ok"]), "the stacked shapeless grid crafts")
+	h.eq(table.inventory.total_of(BlockDB.PLANKS), 0,
+		"the stacked shapeless craft consumed all four planks")
+	table.inventory.take(StationModel.TABLE_OUTPUT_SLOT, -1)
 
 	# A full result slot refuses the next craft atomically.  A crafting table
 	# stacks to 64, so the slot is filled to its cap first.

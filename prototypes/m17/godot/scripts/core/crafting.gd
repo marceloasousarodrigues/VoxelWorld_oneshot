@@ -480,7 +480,8 @@ static func validate(recipe_entry: Dictionary) -> String:
 ## rows of item ids (`BlockDB.AIR` = empty), at most 3x3; like Minecraft, the
 ## pattern may sit anywhere in the grid and empty rows and columns are trimmed
 ## before comparing, and a shaped pattern may be mirrored horizontally.  A
-## shapeless recipe matches on the ingredient multiset.
+## shapeless recipe matches on the ingredient multiset, counting one item per
+## occupied cell (use `match_shapeless_counts` when the grid can hold stacks).
 static func match_grid(recipe_entry: Dictionary, grid: Array) -> bool:
 	var ids := _grid_ids(grid)
 	if not recipe_entry.has("pattern"):
@@ -492,6 +493,20 @@ static func match_grid(recipe_entry: Dictionary, grid: Array) -> bool:
 	# Minecraft-shaped recipes are mirrorable left-to-right (the axe pattern, for
 	# example, works in both directions).
 	return _mirror_rows(pattern) == placed
+
+
+## Count-aware shapeless matching.  `counts` is item id -> quantity currently in
+## the grid, so eight cobblestones stacked in one cell still satisfy the furnace
+## recipe (the recipe is position-independent).  Zero/air entries are ignored.
+static func match_shapeless_counts(recipe_entry: Dictionary, counts: Dictionary) -> bool:
+	if recipe_entry.has("pattern"):
+		return false
+	var present := {}
+	for item_id in counts:
+		var value := int(counts[item_id])
+		if value > 0 and int(item_id) != BlockDB.AIR:
+			present[int(item_id)] = value
+	return present == ingredients(recipe_entry)
 
 
 static func _mirror_rows(rows: Array) -> Array:

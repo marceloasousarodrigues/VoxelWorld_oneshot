@@ -130,8 +130,8 @@ func _resolve_layers() -> void:
 		var keys: PackedStringArray = BlockDB.face_keys[block_id]
 		for face in 6:
 			face_layer[block_id * 6 + face] = library.layer_index(keys[face]) if not keys[face].is_empty() else 0
-		var occludes := BlockDB.is_opaque(block_id) or block_id == BlockDB.OAK_LEAVES \
-			or block_id == BlockDB.PINE_LEAVES or block_id == BlockDB.CACTUS
+		var occludes := not BlockDB.is_open_model(block_id) and (BlockDB.is_opaque(block_id) \
+			or block_id == BlockDB.OAK_LEAVES or block_id == BlockDB.PINE_LEAVES or block_id == BlockDB.CACTUS)
 		_occluder[block_id] = 1 if occludes else 0
 
 
@@ -405,7 +405,11 @@ func _emit_faces(input: Dictionary) -> void:
 					if liquid[neighbour] == 1:
 						continue
 				elif opaque[neighbour] == 1:
-					continue
+					# Open station models (table/furnace) are not full cubes and
+					# must not cull the ground/neighbour face beneath or beside
+					# them; doing so left a visible hole under the table.
+					if BlockDB.open_model[neighbour] == 0:
+						continue
 				elif neighbour == block_id and culls:
 					continue
 			if is_station:

@@ -29,19 +29,35 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Station targeting from the existing voxel ray with range, prompt/outline,
       E to open, Esc/E to close, blocked world input and safe invalid/unloaded
       targets.  Verified from top-down and diagonal angles at range
-- [x] Crafting table: one ingredient per grid cell per click/drag/shift-click,
-      real 3×3 shaped (with horizontal mirroring) and shapeless matching, live
-      result preview/status, atomic craft and full-result refusal
+- [x] Crafting table: one ingredient per grid cell per click/drag/shift-click;
+      real 3×3 shaped (with horizontal mirroring) and shapeless matching; live
+      result preview/status, atomic craft and full-result refusal.  **M20
+      stabilization** makes shapeless matching quantity-aware, so eight
+      cobblestone stacked in one cell craft a furnace exactly like eight spread
+      across cells; shaped recipes keep the per-cell rule
 - [x] Furnace: input/fuel/output timed processing verified through the rebuilt
       panel, with fuel, output-full pause, progress and persistence coverage
-- [x] One coherent crafting model: the C catalogue is a recipe reference plus
-      hand crafting; table/furnace recipes are listed with missing ingredients
-      and “use … (E)” but cannot be crafted from the catalogue
+- [x] One crafting model: the C catalogue and the world-object panels share the
+      same `Crafting` catalogue and atomic transaction.  **M20 stabilization**
+      restores station-gated crafting in the catalogue (the earlier build only
+      pointed at E, which made eight cobblestone appear uncraftable), and removes
+      the duplicate `quick_move`/`put_one` ownership bugs
 - [x] Save VERSION 7: 36-slot inventory, legacy nine-row saves load into the
       hotbar, storage rows round-trip, oversized payloads rejected
-- [x] Tests: unit **1477** / integration **327** assertions, exit 0, 0 bytes
+- [x] **M20 stabilization mesh fix**: `BlockDB.open_model` prevents the
+      open-legged table and furnace from culling the ground/neighbour faces they
+      do not cover, so the stone face under the table is rendered again.  Pinned
+      by `test_block_db.gd` (all block pairs) and `test_m20_stabilization.gd`
+      (ground face present, still present after station removal), and verified in
+      `m20-table-ground.png`
+- [x] **Item-ownership conservation**: deterministic split/merge/swap/quick-move,
+      exact station→player shift-click and incompatible right-click regressions,
+      a take-result-close-reopen check, 800 randomized inventory-panel operations
+      and 600 randomized station transfers, plus real-scene integration coverage
+- [x] Tests: unit **1554** / integration **344** assertions, exit 0, 0 bytes
       stderr; smoke world hash unchanged; `m20-inventory.png`,
-      `m20-table.png`, `m20-furnace.png` and `m20-recipes.png` inspected
+      `m20-table.png`, `m20-furnace.png`, `m20-recipes.png` and
+      `m20-table-ground.png` inspected
 - [~] Human keyboard/mouse play-through of the new interfaces remains outstanding
 - [ ] Dropped-item entity for a genuinely full inventory (mining overflow is
       still reported and lost) and a 2×2 hand-crafting grid

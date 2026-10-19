@@ -44,6 +44,13 @@ func run(h: TestHarness) -> void:
 	h.check(BlockDB.hides_neighbour_face(BlockDB.OAK_LEAVES, BlockDB.OAK_LEAVES), "canopy interior faces are culled")
 	h.check(BlockDB.hides_neighbour_face(BlockDB.OAK_LEAVES, BlockDB.STONE), "opaque neighbours hide leaves faces")
 	h.check(not BlockDB.hides_neighbour_face(BlockDB.GRASS, BlockDB.OAK_LEAVES), "grass face stays visible next to leaves")
+	h.check(not BlockDB.hides_neighbour_face(BlockDB.STONE, BlockDB.CRAFTING_TABLE),
+		"the open crafting-table model does not hide the block below it")
+	h.check(not BlockDB.hides_neighbour_face(BlockDB.STONE, BlockDB.FURNACE),
+		"the furnace model does not hide neighbouring faces")
+	h.check(BlockDB.is_open_model(BlockDB.CRAFTING_TABLE), "the crafting table is an open render model")
+	h.check(BlockDB.is_open_model(BlockDB.FURNACE), "the furnace is an open render model")
+	h.check(not BlockDB.is_open_model(BlockDB.STONE), "stone is a full cube")
 
 	# Render layer assignment drives which mesh surface a block lands in.
 	h.eq(BlockDB.layer_of(BlockDB.WATER), BlockDB.LAYER_WATER, "water renders in the water layer")
@@ -58,6 +65,7 @@ func run(h: TestHarness) -> void:
 	var opaque := BlockDB.opaque
 	var liquid := BlockDB.liquid
 	var cull_same := BlockDB.cull_same
+	var open_model := BlockDB.open_model
 	var mismatches := 0
 	for block_id in BlockDB.COUNT:
 		var is_liquid := liquid[block_id] == 1
@@ -68,7 +76,7 @@ func run(h: TestHarness) -> void:
 				if is_liquid:
 					inlined = liquid[neighbour] == 1
 				elif opaque[neighbour] == 1:
-					inlined = true
+					inlined = open_model[neighbour] == 0
 				elif neighbour == block_id and culls:
 					inlined = true
 			if inlined != BlockDB.hides_neighbour_face(block_id, neighbour):

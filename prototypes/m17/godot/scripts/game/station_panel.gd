@@ -677,9 +677,16 @@ func put_down(side: String, index: int) -> bool:
 	return true
 
 
-## Right-click while carrying: place a single item.
+## Right-click while carrying: place a single item.  This never swaps a different
+## item out of the target: an incompatible occupied slot refuses the operation
+## before the model is touched, so the displaced stack cannot be dropped.
 func put_one(side: String, index: int) -> bool:
 	if _carried.is_empty():
+		return false
+	var model = _model(side)
+	if model == null:
+		return false
+	if not model.is_empty(index) and model.item_at(index) != int(_carried["item"]):
 		return false
 	var one := {"item": int(_carried["item"]), "count": 1,
 		"durability": int(_carried.get("durability", 0))}
@@ -714,7 +721,11 @@ func quick_move(side: String, index: int) -> bool:
 			leftover_count = _deposit_to_grid(stack)
 	else:
 		var leftover := inventory.add_stack(stack) if inventory != null else stack
-		leftover_count = int(leftover.get("count", count))
+		# `add_stack` returns an empty dictionary when everything fit.  Do not use
+		# the original count as a default here: that made a successful station ->
+		# player shift-click restore the whole stack to the station as well,
+		# duplicating it in both containers.
+		leftover_count = 0 if leftover.is_empty() else int(leftover.get("count", 0))
 	if leftover_count > 0:
 		# Put the remainder back where it came from.
 		var remainder := {"item": item_id, "count": leftover_count, "durability": wear}

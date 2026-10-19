@@ -577,10 +577,25 @@ func _crafting_and_mining_section() -> void:
 	_check(not player.can_interact, "the crafting panel disables player interaction")
 	_check(_game.crafting.station() == Crafting.STATION_TABLE, "the panel receives the world station")
 	_check(_game.crafting.row_count() == Crafting.recipes().size(), "the panel lists every recipe")
-	_check(not _game.crafting.row_enabled("stone_axe"),
-		"a table recipe is listed but not crafted from the catalogue")
-	_check(_game.crafting.row_status("stone_axe").contains("Crafting Table"),
-		"the table recipe points at the crafting-table interface")
+
+	# The exact reported scenario: eight cobblestone, a crafting table nearby, and
+	# the furnace recipe.  It must be enabled, consume exactly eight and create one.
+	inventory.remove(BlockDB.COBBLESTONE, inventory.count_of(BlockDB.COBBLESTONE))
+	inventory.add(BlockDB.COBBLESTONE, 8)
+	var furnace_before := inventory.count_of(BlockDB.FURNACE)
+	_check(_game.crafting.row_enabled("furnace"),
+		"eight cobblestone unlock the furnace at a crafting table")
+	_check(_game.crafting.press_craft("furnace"),
+		"the catalogue's furnace Craft button activates")
+	await process_frame
+	_check(inventory.count_of(BlockDB.COBBLESTONE) == 0,
+		"the furnace craft consumed exactly eight cobblestone")
+	_check(inventory.count_of(BlockDB.FURNACE) == furnace_before + 1,
+		"the furnace craft created exactly one furnace")
+
+	inventory.add(BlockDB.COBBLESTONE, 8)
+	inventory.add(ItemDB.STICK, 4)
+	_check(_game.crafting.row_enabled("stone_axe"), "an affordable table recipe is enabled")
 	_check(not _game.crafting.row_enabled("iron_pickaxe"), "an unaffordable station recipe stays disabled")
 	_check(_game.crafting.row_status("iron_pickaxe").contains("missing"),
 		"the disabled row explains the missing ingredient")
@@ -589,14 +604,21 @@ func _crafting_and_mining_section() -> void:
 	var cobble_before := inventory.count_of(BlockDB.COBBLESTONE)
 	var stick_before_hand := inventory.count_of(ItemDB.STICK)
 	var planks_before_hand := inventory.count_of(BlockDB.PLANKS)
-	_check(_game.crafting.press_craft("sticks"), "the catalogue crafts a hand recipe")
+	_check(_game.crafting.press_craft("stone_axe"), "the catalogue crafts a station recipe")
+	await process_frame
+	_check(inventory.count_of(ItemDB.STONE_AXE) == 1, "the craft produced a stone axe")
+	_check(inventory.count_of(BlockDB.COBBLESTONE) == cobble_before - 3,
+		"the stone axe consumed exactly three cobblestone")
+	var axe_slot := inventory.slots.find(ItemDB.STONE_AXE)
+	_check(axe_slot >= 0 and inventory.durability_of(axe_slot) == ItemDB.max_durability(ItemDB.STONE_AXE),
+		"the crafted tool arrives at full durability")
+
+	_check(_game.crafting.press_craft("sticks"), "the catalogue crafts a hand recipe too")
 	await process_frame
 	_check(inventory.count_of(BlockDB.PLANKS) == planks_before_hand - 2,
 		"the hand craft consumed two planks")
-	_check(inventory.count_of(ItemDB.STICK) == stick_before_hand + 4,
-		"the hand craft produced four sticks")
-	_check(inventory.count_of(BlockDB.COBBLESTONE) == cobble_before,
-		"a station recipe never consumes ingredients from the catalogue")
+	_check(inventory.count_of(ItemDB.STICK) == stick_before_hand - 2 + 4,
+		"the hand craft produced four sticks after the axe consumed two")
 
 	# The batch button performs five hand crafts.
 	inventory.add(BlockDB.PLANKS, 10)
@@ -609,15 +631,22 @@ func _crafting_and_mining_section() -> void:
 	_check(inventory.count_of(ItemDB.STICK) == sticks_before + 20,
 		"the batch produced twenty sticks")
 
-	# Smelting is only done at the furnace object; the catalogue lists it.
-	_check(not _game.crafting.row_enabled("iron_ingot"), "smelting is never crafted from the catalogue")
+	# Smelting needs the furnace station; the catalogue uses the same model.
+	_check(not _game.crafting.row_enabled("iron_ingot"), "smelting needs a nearby furnace")
 	_check(_game.crafting.row_status("iron_ingot").contains("Furnace"),
-		"the smelting row points at the furnace")
+		"the smelting row names the missing furnace")
 	_game.world.set_block(Vector3i(9, 72, 8), BlockDB.FURNACE)
 	_game.crafting.set_station(_game._current_station())
+	inventory.remove(ItemDB.IRON_LUMP, inventory.count_of(ItemDB.IRON_LUMP))
+	inventory.remove(ItemDB.COAL, inventory.count_of(ItemDB.COAL))
+	inventory.add(ItemDB.IRON_LUMP, 1)
+	inventory.add(ItemDB.COAL, 1)
 	_check(_game.crafting.station() == Crafting.STATION_FURNACE, "a placed furnace becomes the station")
-	_check(not _game.crafting.row_enabled("iron_ingot"),
-		"the furnace's presence does not turn the catalogue into a second furnace UI")
+	_check(_game.crafting.row_enabled("iron_ingot"), "the furnace unlocks smelting")
+	_check(_game.crafting.press_craft("iron_ingot"), "the furnace smelts through the catalogue")
+	await process_frame
+	_check(inventory.count_of(ItemDB.IRON_INGOT) >= 1, "the smelted ingot is in the inventory")
+	_check(inventory.count_of(ItemDB.COAL) == 0, "the smelt consumed the coal fuel")
 
 	# Regression for "recipes requiring a crafting table do not appear": the
 	# catalogue used a four-block menu radius while the interaction reach is six.
@@ -1340,6 +1369,35 @@ func _stations_section() -> void:
 		"the drag & drop move conserved every stick")
 	_check(table.inventory.total_of(ItemDB.STICK) == 0,
 		"the station no longer holds the sticks")
+
+	# Regression: a station -> player shift-click must not also restore the stack
+	# into the station (the old handler used the original count as the default
+	# leftover when adding to the player, duplicating the whole stack).
+	table.inventory.clear_all()
+	table.inventory.insert(5, {"item": ItemDB.STICK, "count": 5})
+	var sticks_before_shift := inventory.count_of(ItemDB.STICK)
+	_check(panel.quick_move("station", 5), "shift-click moves a station stack to the player")
+	_check(inventory.count_of(ItemDB.STICK) == sticks_before_shift + 5,
+		"the player received exactly five sticks from the station")
+	_check(table.inventory.total_of(ItemDB.STICK) == 0,
+		"the station stack was not duplicated back into the station")
+
+	# Regression: right-click one item onto an incompatible occupied slot must
+	# refuse without swapping or losing the target stack.
+	inventory.clear_slot(27)
+	inventory.put_stack(27, {"item": BlockDB.SAND, "count": 10, "durability": 0})
+	table.inventory.insert(6, {"item": ItemDB.IRON_LUMP, "count": 3})
+	panel.pick_up("station", 6)
+	_check(not panel.put_one("player", 27),
+		"right-click one onto an incompatible player stack is refused")
+	_check(inventory.item_at(27) == BlockDB.SAND and inventory.count_at(27) == 10,
+		"the incompatible target stack is untouched")
+	_check(int(panel.carried().get("count", 0)) == 3,
+		"the cursor still holds all three iron lumps")
+	_check(panel.put_down("station", 6), "the cursor iron returns to the station")
+	_check(table.inventory.total_of(ItemDB.IRON_LUMP) == 3,
+		"the station still owns exactly three iron lumps")
+	table.inventory.clear_all()
 
 	# --- the interface blocks accidental world actions ---------------------
 	_game._close_station()

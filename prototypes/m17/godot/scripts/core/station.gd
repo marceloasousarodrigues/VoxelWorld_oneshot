@@ -108,15 +108,37 @@ func grid_rows() -> Array:
 	return rows
 
 
+## The item quantities currently in the 3x3 grid, ignoring the result slot.  The
+## shapeless recipe matcher uses this so a stack in one cell still counts as its
+## full quantity (eight cobblestone make a furnace whether spread or stacked).
+func grid_counts() -> Dictionary:
+	var counts := {}
+	for index in TABLE_GRID_SLOTS:
+		if inventory.is_empty(index):
+			continue
+		var item_id := inventory.item_at(index)
+		counts[item_id] = int(counts.get(item_id, 0)) + inventory.count_at(index)
+	return counts
+
+
 ## The recipe the grid currently satisfies, or an empty dictionary.  Hand recipes
 ## and crafting-table recipes are both craftable on a table (a table is at least
 ## as good as a hand), but furnace smelting recipes are not.
+##
+## Shaped recipes use the per-cell shape matcher; shapeless recipes are matched
+## by quantity, because their definition says position does not matter.
 func matched_recipe() -> Dictionary:
 	var grid := grid_rows()
+	var counts := grid_counts()
 	for recipe: Dictionary in Crafting.recipes():
 		if Crafting.station_of(recipe) == Crafting.STATION_FURNACE:
 			continue
-		if Crafting.match_grid(recipe, grid):
+		var matches := false
+		if recipe.has("pattern"):
+			matches = Crafting.match_grid(recipe, grid)
+		else:
+			matches = Crafting.match_shapeless_counts(recipe, counts)
+		if matches:
 			return recipe
 	return {}
 
@@ -148,9 +170,30 @@ func craft_grid() -> Dictionary:
 	var amount := int(recipe["output_count"])
 	if not _slot_fits(TABLE_OUTPUT_SLOT, output, amount):
 		return {"ok": false, "reason": "Result slot is full", "output": output, "count": 0}
-	for index in TABLE_GRID_SLOTS:
-		if not inventory.is_empty(index):
-			inventory.take(index, 1)
+	if recipe.has("pattern"):
+		# A shaped recipe takes one item from every occupied cell, exactly like
+		# placing one ingredient per cell in Minecraft.
+		for index in TABLE_GRID_SLOTS:
+			if not inventory.is_empty(index):
+				inventory.take(index, 1)
+	else:
+		# A shapeless recipe consumes the declared quantities, so a stack in one
+		# cell is used correctly instead of being mistaken for one item.  Validate
+		# the exact multiset before consuming anything.
+		var consumed: Dictionary = Crafting.ingredients(recipe)
+		if grid_counts() != consumed:
+			return {"ok": false, "reason": "Ingredients changed", "output": output, "count": 0}
+		for item_id in consumed:
+			var need := int(consumed[item_id])
+			for index in TABLE_GRID_SLOTS:
+				if need <= 0:
+					break
+				if inventory.item_at(index) != int(item_id):
+					continue
+				var taken := mini(need, inventory.count_at(index))
+				if taken > 0:
+					inventory.take(index, taken)
+					need -= taken
 	inventory.insert(TABLE_OUTPUT_SLOT, {"item": output, "count": amount}, true)
 	return {"ok": true, "reason": "", "output": output, "count": amount}
 

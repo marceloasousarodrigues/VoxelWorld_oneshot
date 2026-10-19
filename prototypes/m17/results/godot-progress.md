@@ -1,5 +1,95 @@
 # M17 Godot — Progress and Resume Point
 
+## M20 Stabilization — crafting, duplication and station mesh defects (2026-10-19)
+
+Correctness pass over the M20 inventory/station work.  No new gameplay was added;
+the three reported defects were reproduced, traced to a precise operation, fixed
+and covered by regression tests.
+
+### Defect 1 — furnace not craftable with eight cobblestone
+
+- **Reproduced** in a test: an inventory with eight cobblestone and a crafting
+  table nearby had the furnace row disabled in the C catalogue.
+- **Root cause**: the M20 catalogue had deliberately disabled table/furnace
+  recipes (“use … (E)”), so the recipe never became craftable even when its
+  station was present.  The underlying `Crafting` rule was already correct
+  (`8 Cobblestone → 1 Furnace`, station `table`).
+- **Fix**: the catalogue is station-gated again.  A recipe is enabled only when
+  the required station exists in the world, every ingredient/fuel is present
+  and the output fits; otherwise the row names the missing station or item.
+  `Crafting.can_craft`/`craft_many` remain the single atomic implementation used
+  by both the catalogue and the 3×3 grid.
+- **Extra fix for the grid path**: shapeless recipes are now matched and
+  consumed by quantity, so eight cobblestone stacked in one grid cell craft a
+  furnace exactly like eight spread across cells.  Shaped recipes keep the
+  per-cell Minecraft rule.  The exact multiset is validated before consuming, so
+  a refused craft still changes nothing.
+- **Tests**: `test_m20_stabilization.gd` reproduces the 8-cobble catalogue craft
+  and the stacked/spread grid craft; integration performs the 8-cobble craft
+  through the real `CraftingPanel` and the real scene.
+
+### Defect 2 — item duplication
+
+Two precise operations were found with a randomized conservation test that
+tracks player + station + cursor totals after every step.
+
+1. **Station → player shift-click duplicated a whole stack.**  In
+   `StationPanel.quick_move`, a successful `Inventory.add_stack()` returns `{}`,
+   but the code read the leftover as `int(leftover.get("count", count))` — the
+   original count.  It therefore also restored the whole stack into the station.
+   The fuzz caught it as `+8 Sticks`; the fix treats an empty return as zero.
+2. **Right-click one item onto an incompatible occupied slot swapped and dropped
+   the target.**  `StationPanel.put_one` had no compatibility pre-check, so
+   `Inventory.put_stack` swapped the carried item in and returned the displaced
+   stack, which `put_one` ignored, while the cursor count was not reduced.  The
+   result was one duplicated carried item and one lost target stack.  `put_one`
+   now refuses an incompatible occupied slot before touching the model.
+
+Regression coverage now includes deterministic split/merge/swap/quick-move
+count conservation, the exact shift-click and right-click sequences, a
+“take result, close, reopen, take again” check, 800 randomized inventory-panel
+operations and 600 randomized station transfers, plus real-scene integration
+assertions for both duplication paths.
+
+### Defect 3 — missing mesh under the crafting table
+
+- **Reproduced** in the real M18 scene: from ground level the plaza under the
+  open-legged table showed a pale patch instead of the stone-brick face (the
+  unreleased capture `m18-step12-close-noon.png` already showed it).
+- **Root cause**: the station block is still logically opaque/solid, so the
+  mesher culled the neighbouring block's face against it.  The custom table
+  model is a tabletop on legs and does not fill the cube, so the ground's top
+  face disappeared and the gap rendered as a hole.
+- **Fix**: `BlockDB.open_model` marks the table/furnace as non-cube render
+  models.  `hides_neighbour_face`, the mesher's inlined culling path and the AO
+  occluder table now treat them as not hiding neighbouring faces, while
+  `is_solid`/collision/identity are unchanged.  Removing the station and
+  rebuilding also leaves the ground face intact.
+- **Tests**: `test_block_db.gd` pins the culling rule for all block pairs;
+  `test_m20_stabilization.gd` meshes a stone block under a table, asserts the
+  ground top face is emitted, then removes the table and rebuilds.
+- **Visual evidence**: `results/godot/m20-table-ground.png` (same vantage as the
+  old close capture) now shows continuous stone brick under the table.
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows)
+
+- Unit: **1554 assertions**, exit 0, 0 bytes stderr.
+- Integration: **344 assertions**, exit 0, 0 bytes stderr.
+- Headless smoke: exit 0, 0 bytes stderr, `world_hash=7995773462820745781`,
+  `faces=170492`, `faces_hash=6834793821708419232` (no station in the spawn
+  region, so the neighbour-culling fix does not change that fingerprint).
+- Inspected captures: `m20-table-ground.png` (ground face restored) and
+  `m20-recipes.png` (furnace row Ready, 8/8 cobblestone, Craft enabled).
+
+### Limitations
+
+- No human keyboard/mouse play-through; runtime evidence is scripted tests and
+  inspected captures.
+- There is still no dropped-item entity, so a genuinely full inventory reports
+  and loses a mining overflow.
+
+---
+
 ## M20 — Inventory, hotbar, crafting and interaction overhaul (2026-10-19)
 
 Mission: make the inventory, hotbar, crafting table, furnace and item collection
@@ -21,9 +111,10 @@ not touched.
    into one cell could never satisfy a four-cell recipe.
 3. **The interfaces had two competing crafting paths.**  The C catalogue could
    craft table/furnace recipes directly from the player inventory while the
-   station panels used a 3×3 grid / timed furnace.  M20 keeps the catalogue as a
-   recipe catalogue plus hand crafting, and makes table/furnace recipes
-   station-only (the row points at E and its buttons are disabled).
+   station panels used a 3×3 grid / timed furnace.  The stabilization pass keeps
+   one `Crafting` implementation and station-gates every recipe: a row is
+   craftable only when its required station is present, and the world object
+   offers the precise grid/furnace interaction.
 
 ### Implemented
 
@@ -90,9 +181,10 @@ not touched.
   pause and persisted progress were already M19 mechanics; M20 verifies them
   through the rebuilt panel and fixes the shared station-detection radius.  The
   catalogue no longer provides a second instantaneous furnace.
-- The catalogue (`C`) remains available as a recipe reference and for hand
-  recipes; station recipes are listed with their missing ingredients and a
-  “use Crafting Table/Furnace (E)” explanation but cannot be crafted there.
+- The catalogue (`C`) lists the whole catalogue with live have/need counts and
+  station-gated crafting; the world-object panels use the same `Crafting`
+  catalogue and atomic transaction, so there is no second recipe source or
+  duplicate consumption path.
 
 ### Verification actually run (Godot 4.7.2 stable mono, Windows)
 
@@ -881,12 +973,14 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 ## 9. Resume
 
 Read this file and `godot-roadmap.md`, then run the baseline commands at the end of this
-section. The current baseline is **1477 unit + 327 integration assertions** (post-M20),
-both exit 0 with 0 bytes of stderr. The M18 content pass (denser trees, boulders) changed
-the generated world, so the spawn-region smoke is now `world_hash=7995773462820745781`,
-`faces=170492`, `faces_hash=6834793821708419232`, `edits=0`, `meshed=392` at radius 4
-(re-confirmed after M20; M20 changes no world generation). All hashes quoted earlier in this
-file are historical (pre-M18 generation); only this one is current.
+section. The current baseline is **1554 unit + 344 integration assertions** (post-M20
+stabilization), both exit 0 with 0 bytes of stderr. The M18 content pass (denser trees,
+boulders) changed the generated world, so the spawn-region smoke is now
+`world_hash=7995773462820745781`, `faces=170492`,
+`faces_hash=6834793821708419232`, `edits=0`, `meshed=392` at radius 4
+(re-confirmed after M20 stabilization; the stabilization changes station/neighbour
+mesh culling, not world generation). All hashes quoted earlier in this file are historical
+(pre-M18 generation); only this one is current.
 
 Phases A, B and C are complete and phase D is well under way. What is implemented and verified
 is listed in `godot-roadmap.md`; the honest remaining gaps are:
@@ -895,9 +989,10 @@ is listed in `godot-roadmap.md`; the honest remaining gaps are:
 - **Phase D**: player construction beyond single blocks (blueprints/paste), and the
   city-management foundation (settlement growth, resource economy with the player, guards and
   worked plots).  Raids, residents, tasks and settlement stores exist.
-- **Crafting follow-ups**: there is no 2×2 hand grid (hand recipes are crafted from the C
-  catalogue) and no anvil/repair.  Table/furnace recipes are now station-only and use the real
-  3×3 grid / timed furnace; the catalogue is a reference and hand-crafting entry point.
+- **Crafting follow-ups**: there is no 2×2 hand grid and no anvil/repair.
+  Table/furnace recipes use the real 3×3 grid / timed furnace and are also
+  craftable from the station-gated C catalogue, which shares the same `Crafting`
+  transaction.
 - **Mining overflow**: there is still no dropped-item entity, so a drop that does not fit in a
   completely full inventory is reported and lost.  The starter kit now leaves the 27 storage
   slots free, which fixes the ordinary iron/coal case.

@@ -73,6 +73,11 @@ static var names: PackedStringArray = PackedStringArray()
 static var render_layers: PackedByteArray = PackedByteArray()
 static var solid: PackedByteArray = PackedByteArray()
 static var opaque: PackedByteArray = PackedByteArray()
+## Blocks whose render model is intentionally not a full cube (the crafting
+## table and furnace).  They remain solid and opaque for logic/collision, but
+## they must not cull the faces of neighbouring blocks: the open space under the
+## table would otherwise leave a hole in the ground below it.
+static var open_model: PackedByteArray = PackedByteArray()
 static var cull_same: PackedByteArray = PackedByteArray()
 static var liquid: PackedByteArray = PackedByteArray()
 static var hardness: PackedFloat32Array = PackedFloat32Array()
@@ -132,6 +137,9 @@ static func _static_init() -> void:
 		hardness.append(float(definition[6]))
 		drops.append(int(definition[7]))
 		face_keys.append(_expand_faces(definition[8]))
+		open_model.append(0)
+	open_model[CRAFTING_TABLE] = 1
+	open_model[FURNACE] = 1
 
 
 static func _expand_faces(triple: Array) -> PackedStringArray:
@@ -153,6 +161,12 @@ static func is_opaque(block_id: int) -> bool:
 	return block_id >= 0 and block_id < opaque.size() and opaque[block_id] == 1
 
 
+## True for stations whose custom render model is not a full cube.  They still
+## occlude for gameplay/collision, but their neighbours' faces stay visible.
+static func is_open_model(block_id: int) -> bool:
+	return block_id >= 0 and block_id < open_model.size() and open_model[block_id] == 1
+
+
 static func is_liquid(block_id: int) -> bool:
 	return block_id >= 0 and block_id < liquid.size() and liquid[block_id] == 1
 
@@ -172,6 +186,10 @@ static func hides_neighbour_face(block_id: int, neighbour_id: int) -> bool:
 		return false
 	if is_liquid(block_id):
 		return is_liquid(neighbour_id)
+	# An open station model (table/furnace) does not fill its voxel cube, so it
+	# must not hide the face of the block it sits on or beside.
+	if is_open_model(neighbour_id):
+		return false
 	if is_opaque(neighbour_id):
 		return true
 	if neighbour_id == block_id and cull_same[block_id] == 1:
