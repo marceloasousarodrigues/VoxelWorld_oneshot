@@ -75,7 +75,10 @@ design contract: `prototypes/m17/results/m18-visual-design.md`.
 
   Draw calls rose (settle ≈510 vs ≈369 before) because shadows now use four blended
   splits rather than two; frame times are unchanged-to-better and stream-work frames
-  remain in the same range.
+  remain in the same range. Mesher CPU also rose (spawn emit ≈3.1 s for 392 chunks
+  vs ≈1.8 s pre-M18; worst chunk ≈25 ms) from baked AO, denser canopies and more
+  generated faces; meshing runs on the worker thread, so frame times are not
+  affected, but the initial fill is slightly longer.
 - Asset manifest and `assets/texture_sources.json` record the six M18 derived
   textures and their attribution.
 
