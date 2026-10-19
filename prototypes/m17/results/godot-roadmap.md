@@ -40,7 +40,8 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Tests: `test_stations.gd` (unit) + 73 real-scene integration assertions;
       unit 1447 / integration 257 assertions, exit 0, 0 bytes stderr; smoke hash
       unchanged from M18; `m19-crafting-table.png` and `m19-furnace.png`
-      inspected
+      inspected; `perf-look-m19.json` / `perf-settle-m19.json` show no frame-time
+      regression (look p95 2.04 ms, settle p95 5.40 ms, radius 4, vsync off)
 - [~] Human keyboard/mouse play-through of the new interfaces remains outstanding
 - [ ] Station-adjacent conveniences not requested by M19 (shift-drag splitting
       across containers, dropped-item entities for full inventories)

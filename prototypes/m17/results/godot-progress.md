@@ -148,6 +148,14 @@ Ursina implementation was not touched.
   "Fuel: Coal · active". The furnace capture also proves live ticking: the
   screenshot was taken after the furnace completed a cook while the panel was
   open.
+- Frame-time harness (`run_perf.gd`, windowed, seed 17017, radius 4, vsync off,
+  RTX 3080 / i7-10700K): look **p50 1.55 / p95 2.04 / p99 2.48 ms**, 1 % low
+  **217 fps**; settle **p50 1.75 / p95 5.40 / p99 10.18 ms**, 1 % low **50 fps**.
+  The M18 table was look p50 1.96 / p95 2.79 / p99 3.22 ms and settle p50 2.25 /
+  p95 6.61 / p99 10.15 ms (at radius 5), so there is no measured regression. The
+  idle path adds one bounded registry iteration (zero stations in the smoke) and
+  the open-interface refresh touches a few dozen controls.
+  Reports: `perf-look-m19.json`, `perf-settle-m19.json`.
 
 ### Limitations / not verified
 
