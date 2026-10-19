@@ -164,8 +164,8 @@ def main() -> None:
     crafting_table_side()
     furnace_opening()
     glass_clean()
-    dense_leaves("default_leaves.png", "oak_leaves_clean.png", (1.0, 1.02, 0.96), 3)
-    dense_leaves("default_pine_needles.png", "pine_leaves_clean.png", (0.88, 1.02, 0.92), 3)
+    dense_leaves("default_leaves.png", "oak_leaves_clean.png", (1.0, 1.02, 0.96), 0)
+    dense_leaves("default_pine_needles.png", "pine_leaves_clean.png", (0.88, 1.02, 0.92), 0)
     print("wrote crafting_table_top.png, crafting_table_side.png, furnace_opening.png, glass_clean.png")
 
 

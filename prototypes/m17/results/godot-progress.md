@@ -58,8 +58,9 @@ design contract: `prototypes/m17/results/m18-visual-design.md`.
   `m18-cycle-0.55.png` twilight, `m18-cycle-0.9.png` pre-dawn): the warm horizon,
   moon, stars, sea colour and shadow direction all follow the clock; the twilight
   frame is dark but readable, consistent with the M17 tuning choice.
-- Final noon captures after deepening the day sky: `m18-step11-normal-noon.png`
-  and `m18-step11-ocean-noon.png`; fixed-yaw rotation stills `m18-sweep-1.png` /
+- Final noon captures after deepening the day sky and making the leaf textures
+  solid (no cutout specks): `m18-step12-close-noon.png` and
+  `m18-step12-ocean-noon.png`; fixed-yaw rotation stills `m18-sweep-1.png` /
   `m18-sweep-3.png` (compact `--shots` plus the new `--shot-prefix`) show stable
   materials around the clearing.
 - Frame-time harness (`run_perf.gd`, radius 5, RTX 3080 / i7-10700K), M18:
