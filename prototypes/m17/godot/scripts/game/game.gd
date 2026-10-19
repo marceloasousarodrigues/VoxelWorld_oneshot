@@ -1761,6 +1761,12 @@ func _on_block_broken(world_position: Vector3i, block_id: int, drop: int) -> voi
 		var leftover := inventory.add(drop, 1)
 		collected = "  +1 %s" % ItemDB.name_of(drop) if leftover == 0 else "  (inventory full)"
 	if StationModel.is_station_block(block_id):
+		# If the station being removed is the one whose interface is open (for
+		# example a future system breaks it), close the interface first so its
+		# carried stack is returned to the player rather than to an orphaned
+		# station object.
+		if station_panel != null and station_panel.is_open() and _open_station_position == world_position:
+			_close_station()
 		collected += _recover_station_contents(world_position)
 	hud.flash("Mined %s at (%d, %d, %d)%s" % [BlockDB.name_of(block_id), world_position.x, world_position.y, world_position.z, collected], 2.6)
 

@@ -212,6 +212,11 @@ func close() -> void:
 			var remaining: int = station.inventory.deposit(leftover)
 			leftover = {} if remaining <= 0 else {"item": int(leftover["item"]), "count": remaining}
 		_carried = {}
+	# Drop the reference: a closed panel must not keep an orphaned station alive
+	# or keep refreshing after its world object is gone.
+	if station != null and station.inventory.changed.is_connected(_refresh):
+		station.inventory.changed.disconnect(_refresh)
+	station = null
 	visible = false
 
 

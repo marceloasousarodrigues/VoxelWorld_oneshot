@@ -252,6 +252,17 @@ func _test_crafting_table(h: TestHarness) -> void:
 	h.eq(shaped.inventory.total_of(BlockDB.PLANKS), 0, "the planks were consumed")
 	h.eq(shaped.inventory.total_of(ItemDB.STICK), 0, "the sticks were consumed")
 
+	# A recipe whose output count is greater than one fills the result slot with
+	# the whole output (a log makes four planks).
+	var logs := StationModel.new(StationModel.TABLE)
+	logs.inventory.insert(4, {"item": BlockDB.OAK_LOG, "count": 1})
+	h.eq(str(logs.matched_recipe().get("id", "")), "planks_oak", "one log in any cell matches the planks recipe")
+	var planks_result: Dictionary = logs.craft_grid()
+	h.check(bool(planks_result["ok"]), "a multi-output recipe crafts")
+	h.eq(int(planks_result["count"]), 4, "the craft result reports all four outputs")
+	h.eq(logs.inventory.count_at(StationModel.TABLE_OUTPUT_SLOT), 4,
+		"the result slot holds all four planks")
+
 	# A recipe that needs a furnace is not craftable on a table.
 	var smelt := StationModel.new(StationModel.TABLE)
 	smelt.inventory.insert(0, {"item": ItemDB.IRON_LUMP, "count": 1})

@@ -37,8 +37,8 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       pre-existing F9 reload bug (`apply` received the unwrapped payload)
 - [x] Destruction/replacement policy: contents transfer to the player (remainder
       reported if the inventory is full); placing a station clears stale state
-- [x] Tests: `test_stations.gd` (unit) + 73 real-scene integration assertions;
-      unit 1447 / integration 257 assertions, exit 0, 0 bytes stderr; smoke hash
+- [x] Tests: `test_stations.gd` (unit) + 81 real-scene integration assertions;
+      unit 1451 / integration 265 assertions, exit 0, 0 bytes stderr; smoke hash
       unchanged from M18; `m19-crafting-table.png` and `m19-furnace.png`
       inspected; `perf-look-m19.json` / `perf-settle-m19.json` show no frame-time
       regression (look p95 2.04 ms, settle p95 5.40 ms, radius 4, vsync off)
@@ -96,7 +96,7 @@ Design contract: `prototypes/m17/results/m18-visual-design.md`.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (1447 assertions, verified 2026-10-19) + runtime integration harness (257 assertions, verified 2026-10-19) + headless determinism fingerprint
+- [x] Automated test suite (1451 assertions, verified 2026-10-19) + runtime integration harness (265 assertions, verified 2026-10-19) + headless determinism fingerprint
 - [x] Frame-time benchmark harness (`scripts/tests/run_perf.gd`): six scripted activities, per-frame
       timings and streaming counters, before/after JSON reports (verified 2026-10-16)
 - [x] Capture harness for reproducible screenshots + objective image statistics tool

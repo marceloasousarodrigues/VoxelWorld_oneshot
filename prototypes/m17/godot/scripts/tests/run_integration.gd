@@ -1103,6 +1103,30 @@ func _stations_section() -> void:
 	_check(table.inventory.is_empty(StationModel.TABLE_OUTPUT_SLOT),
 		"the result slot is empty after the crafted item was taken")
 
+	# Shift-click and drag & drop move whole stacks between the two inventories.
+	inventory.clear_slot(2)
+	inventory.add(ItemDB.STICK, 6)
+	var stick_slot: int = inventory.slots.find(ItemDB.STICK)
+	_check(stick_slot >= 0, "the player holds sticks for the quick-move test")
+	var quick_sticks_before := inventory.count_of(ItemDB.STICK)
+	var stick_stack := inventory.counts[stick_slot]
+	_check(panel.quick_move("player", stick_slot), "shift-click moves a whole stack into the station")
+	_check(inventory.count_of(ItemDB.STICK) == quick_sticks_before - stick_stack,
+		"shift-click removed exactly that stack from the player")
+	_check(table.inventory.total_of(ItemDB.STICK) == stick_stack,
+		"the station received the whole stack")
+	var station_stick_slot := -1
+	for index in table.inventory.size():
+		if table.inventory.item_at(index) == ItemDB.STICK:
+			station_stick_slot = index
+	_check(station_stick_slot >= 0, "the moved sticks are in a station slot")
+	_check(panel.move_between("station", station_stick_slot, "player", stick_slot),
+		"drag & drop moves the stack back to the player")
+	_check(inventory.count_of(ItemDB.STICK) == quick_sticks_before,
+		"the drag & drop move conserved every stick")
+	_check(table.inventory.total_of(ItemDB.STICK) == 0,
+		"the station no longer holds the sticks")
+
 	# --- the interface blocks accidental world actions ---------------------
 	_game._close_station()
 	await process_frame

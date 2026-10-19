@@ -119,7 +119,7 @@ Ursina implementation was not touched.
 ### Verification actually run (Godot 4.7.2 stable mono, Windows)
 
 - Unit: `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd`
-  → **1447 assertions**, exit 0, **0 bytes stderr**. New `test_stations.gd`
+  → **1451 assertions**, exit 0, **0 bytes stderr**. New `test_stations.gd`
   covers role acceptance, caps, insert/take/split/move/swap/deposit, refused
   operations, serialisation/rejection, smelting data, shaped/shapeless crafting,
   atomic craft refusal, result capacity, leftovers, furnace ignition/progress/
@@ -128,7 +128,7 @@ Ursina implementation was not touched.
   persistence round-trip and tick radius. `test_persistence.gd` covers save v6
   station rows, the v3 legacy path and a malformed `stations` payload.
 - Integration: `--headless --path prototypes/m17/godot --script
-  res://scripts/tests/run_integration.gd -- --straight-to-game` → **257
+  res://scripts/tests/run_integration.gd -- --straight-to-game` → **265
   assertions**, exit 0, **0 bytes stderr**. New assertions drive the real scene:
   target a placed table, open it with the real `interact` action, move items
   through the panel's own handlers, preview/craft/take a table, keep the world
@@ -734,7 +734,7 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 ## 9. Resume
 
 Read this file and `godot-roadmap.md`, then run the baseline commands at the end of this
-section. The current baseline is **1447 unit + 257 integration assertions** (post-M19),
+section. The current baseline is **1451 unit + 265 integration assertions** (post-M19),
 both exit 0 with 0 bytes of stderr. The M18 content pass (denser trees, boulders) changed
 the generated world, so the spawn-region smoke is now `world_hash=7995773462820745781`,
 `faces=170492`, `faces_hash=6834793821708419232`, `edits=0`, `meshed=392` at radius 4
