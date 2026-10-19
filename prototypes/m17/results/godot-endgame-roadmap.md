@@ -3,7 +3,7 @@
 **Purpose:** Continue the Godot prototype from M23 to a complete, playable, resource-driven voxel building game whose visual language is guided by the supplied Dragon Quest Builders-style references.
 
 **Project:** `prototypes/m17/godot/`  
-**Current handoff:** M22 and **M23 (roof stairs)** are implemented and verified (M23 gate run 2026-10-20: unit 1852 / integration 426 assertions, smoke hash unchanged). Continue with M24. Do not redo M23.  
+**Current handoff:** M22, **M23 (roof stairs)** and **M24 (building economy)** are implemented and verified. M24 fixed a real dead end (gravel never generated, so packed paths were unobtainable) and proves an empty-inventory route to the whole build kit. Continue with M25. Do not redo M23/M24.  
 **Reference images:** `prototypes/m17/references/visual/dragon-quest-builders/` (see image workflow below).
 
 This roadmap complements the existing `prototypes/m17/results/godot-roadmap.md`, `GODOT_MISSION.md`, `AGENTS.md`, and `ARCHITECTURE.md`. It does not replace their rules or change the production Python/Ursina game. Treat this as the playable endgame plan and keep milestone work scoped to one milestone at a time.
@@ -62,9 +62,11 @@ If the images are not yet in the repository folder, copy the supplied originals 
 
 **Gate:** Do not start M24 until every criterion is verified or an explicit blocker is recorded.
 
-### M24 — Make exploration yield a useful building economy
+### M24 — Make exploration yield a useful building economy — **COMPLETE 2026-10-20**
 
 **Goal:** Make a fresh player journey supply the materials needed for attractive construction through exploration, harvesting, mining, crafting, and smelting.
+
+**Status:** Delivered. Gravel now generates in the submerged subsurface band (the path recipe previously had no world source). `test_economy.gd` scans real terrain for every raw material and follows an empty-inventory route through the real tool gates, station scan and crafting transactions to the full build kit. Gate: unit 1912 / integration 426 assertions, smoke `world_hash=2065363152372568468` stable. Evidence: `godot-progress.md` M24 section.
 
 **Dependencies:** M23 complete; existing M20 inventory/crafting, M21 survival/progression, M22 recipes and blocks.
 

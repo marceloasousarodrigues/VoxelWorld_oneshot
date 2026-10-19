@@ -1,5 +1,66 @@
 # M17 Godot — Progress and Resume Point
 
+## M24 — Exploration yields a useful building economy (2026-10-20)
+
+Mission: prove a fresh player can reach the full construction palette through
+real harvesting, mining, tool gates, stations and crafting, and fix any concrete
+progression dead end.
+
+### What was actually changed
+
+- **Fixed a real dead end: gravel did not generate.** `packed_path` requires
+  `{Dirt: 2, Gravel: 1}`, but `WorldGen` never produced gravel, so Packed Path
+  was unobtainable in normal play. The submerged subsurface band now yields clay
+  (20 %) or gravel (20 %) on a deterministic hash, so both masonry and paths have
+  a real world source. The old reachability meta-test could not catch this
+  because it treated every defined block's drop as reachable; that assumption is
+  now backed by a real generation scan.
+- **New `scripts/tests/test_economy.gd` (45 assertions):**
+  - *generated sources*: scans normal seed-17017 terrain and confirms a natural
+    tree trunk, dirt/stone under the surface, a sand surface biome, clay and
+    gravel in the submerged band, and coal/iron ore underground;
+  - *starter-kit audit*: the kit grants no tools, ingots, ore or furnace;
+  - *empty-inventory route*: starts with nothing, hand-harvests logs, crafts
+    planks/sticks/table, places the table and finds it with
+    `Crafting.best_station`, crafts a wooden pickaxe, proves stone is refused by
+    hand, mines stone, builds a furnace, mines and rejects iron ore with the
+    wooden pickaxe, crafts the stone pickaxe, mines iron, smelts ingots, gathers
+    sand/clay/gravel/dirt, then crafts planks, timber framing, stairs, fence,
+    door, stone brick, packed path, glass (both hand and furnace), roof tiles,
+    barrel and lantern. Every mining step goes through `ItemDB.harvestable` and
+    every craft through `Crafting.craft_many`, i.e. the same rules the player
+    uses.
+- No recipe/catalogue values were changed; the route confirmed the existing
+  costs are payable, including the 4-ingot lantern and 8-cobblestone furnace.
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows)
+
+- Unit: **1912 assertions, exit 0**, no script errors (M23: 1852; +60 economy).
+- Integration: **426 assertions, exit 0** (unchanged; the existing real-scene
+  crafting/mining section is the scene-level path).
+- Headless smoke twice after the generation change: exit 0, 0 bytes stderr,
+  `world_hash=2065363152372568468` (new baseline; gravel replaces one opaque
+  subsurface block with another), `faces=174353` and
+  `faces_hash=665917304729475893` **unchanged**, 392 chunks, identical both
+  runs. Determinism is preserved.
+- No windowed capture was added for M24: the change is a data/generation fix and
+  the gravel texture was already inspected in the M22 showcase. Visual review of
+  shorelines is part of M27.
+
+### Limitations / notes
+
+- No human play-through of the full route; it is a deterministic harness over
+  the real inventory/crafting/mining/station rules, plus the existing scripted
+  real-scene crafting and mining integration.
+- The starter kit remains a deliberate friendly head start (raw build blocks,
+  planks, glass, two tables). It contains no tools/ore/ingots/furnace, and every
+  item it grants is independently reachable from the empty-inventory route, so
+  it does not substitute for the progression.
+- Generated structures remain isolated landmarks (`hut`, `campsite`,
+  `watchtower`, `well`, `timber_cottage`, `market_stall`, `ore_outcrop`); there
+  is no generated player village or castle. The player chooses the building
+  site freely.
+
 ## M23 — Roof stairs and stair behavior (2026-10-19/20)
 
 Mission: complete the delegated stair feature so roofs can form intentional

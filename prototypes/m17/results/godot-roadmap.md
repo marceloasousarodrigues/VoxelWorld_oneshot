@@ -11,6 +11,39 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ---
 
+## M24 — Exploration yields a useful building economy
+
+Design/evidence: `godot-progress.md` M24 section; `scripts/tests/test_economy.gd`.
+
+- [x] **Fixed the gravel dead end**: `WorldGen` never produced gravel while
+      `packed_path` required it, so paths were unobtainable. The submerged
+      subsurface band now yields clay or gravel deterministically (20 % each)
+- [x] **Generated-source scan** proves every core raw material actually appears
+      in normal seed-17017 terrain: wood, dirt/stone, sand, clay, gravel, coal,
+      iron
+- [x] **Empty-inventory route** reaches the whole build kit using the real
+      `ItemDB.harvestable` gate and `Crafting` transactions at a real
+      `Crafting.best_station` table/furnace: planks, sticks, table, wooden
+      pickaxe, stone, furnace, coal, stone pickaxe, iron, ingots, sand, clay,
+      gravel, dirt, timber framing, stairs, fence, door, stone brick, path,
+      glass, roof tiles, barrel, lantern
+- [x] Tool gates confirmed along the route: bare hand refuses stone; wooden
+      pickaxe refuses iron ore; stone pickaxe mines it
+- [x] Starter kit audited: no tools, ingots, ore or furnace; every granted item
+      is independently reachable
+- [x] Inventory capacity/feedback, atomic batches and recipe labels remain
+      covered by `test_crafting.gd`; the route consumes exactly the costs it
+      asserts (e.g. the 4-ingot lantern)
+- [x] Gate: unit **1912** / integration **426** assertions, both exit 0; smoke
+      twice `world_hash=2065363152372568468` (new gravel baseline),
+      `faces`/`faces_hash` unchanged, identical runs
+- [~] No human play-through; the route is a deterministic harness over the real
+      rules plus the existing scripted real-scene crafting/mining checks
+- [ ] A player-authored home site is demonstrated in M25/M28; M24 only proves
+      the materials and freedom to choose the site
+
+---
+
 ## M23 — Roof stairs and stair behavior
 
 Design/evidence: `godot-progress.md` M23 section; captures `m23-stairs-roof.png`,
