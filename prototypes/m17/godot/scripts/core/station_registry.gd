@@ -109,6 +109,10 @@ func prune() -> Array:
 	var removed: Array = []
 	for position: Vector3i in _stations.keys():
 		var station: Station = _stations[position]
+		# An unloaded chunk is not evidence that the station is gone; its state
+		# must survive until the cell can be inspected again.
+		if not world.is_loaded(position):
+			continue
 		if kind_at(position) != station.kind:
 			_stations.erase(position)
 			station_changed.emit(position)

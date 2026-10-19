@@ -175,6 +175,21 @@ func is_empty(index: int) -> bool:
 	return index < 0 or index >= HOTBAR_SIZE or slots[index] == BlockDB.AIR or counts[index] <= 0
 
 
+## The item in a slot (`AIR` when it is empty or out of range).  Mirrors
+## `StationInventory.item_at`, so interfaces can treat both models alike.
+func item_at(index: int) -> int:
+	if is_empty(index):
+		return BlockDB.AIR
+	return slots[index]
+
+
+## The count in a slot (0 when it is empty or out of range).
+func count_at(index: int) -> int:
+	if index < 0 or index >= HOTBAR_SIZE:
+		return 0
+	return counts[index]
+
+
 ## Empties one slot (its item, count and durability).
 func clear_slot(index: int) -> void:
 	if index < 0 or index >= HOTBAR_SIZE:

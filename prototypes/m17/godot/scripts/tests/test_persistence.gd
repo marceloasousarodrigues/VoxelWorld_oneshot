@@ -117,7 +117,7 @@ func run(h: TestHarness) -> void:
 	var data: Dictionary = result["data"]
 	h.eq(int(data["seed"]), 17017, "the saved seed round-trips")
 	h.eq(int(data["version"]), SaveManager.VERSION, "the save is written at the current version")
-	h.eq(int(SaveManager.VERSION), 5, "the current save version is 5")
+	h.eq(int(SaveManager.VERSION), 6, "the current save version is 6")
 
 	# --- apply to a fresh session ------------------------------------------
 	var restored_world := VoxelWorld.new(17017)
@@ -200,6 +200,7 @@ func run(h: TestHarness) -> void:
 	v3_payload["version"] = 3
 	v3_payload.erase("hunger")
 	v3_payload.erase("npcs")
+	v3_payload.erase("stations")
 	_write_raw(saves, JSON.stringify(v3_payload))
 	var v3_result: Dictionary = saves.read()
 	h.check(bool(v3_result["ok"]), "a version 3 save is accepted")
@@ -208,6 +209,7 @@ func run(h: TestHarness) -> void:
 		h.approx(float(v3_applied["breath"]), 4.5, 1e-6, "a version 3 save still restores breath")
 		h.less(float(v3_applied["hunger"]), 0.0, "a version 3 save reports no hunger")
 		h.eq((v3_applied["npcs"] as Dictionary).size(), 0, "a version 3 save carries no residents")
+		h.eq((v3_applied["stations"] as Array).size(), 0, "a version 3 save carries no station state")
 
 	# A current-version save round-trips the settlement stores and residents.
 	var npc_payload := {
@@ -237,6 +239,43 @@ func run(h: TestHarness) -> void:
 	_write_raw(saves, JSON.stringify(bad_npcs))
 	h.check(not bool(saves.read()["ok"]), "a malformed residents payload is rejected")
 	h.check(not FileAccess.file_exists(saves.save_path()), "the malformed-residents save is quarantined")
+
+	# A current-version save round-trips placed-station inventories and timers.
+	var saved_station := Station.new(Station.FURNACE)
+	saved_station.inventory.insert(Station.FURNACE_INPUT_SLOT, {"item": BlockDB.SAND, "count": 2})
+	saved_station.inventory.insert(Station.FURNACE_FUEL_SLOT, {"item": ItemDB.COAL, "count": 1})
+	saved_station.inventory.insert(Station.FURNACE_OUTPUT_SLOT, {"item": BlockDB.GLASS, "count": 1}, true)
+	saved_station.step(1.5)
+	var station_rows: Array = [[8, 70, 8, saved_station.to_dictionary()]]
+	var station_written: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath,
+		hunger, npc_payload, station_rows)
+	_write_raw(saves, JSON.stringify(station_written))
+	var station_result: Dictionary = saves.read()
+	h.check(bool(station_result["ok"]), "a save with station state is accepted")
+	if bool(station_result["ok"]):
+		var station_applied: Dictionary = saves.apply(station_result, restored_world, restored_player,
+			restored_inventory, null, null)
+		h.check(bool(station_applied["ok"]), "a save with station state applies")
+		var restored_rows: Array = station_applied["stations"]
+		h.eq(restored_rows.size(), 1, "the station row survived the round-trip")
+		var registry := StationRegistry.new(restored_world)
+		var station_summary: Dictionary = registry.from_dictionary(restored_rows)
+		h.eq(int(station_summary["accepted"]), 1, "the station payload restores into the registry")
+		var restored_station = registry.peek(Vector3i(8, 70, 8))
+		h.check(restored_station != null, "the restored station is keyed by its world position")
+		if restored_station != null:
+			h.eq(restored_station.inventory.total_of(BlockDB.SAND), 2, "the station input survived")
+			h.eq(restored_station.inventory.total_of(BlockDB.GLASS), 1, "the station output survived")
+			h.approx(restored_station.cook_progress, saved_station.cook_progress, 1e-6,
+				"the furnace cook progress survived")
+
+	# A malformed stations payload is rejected and quarantined.
+	var bad_stations: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath, hunger,
+		npc_payload, station_rows)
+	bad_stations["stations"] = "not an array"
+	_write_raw(saves, JSON.stringify(bad_stations))
+	h.check(not bool(saves.read()["ok"]), "a malformed stations payload is rejected")
+	h.check(not FileAccess.file_exists(saves.save_path()), "the malformed-stations save is quarantined")
 
 	# --- a save whose health payload is malformed is quarantined ------------
 	var bad_health: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath)

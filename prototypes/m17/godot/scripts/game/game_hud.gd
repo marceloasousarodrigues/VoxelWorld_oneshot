@@ -49,6 +49,7 @@ var _hurt_strength := 0.55
 var _durability_bars: Array[ColorRect] = []
 var _mining_root: Control
 var _mining_fill: ColorRect
+var _interact: Label
 
 
 func setup(player_inventory: Inventory, texture_library: TextureLibrary) -> void:
@@ -89,6 +90,14 @@ func _build() -> void:
 	_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_message.visible = false
 	_debug = _build_label(Vector2(18, 128), 13, Color(0.85, 0.95, 1.0, 0.78))
+	_interact = _build_label(Vector2.ZERO, 15, Color(1.0, 0.92, 0.65, 0.96))
+	_interact.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_interact.offset_left = -260
+	_interact.offset_right = 260
+	_interact.offset_top = 44
+	_interact.offset_bottom = 68
+	_interact.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_interact.visible = false
 	_build_hotbar()
 	_build_vitals()
 	_build_mining_bar()
@@ -371,7 +380,7 @@ func refresh() -> void:
 		if max_wear > 0:
 			text += "   %d / %d" % [inventory.durability_of(inventory.selected), max_wear]
 		_selected_label.text = "%s   (slot %d)" % [text, inventory.selected + 1]
-	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  hold LMB mine  ·  RMB build/eat  ·  C craft  ·  I inventory  ·  O settings\n" \
+	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  hold LMB mine  ·  RMB build/eat  ·  E use  ·  C craft  ·  I inventory  ·  O settings\n" \
 		+ "1-9 select  ·  F fly  ·  F5 save  ·  F9 load  ·  F3 debug  ·  Esc pause"
 
 
@@ -468,6 +477,15 @@ func hurt_flash(strength: float = 0.55) -> void:
 	_hurt_strength = clampf(strength, 0.0, 1.0)
 	_hurt_timer = HURT_FLASH_SECONDS
 	_hurt.color = Color(0.72, 0.03, 0.03, _hurt_strength)
+
+
+## A short prompt under the crosshair ("Press E to use Crafting Table").  An
+## empty string hides it.
+func set_interact_prompt(text: String) -> void:
+	if _interact == null:
+		return
+	_interact.text = text
+	_interact.visible = not text.is_empty()
 
 
 func set_debug(text: String) -> void:

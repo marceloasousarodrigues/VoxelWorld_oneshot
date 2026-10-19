@@ -1,6 +1,176 @@
 # M17 Godot — Progress and Resume Point
 
-## M18 — Visual quality upgrade (current work, 2026-10-19)
+## M19 — Interactive crafting stations and persistent inventories (2026-10-19)
+
+Mission: turn the placed crafting table and furnace into real, targetable world
+objects with their own persistent inventories and dedicated interfaces, using the
+existing inventory, recipe and save systems rather than a second implementation.
+The work lives in the Godot project under `prototypes/m17/godot/`; the production
+Ursina implementation was not touched.
+
+### Implemented
+
+**1. Reusable station inventory (`scripts/core/station_inventory.gd`)**
+
+- Slot-role container (`grid`, `input`, `fuel`, `output`) with the same item
+  id/count/durability model as the player `Inventory`.
+- Role acceptance: grid takes any item, input only smeltable items, fuel only
+  fuels, output only station writes. Stack caps come from `ItemDB`.
+- Count-preserving `insert`/`take`/`split`/`move`/`swap`/`remove_item`/`deposit`
+  and atomic `to_dictionary`/`from_dictionary`. A refused operation returns the
+  untouched stack, so no move can duplicate or destroy an item.
+- A `changed` signal drives UI refresh; nothing in the model knows about nodes.
+
+**2. Station behaviour (`scripts/core/station.gd`, `scripts/core/smelting.gd`)**
+
+- A station owns its kind (`crafting_table` / `furnace`) and inventory layout.
+  Adding a future workstation is a kind + role list, not new UI logic.
+- Crafting table: real 3x3 grid (`Crafting.match_grid`), shaped and shapeless
+  recipes from the existing 32-recipe catalogue, a live result preview, and an
+  **atomic** `craft_grid()` that checks the result slot first, then consumes one
+  item from every occupied cell and stores the output. The result slot refuses
+  player inserts; the grid is persistent station storage.
+- Furnace: input/fuel/output, a timed `step(delta)` driven by data
+  (`Smelting.FUEL_SECONDS`: coal 48 s, logs/planks 12 s, sticks 4 s; per-recipe
+  cook time, iron 8 s, others 6 s). Fuel only burns while there is work and room
+  for the output, output is produced atomically, a full result pauses the cook,
+  and changing the input resets progress.
+- `Crafting` smelting recipes gained a `time` field; the recipe catalogue remains
+  the single source of truth for what an input smelts into.
+
+**3. World identity (`scripts/core/station_registry.gd`)**
+
+- Station state is keyed by world position (integer cell), independent of chunk
+  load/unload and generation order. State is created lazily on first use, so an
+  untouched station costs nothing.
+- `station_at` validates the live block, drops stale state when the cell is no
+  longer that station, and `prune()` sweeps only **loaded** cells (an unloaded
+  chunk is not evidence that a station is gone).
+- `tick(delta, focus)` advances only loaded furnaces within `ACTIVE_RADIUS` (64
+  blocks), so processing cost follows the player's neighbourhood. Contents,
+  burn time and cook progress are kept while unloaded and resume on return.
+- `take_contents()` removes state and returns every stack for the destruction
+  policy below.
+
+**4. Targeting and interaction (`game.gd`, `game_hud.gd`, `project.godot`)**
+
+- New `interact` action on **E** (physical key 69), using the existing camera
+  voxel ray (`VoxelRay`, reach 6) — the same target the miner/outline uses, so a
+  station must be loaded and within reach.
+- Aiming at a table/furnace shows `E  use Crafting Table` under the crosshair;
+  the existing outline still marks the cell.
+- E (or Escape) closes the interface; Escape closes it before pausing. Opening a
+  station closes the crafting, inventory and settings overlays (mutual
+  exclusion), disables `player.can_interact`, shows the mouse and captures no
+  world input.
+- Invalid targets report `Nothing to interact with` / `X is not a workstation`;
+  beyond reach the block is simply not targetable and the message is shown.
+- Breaking a station recovers its contents into the player's inventory and
+  reports the outcome; placing a station clears any state in that cell so a new
+  object never inherits an old inventory.
+
+**5. Interfaces (`game/station_slot.gd`, `game/station_panel.gd`)**
+
+- `StationSlot` draws either a player or station slot (icon, count, durability,
+  role caption, tooltip with name/quantity) and implements click, right-click,
+  shift-click and Godot drag & drop without mutating a model.
+- `StationPanel` is one overlay for both kinds, in the M18 visual language: dark
+  rounded panel, 3x3 grid + result (with ghost preview) for a table; input, fuel,
+  output, COOK and FUEL bars and a live status sentence for a furnace; the nine
+  player slots, a carrying slot and a hint line. It reads the models and emits
+  messages only.
+- Table controls: `Return grid` (returns leftovers to the player, keeps anything
+  that does not fit), `Take result`, and clicking the result crafts and takes.
+  Right-click splits/places one; shift-click quick-moves between inventories.
+- Closing with a carried stack returns it to the player and then to the station,
+  so closing cannot destroy an item. Ingredients left in the grid stay in the
+  station (documented persistent-storage policy).
+
+**6. Persistence (`save_manager.gd`, save VERSION 6)**
+
+- New `stations` payload: `[x, y, z, station state]` rows; each station state
+  includes kind, slot contents and furnace timers. Validated before any live
+  state changes; rows are validated/rejected individually by the registry.
+- Versions 1–5 still load with no station state. The game passes the payload
+  through `_stations_payload()` / `_apply_stations()`.
+- **Bug found and fixed by the new test:** `_reload_now()` passed
+  `result["data"]` to `SaveManager.apply()` (which expects the `ok`/`data`
+  wrapper), so every F9 reload failed with "save is not validated". It now passes
+  the validated result; station save/load is covered by the integration test.
+
+### Explicit policies
+
+- **Closing the interface:** carried stacks return to the player, then the
+  station; grid/input/fuel/output contents stay in the station.
+- **Destroying a station:** its contents transfer to the player. If the inventory
+  is full the remainder is reported and lost — the same explicit rule the game
+  already applies to a mined block's drop, because there is no dropped-item
+  entity system. The block itself still drops normally.
+- **Chunk unload/reload:** station state stays in the registry (keyed by cell),
+  so it survives; the registry only prunes a station when a *loaded* cell no
+  longer holds it.
+- **Coexistence with the recipe-list panel:** `C` still opens the existing
+  catalogue interface (a deliberate convenience that uses the same `Crafting`
+  model and consumption rules). The world-object panels are the new interaction;
+  both consume through `Crafting`/`Station`, so there is one source of truth.
+- **Grid matching is per cell:** four planks need four cells, exactly as placing
+  ingredients in a Minecraft grid; a stack of four in one cell is not a recipe.
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows)
+
+- Unit: `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd`
+  → **1447 assertions**, exit 0, **0 bytes stderr**. New `test_stations.gd`
+  covers role acceptance, caps, insert/take/split/move/swap/deposit, refused
+  operations, serialisation/rejection, smelting data, shaped/shapeless crafting,
+  atomic craft refusal, result capacity, leftovers, furnace ignition/progress/
+  fuel economy/output-full pause/serialisation/determinism, registry lazy
+  creation, two independent stations, stale-state removal, chunk unload/reload,
+  persistence round-trip and tick radius. `test_persistence.gd` covers save v6
+  station rows, the v3 legacy path and a malformed `stations` payload.
+- Integration: `--headless --path prototypes/m17/godot --script
+  res://scripts/tests/run_integration.gd -- --straight-to-game` → **257
+  assertions**, exit 0, **0 bytes stderr**. New assertions drive the real scene:
+  target a placed table, open it with the real `interact` action, move items
+  through the panel's own handlers, preview/craft/take a table, keep the world
+  untouched while the interface owns input, open a separate furnace, insert sand
+  and coal, advance it through the registry's real tick, take the glass, save →
+  clear → reload → verify contents/progress, unload/reload the chunk, break the
+  table through the player path and verify contents recovery, and verify sky and
+  out-of-range interactions open nothing.
+- Smoke: `--straight-to-game --quit-after=25` → exit 0, 0 bytes stderr,
+  `world_hash=7995773462820745781`, `faces=170492`,
+  `faces_hash=6834793821708419232` (unchanged from M18), `stations.count=0`.
+- Windowed captures inspected (1280x720, seed 17017, `--time=0.25`):
+  `results/godot/m19-crafting-table.png` — 3x3 grid with four planks, a ghost
+  result preview and "Ready: 1 Crafting Table", the player row and carrying row;
+  `results/godot/m19-furnace.png` — sand input, coal fuel, glass output (3),
+  COOK and FUEL bars, "Smelting Sand → 1 Glass", "Furnace is cooking" and
+  "Fuel: Coal · active". The furnace capture also proves live ticking: the
+  screenshot was taken after the furnace completed a cook while the panel was
+  open.
+
+### Limitations / not verified
+
+- No human keyboard/mouse play-through; all runtime evidence is scripted
+  headless integration plus inspected windowed captures.
+- There is no dropped-item entity, so a full inventory loses the reported
+  remainder when a station is destroyed (explicit policy above).
+- Furnaces process only within 64 blocks and only in loaded chunks; an unloaded
+  furnace pauses with its progress preserved.
+- One nine-slot player inventory row, as before; station slots are one page.
+- The recipe-list panel remains available; it is not removed or replaced.
+- Add/remove of station state is bounded by stations the player has used; the
+  save payload grows with those stations (no per-chunk inventory bookkeeping).
+
+### Resume point
+
+Next independent work: the roadmap's remaining Phase D/C items (weather, city
+management, player construction beyond single blocks) or a human play-through of
+M19. The M19 system itself is implemented, tested, captured and documented.
+
+---
+
+## M18 — Visual quality upgrade (2026-10-19)
 
 Mission: raise the Godot world to a polished stylized voxel-survival look without
 changing the voxel architecture or the production Ursina implementation. Visual
@@ -556,11 +726,12 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 ## 9. Resume
 
 Read this file and `godot-roadmap.md`, then run the baseline commands at the end of this
-section. The current baseline is **1273 unit + 184 integration assertions**, both exit 0 with
-0 bytes of stderr. The M18 content pass (denser trees, boulders) changed the generated world,
-so the spawn-region smoke is now `world_hash=7995773462820745781`, `faces=170492`,
-`faces_hash=6834793821708419232`, `edits=0`, `meshed=392` at radius 4. All hashes quoted
-earlier in this file are historical (pre-M18 generation); only this one is current.
+section. The current baseline is **1447 unit + 257 integration assertions** (post-M19),
+both exit 0 with 0 bytes of stderr. The M18 content pass (denser trees, boulders) changed
+the generated world, so the spawn-region smoke is now `world_hash=7995773462820745781`,
+`faces=170492`, `faces_hash=6834793821708419232`, `edits=0`, `meshed=392` at radius 4
+(re-confirmed after M19). All hashes quoted earlier in this file are historical
+(pre-M18 generation); only this one is current.
 
 Phases A, B and C are complete and phase D is well under way. What is implemented and verified
 is listed in `godot-roadmap.md`; the honest remaining gaps are:

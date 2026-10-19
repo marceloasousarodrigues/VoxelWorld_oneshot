@@ -20,6 +20,7 @@ const HostileModel = preload("res://scripts/core/hostile_creatures.gd")
 const NpcModel = preload("res://scripts/core/npc.gd")
 const SettlementModel = preload("res://scripts/core/settlement.gd")
 const RaidModel = preload("res://scripts/core/raid.gd")
+const StationModel = preload("res://scripts/core/station.gd")
 
 
 func _initialize() -> void:
@@ -526,6 +527,9 @@ func _main() -> void:
 	# --- Inventory interface: slots, stack moves and item details ----------
 	await _inventory_section()
 
+	# --- Interactive world-object stations ---------------------------------
+	await _stations_section()
+
 	# --- Settlements and residents -----------------------------------------
 	await _residents_section()
 
@@ -992,3 +996,257 @@ func _raid_section() -> void:
 	_check(int(_game._raided_day) >= 0, "the day is marked as raided")
 	_game._options.erase("raid_now")
 	_game.npc_states.erase(str(defender["id"]))
+
+
+# =========================================================================
+# Interactive world-object stations (M19)
+# =========================================================================
+
+## Puts the player three metres above a cell and looking straight down, so the
+## real voxel ray targets it.  The cells above must be air.
+func _aim_at(cell: Vector3i) -> void:
+	var player: Node = _game.player
+	player.flying = true
+	player.teleport_to(Vector3(cell) + Vector3(0.5, 3.0, 0.5))
+	player.look_yaw(0.0)
+	player.look_pitch(-89.0)
+	for i in range(2):
+		await process_frame
+
+
+func _press_interact() -> void:
+	var event := InputEventAction.new()
+	event.action = "interact"
+	event.pressed = true
+	_game._unhandled_input(event)
+
+
+func _stations_section() -> void:
+	var player: Node = _game.player
+	var inventory: Inventory = _game.inventory
+	var world: VoxelWorld = _game.world
+	var panel = _game.station_panel
+	# The inventory section closed its panel directly; restore the play state so
+	# this section starts from a clean, interactive baseline.
+	if _game.inventory_panel.is_open():
+		_game._close_inventory()
+	else:
+		player.can_interact = true
+	player.flying = true
+
+	# A clear two-station site near spawn, in cells the streamer has loaded.  The
+	# column above is cleared well past the camera so the test aims at the
+	# station rather than at a hillside.
+	var table_cell := Vector3i(20, 76, 20)
+	var furnace_cell := Vector3i(24, 76, 20)
+	for cell: Vector3i in [table_cell, furnace_cell]:
+		for dy in range(1, 12):
+			world.set_block(cell + Vector3i(0, dy, 0), BlockDB.AIR)
+		world.set_block(cell, BlockDB.AIR)
+	world.set_block(table_cell, BlockDB.CRAFTING_TABLE)
+
+	# --- targeting and opening --------------------------------------------
+	await _aim_at(table_cell)
+	_check(_game.targeted_station_position() == table_cell,
+		"the crosshair identifies the placed crafting table")
+	_check(not _game.stations.has(table_cell), "a station has no state before it is used")
+	_press_interact()
+	await process_frame
+	_check(panel.is_open(), "E opens the targeted crafting table")
+	_check(not player.can_interact, "the open station disables world interaction")
+	_check(_game.stations.count() == 1, "opening a station creates exactly one state")
+	_check(panel.station_slot_count() == 10,
+		"the crafting table interface has a 3x3 grid and a result slot")
+	var table = _game.stations.peek(table_cell)
+	_check(table != null and table.kind == StationModel.TABLE, "the opened station is a crafting table")
+
+	# --- moving items between the two inventories -------------------------
+	inventory.clear_slot(0)
+	inventory.clear_slot(1)
+	inventory.clear_slot(2)
+	inventory.add(BlockDB.PLANKS, 4)
+	var planks_slot: int = inventory.slots.find(BlockDB.PLANKS)
+	_check(planks_slot >= 0, "the player holds planks for the grid")
+	var planks_before := inventory.count_of(BlockDB.PLANKS)
+	_check(panel.pick_up("player", planks_slot), "a stack can be picked up from the player inventory")
+	_check(not panel.carried().is_empty(), "the picked-up stack is carried")
+	_check(panel.put_one("station", 0), "one item moves from the carried stack into the grid")
+	_check(panel.status_text().contains("No matching recipe"),
+		"an incomplete grid reports that nothing matches")
+	for grid_slot in [1, 3, 4]:
+		_check(panel.put_one("station", grid_slot), "another plank moves into grid cell %d" % grid_slot)
+	var empty_slot: int = inventory.slots.find(BlockDB.AIR)
+	_check(empty_slot >= 0, "the player has a free slot for the remainder")
+	_check(panel.put_down("player", empty_slot), "the carried remainder returns to the player")
+	_check(inventory.count_of(BlockDB.PLANKS) == planks_before - 4,
+		"exactly four planks left the player inventory")
+	_check(table.inventory.total_of(BlockDB.PLANKS) == 4, "exactly four planks are in the grid")
+	_check(table.inventory.total_items() == 4, "the station and the player hold every item exactly once")
+
+	# --- crafting from the grid -------------------------------------------
+	var preview: Dictionary = table.result_preview()
+	_check(int(preview.get("output", -1)) == BlockDB.CRAFTING_TABLE,
+		"the 3x3 grid previews a crafting table")
+	_check(panel.status_text().contains("Ready"), "the interface confirms the recipe is ready")
+	var tables_before := inventory.count_of(BlockDB.CRAFTING_TABLE)
+	_check(panel.take_output(), "the result can be taken from the table")
+	var carried: Dictionary = panel.carried()
+	_check(int(carried.get("item", -1)) == BlockDB.CRAFTING_TABLE,
+		"taking the result carries the crafted table")
+	var table_slot: int = inventory.slots.find(BlockDB.AIR)
+	_check(table_slot >= 0, "the player has a free slot for the crafted table")
+	_check(panel.put_down("player", table_slot), "the crafted table moves into the player inventory")
+	_check(inventory.count_of(BlockDB.CRAFTING_TABLE) == tables_before + 1,
+		"the crafted table reached the player")
+	_check(table.inventory.total_of(BlockDB.PLANKS) == 0,
+		"the craft consumed exactly the four grid planks")
+	_check(table.inventory.is_empty(StationModel.TABLE_OUTPUT_SLOT),
+		"the result slot is empty after the crafted item was taken")
+
+	# --- the interface blocks accidental world actions ---------------------
+	_game._close_station()
+	await process_frame
+	_check(not panel.is_open(), "the station interface closes")
+	_check(player.can_interact, "closing the station restores world interaction")
+	await _aim_at(table_cell)
+	_press_interact()
+	await process_frame
+	_check(panel.is_open(), "the station can be opened again")
+	Input.action_press("break_block")
+	for i in range(8):
+		await process_frame
+	Input.action_release("break_block")
+	_check(_game.world.get_block(table_cell) == BlockDB.CRAFTING_TABLE,
+		"holding the mine action does not break the block while the interface is open")
+	_check(_game.world.get_block(table_cell + Vector3i.UP) == BlockDB.AIR,
+		"no accidental placement happened while the interface was open")
+
+	# --- the furnace: a separate station with its own inventory -----------
+	world.set_block(furnace_cell, BlockDB.FURNACE)
+	_game._close_station()
+	await _aim_at(furnace_cell)
+	_check(_game.targeted_station_position() == furnace_cell, "the crosshair identifies the placed furnace")
+	_press_interact()
+	await process_frame
+	_check(panel.is_open(), "E opens the targeted furnace")
+	_check(_game.stations.count() == 2, "two nearby stations each have their own state")
+	_check(panel.station_slot_count() == 3,
+		"the furnace interface has input, fuel and output slots")
+	var furnace = _game.stations.peek(furnace_cell)
+	_check(furnace != null and furnace.kind == StationModel.FURNACE, "the opened station is a furnace")
+	_check(table.inventory.total_items() == 0, "the furnace did not receive the table's items")
+
+	inventory.clear_slot(3)
+	inventory.clear_slot(4)
+	inventory.add(BlockDB.SAND, 3)
+	inventory.add(ItemDB.COAL, 1)
+	var sand_slot: int = inventory.slots.find(BlockDB.SAND)
+	var coal_slot: int = inventory.slots.find(ItemDB.COAL)
+	panel.pick_up("player", sand_slot)
+	_check(panel.put_down("station", StationModel.FURNACE_INPUT_SLOT),
+		"the input slot accepts sand")
+	panel.pick_up("player", coal_slot)
+	_check(panel.put_down("station", StationModel.FURNACE_FUEL_SLOT),
+		"the fuel slot accepts coal")
+	_check(furnace.inventory.total_of(BlockDB.SAND) == 3, "the furnace holds the input")
+	_check(furnace.inventory.total_of(ItemDB.COAL) == 1, "the furnace holds the fuel")
+	_check(panel.status_text().contains("Smelting"), "the furnace explains what it will smelt")
+
+	var glass_before := inventory.count_of(BlockDB.GLASS)
+	var changes: int = _game.stations.tick(6.5, player.global_position)
+	_check(changes > 0, "the furnace advances with time through the registry")
+	panel.refresh()
+	_check(furnace.inventory.count_at(StationModel.FURNACE_OUTPUT_SLOT) >= 1,
+		"the furnace produced glass in its output slot")
+	_check(furnace.inventory.total_of(BlockDB.SAND) == 2, "one sand was consumed")
+	_check(furnace.inventory.total_of(ItemDB.COAL) == 0, "one coal was burned")
+	_check(panel.status_text().contains("Furnace is"), "the interface reports the furnace state")
+	_check(panel.take_output(), "the furnace result can be taken")
+	var glass_slot: int = inventory.slots.find(BlockDB.AIR)
+	_check(panel.put_down("player", glass_slot), "the furnace result moves to the player")
+	_check(inventory.count_of(BlockDB.GLASS) == glass_before + 1,
+		"the smelted glass reached the player")
+
+	# --- persistence across save/load --------------------------------------
+	_game._close_station()
+	await process_frame
+	var stored = _game.stations.station_at(table_cell)
+	stored.inventory.insert(5, {"item": ItemDB.STICK, "count": 5})
+	_game._save_now()
+	_check(FileAccess.file_exists(_game.saves.save_path()), "the station save is written to disk")
+	_game.stations.from_dictionary([])
+	_check(_game.stations.count() == 0, "station state can be cleared to prove it comes from disk")
+	_game._reload_now()
+	await process_frame
+	var restored_table = _game.stations.peek(table_cell)
+	_check(restored_table != null, "the table state is restored on load")
+	if restored_table != null:
+		_check(restored_table.inventory.total_of(ItemDB.STICK) == 5,
+			"the table contents survive save/load")
+	var restored_furnace = _game.stations.peek(furnace_cell)
+	_check(restored_furnace != null, "the furnace state is restored on load")
+	if restored_furnace != null:
+		_check(restored_furnace.inventory.total_of(BlockDB.SAND) == 2,
+			"the furnace input survives save/load")
+		_check(restored_furnace.burn_remaining > 0.0,
+			"the furnace burn time survives save/load")
+
+	# --- chunk unload and reload ------------------------------------------
+	var coord := VoxelWorld.world_to_chunk(table_cell)
+	_game.world.unload_chunk(coord)
+	_check(not _game.world.has_chunk(coord), "the station's chunk unloads")
+	_game.world.ensure_chunk(coord)
+	_check(_game.world.get_block(table_cell) == BlockDB.CRAFTING_TABLE,
+		"the station block returns when the chunk reloads")
+	var after_chunk = _game.stations.peek(table_cell)
+	_check(after_chunk != null and after_chunk.inventory.total_of(ItemDB.STICK) == 5,
+		"the station contents survive chunk unload/reload")
+
+	# --- destruction returns the contents ---------------------------------
+	await _aim_at(table_cell)
+	_check(_game.targeted_station_position() == table_cell, "the restored station is targetable")
+	var sticks_before := inventory.count_of(ItemDB.STICK)
+	var table_blocks_before := inventory.count_of(BlockDB.CRAFTING_TABLE)
+	var broke: bool = player.break_target()
+	await process_frame
+	_check(broke, "the targeted station can be broken")
+	_check(_game.world.get_block(table_cell) == BlockDB.AIR, "the station block is gone")
+	_check(not _game.stations.has(table_cell), "the destroyed station's state is removed")
+	_check(inventory.count_of(ItemDB.STICK) == sticks_before + 5,
+		"the station contents were recovered when it was destroyed")
+	_check(inventory.count_of(BlockDB.CRAFTING_TABLE) == table_blocks_before + 1,
+		"the station block itself dropped")
+
+	# --- invalid interaction and interaction range -------------------------
+	var range_cell := Vector3i(28, 76, 20)
+	for dy in range(1, 12):
+		world.set_block(range_cell + Vector3i(0, dy, 0), BlockDB.AIR)
+	world.set_block(range_cell, BlockDB.AIR)
+	world.set_block(range_cell, BlockDB.CRAFTING_TABLE)
+	await _aim_at(range_cell)
+	_check(_game.targeted_station_position() == range_cell,
+		"a nearby station is targetable inside the interaction range")
+	player.look_pitch(45.0)
+	await process_frame
+	_game._try_interact()
+	await process_frame
+	_check(not panel.is_open(), "interacting with the sky opens nothing")
+	player.teleport_to(Vector3(range_cell) + Vector3(0.5, 10.0, 0.5))
+	player.flying = true
+	player.look_pitch(-89.0)
+	for i in range(2):
+		await process_frame
+	var beyond: Dictionary = player.target()
+	_check(not beyond.get("hit", false) or Vector3i(beyond["block"]) != range_cell,
+		"a station beyond the interaction range is not targetable")
+	_game._try_interact()
+	await process_frame
+	_check(not panel.is_open(), "a station beyond the interaction range cannot be opened")
+	world.set_block(range_cell, BlockDB.AIR)
+
+	# Leave no save behind for later captures or sessions.
+	_game.saves.delete_save()
+	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.look_pitch(-20.0)
+	for i in range(2):
+		await process_frame

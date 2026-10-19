@@ -11,6 +11,42 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ---
 
+## M19 — Interactive crafting stations and persistent inventories
+
+- [x] Targetable world objects: the existing E-key action uses the camera voxel
+      ray and reach; aiming at a table/furnace shows an `E use …` prompt and the
+      existing cell outline. Invalid/out-of-range targets report a message
+- [x] Reusable station inventory model (`core/station_inventory.gd`): grid/input/
+      fuel/output roles, item acceptance, stack caps, count-preserving insert/
+      take/split/move/swap/deposit, `changed` notifications and atomic
+      serialisation. Shared by every station kind instead of per-UI logic
+- [x] Station behaviour (`core/station.gd`, `core/smelting.gd`): crafting table
+      3×3 shaped/shapeless grid, live result preview and atomic `craft_grid()`;
+      furnace timed smelting with data-driven fuel and cook times, output-full
+      pause, input-change reset and persistent progress
+- [x] Station registry (`core/station_registry.gd`): state keyed by world cell,
+      lazily created, stale-state validation/pruning (loaded cells only), bounded
+      furnace ticking near the player (64 blocks), chunk-unload survival
+- [x] Dedicated interfaces (`game/station_panel.gd`, `game/station_slot.gd`): 3×3
+      grid + result with ghost preview and Return grid/Take result for a table;
+      input/fuel/output with COOK/FUEL bars and live status for a furnace; player
+      row, carrying slot, tooltips, click/right-click/shift-click/drag & drop.
+      Mutual exclusion with the C/I/O overlays; E/Esc closes; world input blocked
+- [x] Persistence: save VERSION 6 adds `stations` rows (contents + furnace
+      timers), validated before apply; v1–v5 load with no station state. Fixed a
+      pre-existing F9 reload bug (`apply` received the unwrapped payload)
+- [x] Destruction/replacement policy: contents transfer to the player (remainder
+      reported if the inventory is full); placing a station clears stale state
+- [x] Tests: `test_stations.gd` (unit) + 73 real-scene integration assertions;
+      unit 1447 / integration 257 assertions, exit 0, 0 bytes stderr; smoke hash
+      unchanged from M18; `m19-crafting-table.png` and `m19-furnace.png`
+      inspected
+- [~] Human keyboard/mouse play-through of the new interfaces remains outstanding
+- [ ] Station-adjacent conveniences not requested by M19 (shift-drag splitting
+      across containers, dropped-item entities for full inventories)
+
+---
+
 ## M18 — Visual quality upgrade
 
 Design contract: `prototypes/m17/results/m18-visual-design.md`.
@@ -59,7 +95,7 @@ Design contract: `prototypes/m17/results/m18-visual-design.md`.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (1238 assertions, verified 2026-10-19) + runtime integration harness (184 assertions, verified 2026-10-19) + headless determinism fingerprint
+- [x] Automated test suite (1447 assertions, verified 2026-10-19) + runtime integration harness (257 assertions, verified 2026-10-19) + headless determinism fingerprint
 - [x] Frame-time benchmark harness (`scripts/tests/run_perf.gd`): six scripted activities, per-frame
       timings and streaming counters, before/after JSON reports (verified 2026-10-16)
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
@@ -97,7 +133,12 @@ Design contract: `prototypes/m17/results/m18-visual-design.md`.
 - [x] Crafting stations: the recipe's `station` must exist **in the world**
       (`Crafting.best_station` scans loaded voxels for a crafting table or furnace); a furnace
       also serves table recipes, and smelting needs the furnace plus one coal of fuel per
-      craft. New `FURNACE` block id 34 (2026-10-19)
+      craft. New `FURNACE` block id 34 (2026-10-19). **M19** adds the world-object layer:
+      tables/furnaces are targeted with E and open dedicated persistent interfaces
+      (3×3 grid crafting; timed furnace with input/fuel/output and progress), keep
+      their contents across close/save/chunk reload, and return contents when
+      destroyed. The original C-key recipe list remains available as a convenience
+      over the same `Crafting` model
 - [x] Items, tools, tool tiers and durability (2026-10-19) — new `core/item_db.gd` extends the
       id space with 26 non-block items (materials, food, 16 tools in four tiers) while keeping
       block ids unchanged; `Inventory` gained per-slot durability, `wear()` that clears broken

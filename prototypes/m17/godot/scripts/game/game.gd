@@ -32,6 +32,9 @@ var hud: GameHUD
 var menu: MainMenu
 var crafting: CraftingPanel
 var inventory_panel: InventoryPanel
+var station_panel: StationPanel
+var stations: StationRegistry
+var _open_station_position := Vector3i.ZERO
 
 # --- settlements and residents -------------------------------------------
 const NpcModel = preload("res://scripts/core/npc.gd")
@@ -74,6 +77,9 @@ const CreatureModel = preload("res://scripts/core/passive_creatures.gd")
 const HostileNode = preload("res://scripts/game/hostile_creature.gd")
 const HostileModel = preload("res://scripts/core/hostile_creatures.gd")
 const SettingsPanelNode = preload("res://scripts/game/settings_panel.gd")
+const StationPanelNode = preload("res://scripts/game/station_panel.gd")
+const StationModel = preload("res://scripts/core/station.gd")
+const StationRegistryModel = preload("res://scripts/core/station_registry.gd")
 const GameSettingsModel = preload("res://scripts/core/game_settings.gd")
 const SETTINGS_PATH := "user://voxelworld_settings.cfg"
 
@@ -117,6 +123,7 @@ var _options := {
 	"open_crafting": false,
 	"open_inventory": false,
 	"open_settings": false,
+	"station_capture": "",
 	"creature_feedback_capture": false,
 	"spawn_hostiles": false,
 	"hostile_feedback_capture": false,
@@ -155,6 +162,9 @@ var _fps_accumulator := 0.0
 var _last_fps := 0.0
 var _shots_taken := 0
 var _stream_report_printed := false
+## Periodic sweep for station state whose block no longer exists (prune only
+## inspects loaded cells, so an unloaded station is never mistaken for a stale one).
+var _station_sweep_timer := 0.0
 
 
 # =========================================================================
@@ -378,6 +388,15 @@ func _build_ui() -> void:
 	crafting_layer.add_child(inventory_panel)
 	inventory_panel.setup(inventory, library)
 
+	# The station interface (M19) shares the overlay layer: only one panel is
+	# open at a time, and the station panel is opened at the world object the
+	# player is aiming at rather than by a keyboard shortcut.
+	station_panel = StationPanelNode.new()
+	station_panel.name = "StationPanel"
+	crafting_layer.add_child(station_panel)
+	station_panel.setup(inventory, library)
+	station_panel.message.connect(func(text: String) -> void: hud.flash(text, 2.2))
+
 	# The death screen sits above the HUD and the crafting panel but below the
 	# menu (20), and owns the screen while the player is dead.
 	var death_layer := CanvasLayer.new()
@@ -473,6 +492,10 @@ func _parse_arguments() -> void:
 				_options["raid_now"] = true
 			"--open-settings":
 				_options["open_settings"] = true
+			"--station-capture":
+				# Diagnostic: place a station in front of the player and open its
+				# interface, so a capture can inspect it without a scripted walk.
+				_options["station_capture"] = value.to_lower() if not value.is_empty() else "table"
 			"--tools":
 				# Diagnostic: one tool of each tier plus materials and food, so a
 				# capture can show the item icons, durability bars and the HUD
@@ -552,6 +575,8 @@ func _show_title() -> void:
 		crafting.close()
 	if inventory_panel != null and inventory_panel.is_open():
 		inventory_panel.close()
+	if station_panel != null and station_panel.is_open():
+		station_panel.close()
 	if death_screen != null and death_screen.is_open():
 		death_screen.hide_death()
 	menu.set_title_callback(_return_to_title)
@@ -568,10 +593,13 @@ func _start_world(seed_value: int, save: Variant) -> void:
 		crafting.close()
 	if inventory_panel != null and inventory_panel.is_open():
 		inventory_panel.close()
+	if station_panel != null and station_panel.is_open():
+		station_panel.close()
 	state = State.LOADING
 	_loading_seconds = 0.0
 	_play_seconds = 0.0
 	_autosave_timer = 0.0
+	_station_sweep_timer = 5.0
 	_stream_report_printed = false
 	clock = DayNight.new(float(_options["time_of_day"]), _cycle_length())
 	_update_sky()
@@ -584,6 +612,9 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	_last_damage_source = ""
 
 	world = VoxelWorld.new(seed_value)
+	stations = StationRegistryModel.new(world)
+	if station_panel != null and station_panel.is_open():
+		station_panel.close()
 	creature_model = CreatureModel.new(seed_value)
 	creature_nodes.clear()
 	_creature_spawn_timer = 0.0
@@ -641,6 +672,7 @@ func _start_world(seed_value: int, save: Variant) -> void:
 			if float(applied.get("hunger", -1.0)) >= 0.0:
 				hunger = float(applied["hunger"])
 			_apply_npcs(applied.get("npcs", {}))
+			_apply_stations(applied.get("stations", []))
 			streamer.focus_at(player.global_position)
 			hud.flash("Loaded %d block edits and %d fluid changes" % [int(applied["block_edits"]), int(applied["fluid_edits"])], 5.0)
 	hud.set_hunger(hunger, Survival.MAX_HUNGER)
@@ -861,6 +893,8 @@ func _enter_play(area_ready: bool) -> void:
 		_spawn_creature_feedback_capture()
 	if bool(_options["hostile_feedback_capture"]):
 		_spawn_hostile_feedback_capture()
+	if not str(_options.get("station_capture", "")).is_empty():
+		_spawn_station_capture(str(_options["station_capture"]))
 
 
 ## Reproducible capture aid: place one legal boar in front of the player and
@@ -983,6 +1017,8 @@ func _pause() -> void:
 		crafting.close()
 	if inventory_panel != null and inventory_panel.is_open():
 		inventory_panel.close()
+	if station_panel != null and station_panel.is_open():
+		station_panel.close()
 	state = State.PAUSED
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.can_interact = false
@@ -1058,6 +1094,13 @@ func _process(delta: float) -> void:
 			if fluid != null:
 				fluid.tick()
 			_update_survival(delta)
+			var station_changes := stations.tick(delta, player.global_position) if stations != null else 0
+			if station_changes > 0 and station_panel != null and station_panel.is_open():
+				station_panel.refresh()
+			_station_sweep_timer -= delta
+			if _station_sweep_timer <= 0.0 and stations != null:
+				_station_sweep_timer = 5.0
+				stations.prune()
 			# The visual test area is a still-life render target.  Keep transient
 			# creatures, residents and raids out of it so captures are stable and
 			# comparable; normal play still runs all of them.
@@ -1210,6 +1253,8 @@ func _enter_dead() -> void:
 		crafting.close()
 	if inventory_panel != null and inventory_panel.is_open():
 		inventory_panel.close()
+	if station_panel != null and station_panel.is_open():
+		station_panel.close()
 	state = State.DEAD
 	player.velocity = Vector3.ZERO
 	player.can_interact = false
@@ -1276,6 +1321,16 @@ func _update_status() -> void:
 		int(round(_last_fps)),
 		"\nHUD hidden (F3 shows it)" if not hud.debug_visible() else "",
 	])
+	# Aiming at a workstation shows how to use it.  The existing voxel outline
+	# already marks the targeted cell; this adds the action and the object's name.
+	var prompt := ""
+	if player.can_interact:
+		var aimed: Dictionary = player.target()
+		if aimed.get("hit", false):
+			var station_kind: String = StationModel.kind_for_block(int(aimed["block_id"]))
+			if not station_kind.is_empty():
+				prompt = "E  use %s" % str(StationModel.KIND_NAMES.get(station_kind, "Station"))
+	hud.set_interact_prompt(prompt)
 
 
 func _center_biome_name() -> String:
@@ -1298,6 +1353,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif state == State.PLAYING and crafting != null and crafting.is_open():
 			# Escape closes the crafting panel before it would pause the game.
 			_close_crafting()
+		elif state == State.PLAYING and station_panel != null and station_panel.is_open():
+			# Escape closes the station interface before it would pause the game.
+			_close_station()
 		elif state == State.PLAYING:
 			_pause()
 		elif state == State.PAUSED:
@@ -1309,15 +1367,18 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("load_saved_world"):
 		_reload_now()
 	elif state == State.PLAYING:
-		if event.is_action_pressed("open_settings"):
+		if event.is_action_pressed("interact"):
+			if station_panel != null and station_panel.is_open():
+				_close_station()
+			elif not _overlay_open():
+				_try_interact()
+		elif event.is_action_pressed("open_settings"):
 			_toggle_settings()
 		elif event.is_action_pressed("open_crafting"):
 			_toggle_crafting()
 		elif event.is_action_pressed("open_inventory"):
 			_toggle_inventory()
-		elif (settings_panel != null and settings_panel.is_open()) \
-				or (crafting != null and crafting.is_open()) \
-				or (inventory_panel != null and inventory_panel.is_open()):
+		elif _overlay_open():
 			# The open overlay owns the mouse; ignore gameplay input.
 			pass
 		elif event.is_action_pressed("toggle_fly"):
@@ -1347,6 +1408,8 @@ func _open_crafting() -> void:
 		return
 	if settings_panel != null and settings_panel.is_open():
 		settings_panel.close()
+	if station_panel != null and station_panel.is_open():
+		station_panel.close()
 	# Which stations the player can use right now: any crafting table (or
 	# furnace) block that is loaded within a few blocks of the player.
 	crafting.set_station(_current_station())
@@ -1396,6 +1459,163 @@ func _on_crafted(result: Dictionary) -> void:
 
 
 # =========================================================================
+# World-object stations
+# =========================================================================
+
+## True while any modal interface owns the mouse and keyboard.
+func _overlay_open() -> bool:
+	if crafting != null and crafting.is_open():
+		return true
+	if inventory_panel != null and inventory_panel.is_open():
+		return true
+	if settings_panel != null and settings_panel.is_open():
+		return true
+	if station_panel != null and station_panel.is_open():
+		return true
+	return false
+
+
+## Interact (E): use the workstation the player is aiming at.  The block ray is
+## the same one that targets blocks for mining/building, so the object must be
+## loaded and inside the player's reach to be usable.
+func _try_interact() -> void:
+	if player == null or stations == null:
+		return
+	var aimed: Dictionary = player.target()
+	if not aimed.get("hit", false):
+		hud.flash("Nothing to interact with", 1.4)
+		return
+	var cell: Vector3i = aimed["block"]
+	var kind: String = StationModel.kind_for_block(int(aimed["block_id"]))
+	if kind.is_empty():
+		hud.flash("%s is not a workstation" % BlockDB.name_of(int(aimed["block_id"])), 1.6)
+		return
+	var centre := Vector3(cell) + Vector3.ONE * 0.5
+	if player.eye_position().distance_to(centre) > player.reach + 0.75:
+		hud.flash("Too far away to use the %s" % str(StationModel.KIND_NAMES.get(kind, "station")), 1.6)
+		return
+	_open_station(cell)
+
+
+func _open_station(position: Vector3i) -> void:
+	if station_panel == null or stations == null or state != State.PLAYING:
+		return
+	var station = stations.station_at(position)
+	if station == null:
+		hud.flash("That station is no longer there", 1.8)
+		return
+	if crafting != null and crafting.is_open():
+		crafting.close()
+	if inventory_panel != null and inventory_panel.is_open():
+		inventory_panel.close()
+	if settings_panel != null and settings_panel.is_open():
+		settings_panel.close()
+	_open_station_position = position
+	station_panel.open_station(station)
+	player.can_interact = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	hud.set_interact_prompt("")
+	print("M17_STATION_OPENED kind=%s at=%d,%d,%d" % [station.kind, position.x, position.y, position.z])
+
+
+func _close_station() -> void:
+	if station_panel == null:
+		return
+	station_panel.close()
+	if state == State.PLAYING:
+		player.can_interact = true
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	print("M17_STATION_CLOSED at=%d,%d,%d" % [
+		_open_station_position.x, _open_station_position.y, _open_station_position.z])
+
+
+## The station under the crosshair, or null.  Used by the HUD prompt and by the
+## integration test to assert the targeting range.
+func targeted_station_position() -> Vector3i:
+	if player == null:
+		return Vector3i(-1, -1, -1)
+	var aimed: Dictionary = player.target()
+	if not aimed.get("hit", false):
+		return Vector3i(-1, -1, -1)
+	if StationModel.kind_for_block(int(aimed["block_id"])).is_empty():
+		return Vector3i(-1, -1, -1)
+	return aimed["block"]
+
+
+## Breaking a station hands its contents to the player.  If the player has no
+## room the remainder is reported and lost, which is the same explicit rule the
+## game already uses for a mined block's own drop (there is no dropped-item
+## entity system).  The station's state itself is removed, so a replacement
+## station starts empty.
+func _recover_station_contents(position: Vector3i) -> String:
+	if stations == null:
+		return ""
+	var stacks: Array = stations.take_contents(position)
+	if stacks.is_empty():
+		return ""
+	var recovered := 0
+	var lost: Array = []
+	for stack: Dictionary in stacks:
+		var count := int(stack["count"])
+		var leftover: int = inventory.add(int(stack["item"]), count, int(stack.get("durability", -1)))
+		recovered += count - leftover
+		if leftover > 0:
+			lost.append("%d %s" % [leftover, ItemDB.name_of(int(stack["item"]))])
+	var text := "  ·  station: %d item%s recovered" % [recovered, "" if recovered == 1 else "s"]
+	if not lost.is_empty():
+		text += "  ·  lost (inventory full): %s" % ", ".join(lost)
+	return text
+
+
+func _apply_stations(payload: Variant) -> void:
+	if stations == null:
+		return
+	var summary: Dictionary = stations.from_dictionary(payload)
+	var accepted := int(summary.get("accepted", 0))
+	var rejected := int(summary.get("rejected", 0))
+	if accepted > 0 or rejected > 0:
+		print("M17_STATIONS_LOADED accepted=%d rejected=%d" % [accepted, rejected])
+
+
+## Diagnostic for captures: place a station block a few metres in front of the
+## player and open its interface, so the rendered UI can be inspected without a
+## scripted walk.  This is capture-only; normal play builds and uses stations.
+func _spawn_station_capture(kind_name: String) -> void:
+	if world == null or player == null:
+		return
+	var block_id := BlockDB.FURNACE if kind_name.begins_with("f") else BlockDB.CRAFTING_TABLE
+	var forward: Vector3 = player.look_basis() * Vector3(0.0, 0.0, -1.0)
+	var base := player.global_position + forward * 3.0
+	var cell := Vector3i(floori(base.x), floori(player.global_position.y), floori(base.z))
+	if not world.is_loaded(cell):
+		world.ensure_chunk(VoxelWorld.world_to_chunk(cell))
+	if not world.is_loaded(cell):
+		return
+	if world.get_block(cell) != BlockDB.AIR:
+		cell.y += 1
+	if not world.set_block(cell, block_id):
+		hud.flash("Station capture: no room in front of the player", 4.0)
+		return
+	player.look_yaw(rad_to_deg(atan2(-forward.x, -forward.z)))
+	player.look_pitch(-8.0)
+	_open_station(cell)
+	var station = stations.station_at(cell)
+	if station != null:
+		# A representative, deterministic state so the capture shows the real
+		# interface doing its job rather than an empty panel.
+		if station.is_furnace():
+			station.inventory.insert(Station.FURNACE_INPUT_SLOT, {"item": BlockDB.SAND, "count": 3})
+			station.inventory.insert(Station.FURNACE_FUEL_SLOT, {"item": ItemDB.COAL, "count": 2})
+			station.inventory.insert(Station.FURNACE_OUTPUT_SLOT, {"item": BlockDB.GLASS, "count": 2}, true)
+			station.step(2.5)
+		else:
+			for grid_slot in [0, 1, 3, 4]:
+				station.inventory.insert(grid_slot, {"item": BlockDB.PLANKS, "count": 1})
+		station_panel.refresh()
+	hud.flash("Station capture: %s" % BlockDB.name_of(block_id), 8.0)
+
+
+# =========================================================================
 # Settings
 # =========================================================================
 
@@ -1431,6 +1651,8 @@ func _open_inventory() -> void:
 		inventory_panel.close()
 	if settings_panel != null and settings_panel.is_open():
 		settings_panel.close()
+	if station_panel != null and station_panel.is_open():
+		station_panel.close()
 	inventory_panel.open()
 	player.can_interact = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -1452,6 +1674,8 @@ func _open_settings() -> void:
 		crafting.close()
 	if inventory_panel != null and inventory_panel.is_open():
 		inventory_panel.close()
+	if station_panel != null and station_panel.is_open():
+		station_panel.close()
 	settings_panel.open()
 	player.can_interact = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -1536,11 +1760,17 @@ func _on_block_broken(world_position: Vector3i, block_id: int, drop: int) -> voi
 	if drop != BlockDB.NO_DROP:
 		var leftover := inventory.add(drop, 1)
 		collected = "  +1 %s" % ItemDB.name_of(drop) if leftover == 0 else "  (inventory full)"
-	hud.flash("Mined %s at (%d, %d, %d)%s" % [BlockDB.name_of(block_id), world_position.x, world_position.y, world_position.z, collected], 1.6)
+	if StationModel.is_station_block(block_id):
+		collected += _recover_station_contents(world_position)
+	hud.flash("Mined %s at (%d, %d, %d)%s" % [BlockDB.name_of(block_id), world_position.x, world_position.y, world_position.z, collected], 2.6)
 
 
 func _on_block_placed(world_position: Vector3i, block_id: int) -> void:
 	inventory.take_from_slot(inventory.selected)
+	if StationModel.is_station_block(block_id) and stations != null:
+		# A fresh station never inherits stale state from a previous object in
+		# this cell.
+		stations.remove_station(world_position)
 	hud.flash("Placed %s at (%d, %d, %d)" % [BlockDB.name_of(block_id), world_position.x, world_position.y, world_position.z], 1.4)
 
 
@@ -1705,11 +1935,13 @@ func _on_fly_changed(enabled: bool) -> void:
 # =========================================================================
 
 func _save_now() -> void:
-	var written := saves.write(world, player, inventory, clock, health, breath, hunger, _npcs_to_dictionary())
+	var written := saves.write(world, player, inventory, clock, health, breath, hunger,
+		_npcs_to_dictionary(), _stations_payload())
 	if written:
 		hud.flash("Saved %d block edits to %s" % [world.edits.size(), ProjectSettings.globalize_path(saves.save_path())], 4.0)
-		print("M17_GAME_SAVED path=%s block_edits=%d fluid_edits=%d" % [
+		print("M17_GAME_SAVED path=%s block_edits=%d fluid_edits=%d stations=%d" % [
 			ProjectSettings.globalize_path(saves.save_path()), world.edits.size(), world.fluid_overrides.size(),
+			stations.count() if stations != null else 0,
 		])
 	else:
 		hud.flash("Save failed: %s" % saves.last_error, 5.0)
@@ -1717,18 +1949,46 @@ func _save_now() -> void:
 
 
 func _save_silently(reason: String) -> void:
-	if saves.write(world, player, inventory, clock, health, breath, hunger, _npcs_to_dictionary()):
+	if saves.write(world, player, inventory, clock, health, breath, hunger,
+			_npcs_to_dictionary(), _stations_payload()):
 		print("M17_GAME_AUTOSAVE reason=%s block_edits=%d" % [reason, world.edits.size()])
 	else:
 		push_error("M17_GAME_AUTOSAVE_FAILED %s" % saves.last_error)
 
 
+func _stations_payload() -> Array:
+	return stations.to_dictionary() if stations != null else []
+
+
+## Machine-readable station state for the smoke/capture summary.
+func _station_summary() -> Dictionary:
+	if stations == null:
+		return {"count": 0, "furnaces_active": 0, "items": 0}
+	var active := 0
+	var items := 0
+	for position: Vector3i in stations.positions():
+		var station = stations.peek(position)
+		if station == null:
+			continue
+		if station.is_furnace() and station.is_active():
+			active += 1
+		items += station.inventory.total_items()
+	return {"count": stations.count(), "furnaces_active": active, "items": items}
+
+
 func _reload_now() -> void:
+	if station_panel != null and station_panel.is_open():
+		# The panel holds a reference to a Station from the registry that is
+		# about to be replaced, so close it before applying the save.
+		_close_station()
 	var result := saves.read()
 	if not result["ok"]:
 		hud.flash("Load failed: %s" % result["error"], 5.0)
 		return
-	var applied: Dictionary = saves.apply(result["data"], world, player, inventory, clock, health)
+	# `SaveManager.apply` takes the validated read result (the `ok`/`data`
+	# wrapper); passing `result["data"]` here made every F9 reload fail with
+	# "save is not validated".  Caught by the M19 station save/load test.
+	var applied: Dictionary = saves.apply(result, world, player, inventory, clock, health)
 	if not applied["ok"]:
 		hud.flash("Load failed: %s" % applied["error"], 5.0)
 		return
@@ -1738,10 +1998,12 @@ func _reload_now() -> void:
 		hunger = float(applied["hunger"])
 		exhaustion = 0.0
 	_apply_npcs(applied.get("npcs", {}))
+	_apply_stations(applied.get("stations", []))
 	streamer.focus_at(player.global_position)
 	hud.refresh()
 	hud.flash("Reloaded save (%d block edits)" % int(applied["block_edits"]), 4.0)
-	print("M17_GAME_LOADED block_edits=%d fluid_edits=%d" % [int(applied["block_edits"]), int(applied["fluid_edits"])])
+	print("M17_GAME_LOADED block_edits=%d fluid_edits=%d stations=%d" % [
+		int(applied["block_edits"]), int(applied["fluid_edits"]), stations.count() if stations != null else 0])
 
 
 func _notification(what: int) -> void:
@@ -1850,6 +2112,7 @@ func _smoke_summary() -> void:
 			"settlements": settlements.size(), "stored": settlement_stores.size()},
 		"raid": {"day": clock.day_index if clock != null else -1, "active": raid_nodes.size(),
 			"settlement": _raid_settlement, "last_day": _raided_day},
+		"stations": _station_summary(),
 	}))
 	print("M17_RENDER_STATS draw_calls=%d primitives=%d objects=%d" % [
 		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),

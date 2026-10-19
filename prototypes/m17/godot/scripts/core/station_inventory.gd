@@ -175,6 +175,19 @@ func remove_item(item_id: int, amount: int = 1) -> int:
 	return removed
 
 
+## Adds a stack wherever it fits, filling matching stacks first and then empty
+## accepting slots (never the output).  Returns how many items did not fit, so a
+## quick-move can never duplicate or lose an item.  `insert` refuses a slot it
+## cannot use, so the loop just moves on.
+func deposit(stack: Dictionary) -> int:
+	var carried := stack.duplicate()
+	for index in size():
+		if carried.is_empty() or int(carried.get("count", 0)) <= 0:
+			break
+		carried = insert(index, carried)
+	return int(carried.get("count", 0))
+
+
 ## Empties one slot (item, count and durability).
 func clear_slot(index: int) -> void:
 	if is_empty(index):

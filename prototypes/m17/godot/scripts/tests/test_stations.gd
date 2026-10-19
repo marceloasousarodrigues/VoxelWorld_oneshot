@@ -127,6 +127,21 @@ func _test_station_inventory(h: TestHarness) -> void:
 	h.check(not furnace2.move(0, 1), "moving a non-fuel into the fuel slot is refused")
 	h.eq(furnace2.to_dictionary(), fuel_before, "a refused move changes nothing")
 
+	# deposit() fills matching stacks then empty accepting slots, and never the
+	# output slot; it returns exactly the amount that did not fit.
+	var depot := StationInventory.new(_furnace_roles())
+	depot.insert(0, {"item": ItemDB.IRON_LUMP, "count": 2})
+	h.eq(depot.deposit({"item": ItemDB.IRON_LUMP, "count": 5, "durability": 0}), 0,
+		"deposit tops up a matching stack")
+	h.eq(depot.total_of(ItemDB.IRON_LUMP), 7, "the deposit count is exact")
+	h.eq(depot.deposit({"item": ItemDB.COAL, "count": 3, "durability": 0}), 0,
+		"deposit opens an empty accepting slot")
+	h.eq(depot.total_of(ItemDB.COAL), 3, "the fuel was deposited")
+	h.eq(depot.deposit({"item": BlockDB.STONE, "count": 5, "durability": 0}), 5,
+		"deposit refuses a slot that does not accept the item")
+	h.eq(depot.total_of(BlockDB.STONE), 0, "a refused deposit adds nothing")
+	h.eq(depot.total_of(ItemDB.COAL), 3, "a refused deposit cannot use the output slot")
+
 	# Serialisation: exact round-trip, malformed payloads rejected atomically.
 	var source := StationInventory.new(_furnace_roles())
 	source.insert(0, {"item": ItemDB.IRON_LUMP, "count": 4})

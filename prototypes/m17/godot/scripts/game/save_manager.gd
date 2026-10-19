@@ -15,14 +15,12 @@ extends RefCounted
 
 const FORMAT := "voxelworld.godot.save"
 ## 1: block/fluid edits, player, inventory.  2: adds the day/night clock.
-## 3: adds player health and breath.  Version 1 and 2 saves still load: every
-## newer field is optional and falls back to a default.
-## 1: block/fluid edits, player, inventory.  2: adds the day/night clock.
 ## 3: adds player health and breath.  4: adds hunger.  5: adds settlement stores
-## and residents.  Older saves still load: every field a version did not know
-## about is optional and keeps its default (a legacy save simply starts with a
-## full hunger bar and no residents).
-const VERSION := 5
+## and residents.  6: adds placed-station inventories (M19).  Older saves still
+## load: every field a version did not know about is optional and keeps its
+## default (a legacy save simply starts with a full hunger bar, no residents and
+## no station state).
+const VERSION := 6
 const DEFAULT_DIRECTORY := "user://saves"
 const DEFAULT_NAME := "world.json"
 
@@ -50,7 +48,7 @@ func ensure_directory() -> bool:
 
 func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null,
 		health: Health = null, breath: float = -1.0, hunger: float = -1.0,
-		npcs: Dictionary = {}) -> Dictionary:
+		npcs: Dictionary = {}, stations: Array = []) -> Dictionary:
 	var block_edits: Array = []
 	for position: Vector3i in world.edits:
 		block_edits.append([position.x, position.y, position.z, int(world.edits[position])])
@@ -90,6 +88,7 @@ func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory,
 		"breath": breath,
 		"hunger": hunger,
 		"npcs": npcs,
+		"stations": stations,
 		"blocks": block_edits,
 		"fluid": fluid_edits,
 	}
@@ -97,11 +96,11 @@ func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory,
 
 func write(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null,
 		health: Health = null, breath: float = -1.0, hunger: float = -1.0,
-		npcs: Dictionary = {}) -> bool:
+		npcs: Dictionary = {}, stations: Array = []) -> bool:
 	last_error = ""
 	if not ensure_directory():
 		return false
-	var payload := to_dictionary(world, player, inventory, clock, health, breath, hunger, npcs)
+	var payload := to_dictionary(world, player, inventory, clock, health, breath, hunger, npcs, stations)
 	var path := save_path()
 	var temporary := path + ".tmp"
 	var file := FileAccess.open(temporary, FileAccess.WRITE)
@@ -215,7 +214,7 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 		if bool(state.get("flying", false)) and not player.flying:
 			player.toggle_fly()
 	return {"ok": true, "error": "", "block_edits": block_edits.size(), "fluid_edits": fluid_edits.size(),
-		"breath": breath, "hunger": hunger, "npcs": npc_payload}
+		"breath": breath, "hunger": hunger, "npcs": npc_payload, "stations": data.get("stations", [])}
 
 
 # --- validation ----------------------------------------------------------
@@ -278,6 +277,10 @@ func _sanitise(data: Dictionary) -> Variant:
 	if typeof(npcs_state) != TYPE_DICTIONARY:
 		last_error = "npcs is not an object"
 		return null
+	var stations_state: Variant = data.get("stations", [])
+	if typeof(stations_state) != TYPE_ARRAY:
+		last_error = "stations is not an array"
+		return null
 	return {
 		"seed": seed_value,
 		"player": player_state,
@@ -287,6 +290,7 @@ func _sanitise(data: Dictionary) -> Variant:
 		"breath": float(breath_value),
 		"hunger": float(hunger_value),
 		"npcs": npcs_state,
+		"stations": stations_state,
 		"blocks": rows,
 		"fluid": fluid,
 		"version": version,
