@@ -108,7 +108,7 @@ static func _build_catalogue() -> Array:
 		_shaped("diamond_sword", "Tools", STATION_TABLE, [" P ", " P ", " S "],
 			{"P": ItemDB.DIAMOND, "S": ItemDB.STICK}, ItemDB.DIAMOND_SWORD, 1),
 		# --- Smelting: the furnace turns raw materials into better ones -----
-		_smelting("iron_ingot", {ItemDB.IRON_LUMP: 1}, ItemDB.IRON_INGOT, 1),
+		_smelting("iron_ingot", {ItemDB.IRON_LUMP: 1}, ItemDB.IRON_INGOT, 1, 8.0),
 		_smelting("glass_from_sand", {BlockDB.SAND: 1}, BlockDB.GLASS, 1),
 		_smelting("stone_from_cobble", {BlockDB.COBBLESTONE: 1}, BlockDB.STONE, 1),
 		_smelting("brick_from_clay", {BlockDB.CLAY: 1}, BlockDB.BRICK, 1),
@@ -136,11 +136,15 @@ static func _shaped(id: String, category: String, station: String, pattern: Arra
 	}
 
 
-static func _smelting(id: String, inputs: Dictionary, output: int, output_count: int) -> Dictionary:
+static func _smelting(id: String, inputs: Dictionary, output: int, output_count: int,
+		time: float = 6.0) -> Dictionary:
+	# `time` is the cook duration the placed-furnace interface uses; the recipe
+	# list interface still consumes one unit of fuel per craft, so the two stay
+	# consistent instead of contradicting each other.
 	return {
 		"id": id, "category": "Smelting", "station": STATION_FURNACE,
 		"inputs": inputs, "fuel": {ItemDB.COAL: 1},
-		"output": output, "output_count": output_count,
+		"output": output, "output_count": output_count, "time": time,
 	}
 
 

@@ -31,6 +31,7 @@ const MODULES := [
 	"res://scripts/tests/test_determinism.gd",
 	"res://scripts/tests/test_streaming_lifecycle.gd",
 	"res://scripts/tests/test_crafting.gd",
+	"res://scripts/tests/test_stations.gd",
 	"res://scripts/tests/test_health.gd",
 	"res://scripts/tests/test_survival.gd",
 	"res://scripts/tests/test_creatures.gd",
