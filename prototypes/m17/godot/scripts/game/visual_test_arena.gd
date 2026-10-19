@@ -304,7 +304,7 @@ func _can_plant(world: VoxelWorld, position: Vector3i) -> bool:
 	if world.get_block(position) != BlockDB.AIR:
 		return false
 	var below := world.get_block(position + Vector3i.DOWN)
-	return below == BlockDB.GRASS or below == BlockDB.DIRT or below == BlockDB.PATH
+	return below == BlockDB.GRASS or below == BlockDB.DIRT
 
 
 func _place_rocks(world: VoxelWorld, report: Dictionary) -> void:
