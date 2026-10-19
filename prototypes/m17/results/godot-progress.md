@@ -106,8 +106,9 @@ and these result documents; the production Ursina implementation was not touched
 M21's implemented loops are mining → tool tiers → ore/smelting, hunting → meat/
 hide/bone → cooking, seeds → wheat → bread/replanting, and chest storage.
 Next independent work: equipment/armour and combat depth, or a human play-through
-of the new interactions.  Code savepoint: **9ba924b** — “M21 Godot: species loot,
-cooking, farming and storage chest” (unit 1690 / integration 389 assertions).
+of the new interactions.  Feature savepoint: **9ba924b** — “M21 Godot: species
+loot, cooking, farming and storage chest”; current HEAD **66714db** (version-7
+save coverage and refreshed evidence; unit 1690 / integration 389 assertions).
 
 ---
 
