@@ -58,6 +58,10 @@ design contract: `prototypes/m17/results/m18-visual-design.md`.
   `m18-cycle-0.55.png` twilight, `m18-cycle-0.9.png` pre-dawn): the warm horizon,
   moon, stars, sea colour and shadow direction all follow the clock; the twilight
   frame is dark but readable, consistent with the M17 tuning choice.
+- Final noon captures after deepening the day sky: `m18-step11-normal-noon.png`
+  and `m18-step11-ocean-noon.png`; fixed-yaw rotation stills `m18-sweep-1.png` /
+  `m18-sweep-3.png` (compact `--shots` plus the new `--shot-prefix`) show stable
+  materials around the clearing.
 - Frame-time harness (`run_perf.gd`, radius 5, RTX 3080 / i7-10700K), M18:
 
   | scenario | p50 | p95 | p99 | 1 % low |
@@ -84,10 +88,10 @@ design contract: `prototypes/m17/results/m18-visual-design.md`.
   other runs ~50 ms). It looks like one-off engine/first-use work, not a per-frame
   regression, but it is recorded rather than hidden.
 - Leaf transparency still uses an alpha scissor; the denser leaf texture reduces
-  shimmer/confetti but film-level inspection during a long camera sweep was not
-  performed. Two fixed-yaw stills (`godot-game-tour-0/1.png`, yaw 0 and 12) showed
-  no crawl; an unquoted `--shots` value with spaces was split by PowerShell and only
-  applied the first two viewpoints, so a rotating clip was not produced.
+  shimmer/confetti. A five-step 20° yaw sweep was captured (`m18-sweep-*`, compact
+  `--shots` without spaces plus `--shot-prefix`) and inspected as stills with no
+  visible crawl, but no encoded rotating clip was produced, so motion shimmer is
+  reduced-by-evidence, not eliminated-by-measurement.
 
 Next useful work (not started): weather/particles, richer bark/grass side variants,
 an in-game quality menu for shadows/SSAO/fog, and a scripted rotating-camera clip

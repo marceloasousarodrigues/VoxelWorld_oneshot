@@ -16,8 +16,8 @@ const NOON_ELEVATION := 74.0
 
 # Palette of the sky at noon and at midnight; everything in between is lerped by
 # the smooth `daylight()` factor.
-const DAY_SKY_TOP := Color("2b6fae")
-const DAY_SKY_HORIZON := Color("c9dde4")
+const DAY_SKY_TOP := Color("1f5d97")
+const DAY_SKY_HORIZON := Color("c2d9e0")
 const NIGHT_SKY_TOP := Color("060c1f")
 const NIGHT_SKY_HORIZON := Color("1d2b4a")
 const DAY_GROUND_BOTTOM := Color("7f97a6")

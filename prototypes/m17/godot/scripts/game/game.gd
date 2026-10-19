@@ -122,6 +122,7 @@ var _options := {
 	"hostile_feedback_capture": false,
 	"sun_angle": Vector2(-48.0, -132.0),
 	"shots": [],
+	"shot_prefix": "",
 	"quit_after": 0.0,
 	"quit_after_settle": false,
 	"health": -1.0,
@@ -448,6 +449,10 @@ func _parse_arguments() -> void:
 				_time_rate_given = true
 			"--shots":
 				_options["shots"] = _parse_shots(value)
+			"--shot-prefix":
+				# Names a tour's frames `<prefix>-0.png`, `<prefix>-1.png`, ...
+				# so a sweep does not overwrite unrelated tracked captures.
+				_options["shot_prefix"] = value
 			"--straight-to-game":
 				_options["straight_to_game"] = true
 			"--open-crafting":
@@ -1798,7 +1803,10 @@ func _update_capture(delta: float) -> void:
 func _shot_filename(index: int) -> String:
 	if (_options["shots"] as Array).is_empty():
 		return str(_options["capture_name"])
-	return "godot-game-tour-%d.png" % index
+	var prefix := str(_options["shot_prefix"])
+	if prefix.is_empty():
+		prefix = "godot-game-tour"
+	return "%s-%d.png" % [prefix, index]
 
 
 func _apply_shot(shot: Dictionary) -> void:
