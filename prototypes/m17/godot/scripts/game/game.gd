@@ -2138,6 +2138,9 @@ func _on_fly_changed(enabled: bool) -> void:
 # =========================================================================
 
 func _save_now() -> void:
+	if not str(_options["visual_test"]).is_empty():
+		hud.flash("Saving is disabled in the visual test showcase", 4.0)
+		return
 	if not _flush_cursor_stacks():
 		hud.flash("Make space first — a stack held by the cursor cannot be saved yet", 5.0)
 		return
@@ -2155,6 +2158,9 @@ func _save_now() -> void:
 
 
 func _save_silently(reason: String) -> void:
+	# The showcase is test-only content and must never enter a normal save.
+	if not str(_options["visual_test"]).is_empty():
+		return
 	# An interface may hold a temporary cursor stack that is not part of either
 	# inventory model.  Return it before writing, or the save (and the load after
 	# it) would silently drop the item.  An autosave that cannot do so is skipped
@@ -2247,7 +2253,8 @@ func _reload_now() -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST and world != null and state in [State.PLAYING, State.PAUSED]:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and world != null and state in [State.PLAYING, State.PAUSED] \
+			and str(_options["visual_test"]).is_empty():
 		_save_silently("quit")
 
 

@@ -135,7 +135,10 @@ site (72, 65, −88). It contains:
   worn-earth patches and ore-bearing boulders.
 
 It remains behind `--visual-test` and is isolated from autosave, creatures,
-NPCs and raids.
+NPCs and raids.  All three save paths are guarded: autosave already skipped the
+showcase, and `_save_now`, `_save_silently` and the window-close request now
+also refuse to write while `visual_test` is set, so the test-only placement can
+never leak into a normal save.
 
 ### Lighting and atmosphere
 
