@@ -105,16 +105,20 @@ func _test_break_times(h: TestHarness) -> void:
 	var hand_stone := ItemDB.break_seconds(BlockDB.STONE, BlockDB.AIR)
 	var wood_pick_stone := ItemDB.break_seconds(BlockDB.STONE, ItemDB.WOOD_PICKAXE)
 	var diamond_pick_stone := ItemDB.break_seconds(BlockDB.STONE, ItemDB.DIAMOND_PICKAXE)
-	h.greater(hand_stone, wood_pick_stone, "a pickaxe breaks stone faster than a bare hand")
+	h.greater(hand_stone, wood_pick_stone,
+		"the timing curve gives a pickaxe a speed advantage on stone")
 	h.greater(wood_pick_stone, diamond_pick_stone, "a diamond pickaxe breaks stone faster than a wooden one")
 	h.greater(float(ItemDB.break_seconds(BlockDB.DIRT, BlockDB.AIR)),
 		float(ItemDB.break_seconds(BlockDB.DIRT, ItemDB.STONE_SHOVEL)), "a shovel digs dirt faster")
 
-	# The wrong tool is not a slowdown (a sword is slightly faster than a hand).
-	h.check(ItemDB.break_seconds(BlockDB.STONE, ItemDB.WOOD_AXE) <= hand_stone,
+	# The wrong tool is not a slowdown on a hand-mineable block (a sword is
+	# slightly faster than a hand).  Gated blocks never reach this timing call
+	# because the break is refused first.
+	var hand_dirt := ItemDB.break_seconds(BlockDB.DIRT, BlockDB.AIR)
+	h.check(ItemDB.break_seconds(BlockDB.DIRT, ItemDB.WOOD_AXE) <= hand_dirt,
 		"using the wrong tool never takes longer than the bare hand")
-	h.check(ItemDB.break_seconds(BlockDB.STONE, ItemDB.WOOD_SWORD) < hand_stone,
-		"a sword is faster than a bare hand even on stone")
+	h.check(ItemDB.break_seconds(BlockDB.DIRT, ItemDB.WOOD_SWORD) < hand_dirt,
+		"a sword is faster than a bare hand on a hand-mineable block")
 	h.approx(ItemDB.break_seconds(BlockDB.AIR, BlockDB.AIR), float(ItemDB.MIN_BREAK_SECONDS), 0.0001,
 		"a block with no hardness still takes the minimum time")
 	h.check(ItemDB.break_seconds(BlockDB.DIAMOND_ORE, ItemDB.DIAMOND_PICKAXE) > 0.0,
@@ -122,8 +126,8 @@ func _test_break_times(h: TestHarness) -> void:
 
 
 func _test_drop_requirements(h: TestHarness) -> void:
-	h.check(not ItemDB.harvestable(BlockDB.STONE, BlockDB.AIR), "stone does not drop to a bare hand")
-	h.check(ItemDB.harvestable(BlockDB.STONE, ItemDB.WOOD_PICKAXE), "stone drops to a wooden pickaxe")
+	h.check(not ItemDB.harvestable(BlockDB.STONE, BlockDB.AIR), "stone cannot be mined by a bare hand")
+	h.check(ItemDB.harvestable(BlockDB.STONE, ItemDB.WOOD_PICKAXE), "stone can be mined by a wooden pickaxe")
 	h.check(ItemDB.harvestable(BlockDB.DIRT, BlockDB.AIR), "dirt drops to a bare hand")
 	h.check(ItemDB.harvestable(BlockDB.OAK_LOG, BlockDB.AIR), "a log drops to a bare hand")
 	h.check(ItemDB.harvestable(BlockDB.CLAY, BlockDB.AIR), "clay drops to a bare hand")
@@ -133,7 +137,13 @@ func _test_drop_requirements(h: TestHarness) -> void:
 	h.check(ItemDB.harvestable(BlockDB.DIAMOND_ORE, ItemDB.IRON_PICKAXE), "diamond ore drops to an iron pickaxe")
 	h.check(not ItemDB.harvestable(BlockDB.OBSIDIAN, ItemDB.IRON_PICKAXE), "obsidian needs a diamond pickaxe")
 	h.check(ItemDB.harvestable(BlockDB.OBSIDIAN, ItemDB.DIAMOND_PICKAXE), "obsidian drops to a diamond pickaxe")
-	h.check(not ItemDB.harvestable(BlockDB.STONE, ItemDB.WOOD_AXE), "an axe is not a pickaxe")
+	h.check(not ItemDB.harvestable(BlockDB.STONE, ItemDB.WOOD_AXE), "an axe cannot mine stone")
+	h.eq(ItemDB.requirement_label(BlockDB.STONE), "Pickaxe",
+		"stone asks for a pickaxe in the HUD")
+	h.eq(ItemDB.requirement_label(BlockDB.IRON_ORE), "Stone Pickaxe",
+		"iron ore names both its tool class and minimum tier")
+	h.eq(ItemDB.requirement_label(BlockDB.DIRT), "",
+		"a hand-mineable block has no tool requirement")
 
 
 func _test_item_drops(h: TestHarness) -> void:

@@ -35,9 +35,12 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       chest model, 27-slot `Station` storage with the existing cursor/quick-move
       rules. Contents survive close, save/reload, chunk unload and breaking
       (contents return to the player)
-- [x] Tool progression re-verified end to end: bare hand gets no stone drop;
-      a wooden pickaxe breaks iron ore but yields no iron; a stone pickaxe
-      yields the lump; tool wear and breaking are unchanged
+- [x] Tool progression re-verified end to end: a bare hand **cannot mine stone
+      at all**; a wooden pickaxe **cannot mine iron ore at all** (the block stays
+      in the world); a stone pickaxe yields the lump; tool wear and breaking are
+      unchanged.  This supersedes the earlier "break now, no drop" rule: no
+      progress, no block removal and no durability is spent on a refused break,
+      and the HUD names the minimum tier/tool (`Iron Ore needs a Stone Pickaxe`)
 - [x] UI/HUD: chest interface reuses the station panel (27 slots, persistent
       storage notes); crop and chest blocks have icons and real textures. Capture
       aids `--farming-capture` and `--station-capture=chest` reproduce the views
@@ -45,7 +48,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       updated item/block/creature/hostile/persistence/crafting tests, and real
       scene integration for boar loot, planting → save/reload → growth →
       harvest, timed cooking, chest UI, chest persistence and chest recovery
-- [x] Verification: unit **1690 assertions**, integration **389 assertions**,
+- [x] Verification: unit **1693 assertions**, integration **391 assertions**,
       both exit 0 with empty stderr; headless smoke starts and reports
       `world_hash=7995773462820745781` (untouched generation unchanged);
       inspected `m21-farming.png` (four crop stages, farmland, chest model) and
@@ -256,9 +259,11 @@ Design contract: `prototypes/m17/results/m18-visual-design.md`.
       tools, and a real per-slot stack cap of 64. Crafted tools work in gameplay: tiers set
       mining speed, durability is spent per block and per creature hit, and the HUD shows a
       durability bar plus `20 / 60` readout
-- [x] Mining hardness and tool requirements (2026-10-19) — holding the break action mines
-      progressively (`ItemDB.break_seconds`, shown on a HUD progress bar); an inadequate tool
-      still breaks the block but yields nothing and the HUD says which tool was needed; ores
+- [x] Mining hardness and tool requirements (2026-10-19, revised) — holding the break action
+      mines progressively (`ItemDB.break_seconds`, shown on a HUD progress bar); a block whose
+      required tool class/tier is not held **refuses to break** (no progress, no removal, no
+      durability spent) and the HUD names the requirement, so a gated resource can never be
+      destroyed for no reward; ores
       drop lumps/crystals instead of ore blocks, and leaves/grass have deterministic chance
       drops (apple, wheat)
 - [x] Hunger and survival settings (2026-10-19) — `Survival.hunger_step`/`starvation_damage`/

@@ -694,27 +694,34 @@ func _crafting_and_mining_section() -> void:
 	var target: Dictionary = player.target()
 	_check(target.get("hit", false) and Vector3i(target["block"]) == mine_cell,
 		"the stone block above the player is targeted")
-	# A bare hand: the block breaks, but it does not drop.
+	# A bare hand cannot remove stone at all (the reported defect: the block used
+	# to disappear for no reward).  The requirement is checked before progress.
 	var block_slot := inventory.slots.find(BlockDB.STONE)
 	inventory.select(block_slot)
 	var harvest_failed := [false]
 	player.harvest_failed.connect(func(_block_id: int, _tool: int) -> void: harvest_failed[0] = true)
 	var cobble_from_hand := inventory.count_of(BlockDB.COBBLESTONE)
 	player.mine_step(0.1)
-	_check(player.mining_ratio() > 0.0, "holding the mine action starts a progressive break")
+	_check(is_equal_approx(player.mining_ratio(), 0.0),
+		"a bare hand makes no mining progress on stone")
 	_check(int(_game.world.get_block(mine_cell)) != BlockDB.AIR,
 		"a tenth of a second does not break stone by hand")
 	var hand_seconds := ItemDB.break_seconds(BlockDB.STONE, BlockDB.AIR)
-	var steps := 0
 	var step_limit := int(hand_seconds * 10.0) + 10
-	while int(_game.world.get_block(mine_cell)) != BlockDB.AIR and steps < step_limit:
+	for step in step_limit:
 		player.mine_step(0.1)
-		steps += 1
-	_check(int(_game.world.get_block(mine_cell)) == BlockDB.AIR,
-		"holding the mine action breaks the stone (%d steps)" % steps)
-	_check(harvest_failed[0], "a bare hand is told the block needs a pickaxe")
+	_check(int(_game.world.get_block(mine_cell)) == BlockDB.STONE,
+		"holding the mine action with a bare hand never breaks stone")
+	_check(harvest_failed[0], "a bare hand is told stone needs a pickaxe")
 	_check(inventory.count_of(BlockDB.COBBLESTONE) == cobble_from_hand,
 		"a bare hand gets no drop from stone")
+	# The exact reported example: coal ore is not destroyed by a bare hand.
+	_game.world.set_block(mine_cell, BlockDB.COAL_ORE)
+	for i in range(2):
+		await process_frame
+	_check(not player.break_target(), "coal ore refuses a bare-handed break")
+	_check(int(_game.world.get_block(mine_cell)) == BlockDB.COAL_ORE,
+		"the bare-handed coal ore remains in the world")
 
 	# A pickaxe is faster, yields the drop and wears out.
 	_check(ItemDB.break_seconds(BlockDB.STONE, ItemDB.WOOD_PICKAXE) < hand_seconds,
@@ -728,6 +735,7 @@ func _crafting_and_mining_section() -> void:
 	var tool_broken := [false]
 	player.tool_broken.connect(func(_item: int) -> void: tool_broken[0] = true)
 	var drops_before := inventory.count_of(BlockDB.COBBLESTONE)
+	var steps := 0
 	for use in 2:
 		_game.world.set_block(mine_cell, BlockDB.STONE)
 		for i in range(2):
@@ -744,7 +752,7 @@ func _crafting_and_mining_section() -> void:
 	_check(tool_broken[0], "the wooden pickaxe breaks after its last use")
 	_check(inventory.is_empty(pick_slot), "the broken tool freed its slot")
 
-	# A wooden pickaxe is not enough for iron: the block breaks but yields no ore.
+	# A wooden pickaxe is not enough for iron: the ore cannot be broken at all.
 	inventory.clear_slot(1)
 	inventory.add(ItemDB.WOOD_PICKAXE, 1)
 	var wood_iron_slot: int = inventory.slots.find(ItemDB.WOOD_PICKAXE)
@@ -755,10 +763,11 @@ func _crafting_and_mining_section() -> void:
 	_game.world.set_block(mine_cell, BlockDB.IRON_ORE)
 	for i in range(2):
 		await process_frame
-	_check(player.break_target(), "iron ore breaks with an insufficient pickaxe")
+	_check(not player.break_target(), "iron ore refuses to break with an insufficient pickaxe")
 	_check(inventory.count_of(ItemDB.IRON_LUMP) == iron_before_wrong,
 		"a wooden pickaxe does not yield iron ore")
-	_check(int(_game.world.get_block(mine_cell)) == BlockDB.AIR, "the wrong-tier ore block is still removed")
+	_check(int(_game.world.get_block(mine_cell)) == BlockDB.IRON_ORE,
+		"the wrong-tier ore block stays in the world")
 
 	# Regression for the reported "mining iron does not appear" defect: the
 	# starter kit used to fill all nine slots, so the lump had nowhere to go.  The

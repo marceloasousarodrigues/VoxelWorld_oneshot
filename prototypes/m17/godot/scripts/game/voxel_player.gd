@@ -357,11 +357,20 @@ func _update_mining(delta: float) -> void:
 			_break_cooldown = repeat_interval * 3.0
 			interaction_failed.emit("%s cannot be mined" % BlockDB.name_of(block_id))
 		return
+	var held := _held_item()
+	if not ItemDB.harvestable(block_id, held):
+		# A block that requires a tool cannot be removed at all without it.  Do
+		# not accumulate progress and do not break the block for no reward: the
+		# player gets an explanation and the world stays untouched.
+		_reset_mining()
+		if _break_cooldown <= 0.0:
+			_break_cooldown = repeat_interval * 3.0
+			harvest_failed.emit(block_id, ItemDB.required_tool(block_id))
+		return
 	if not _mining_active or cell != _mining_cell:
 		_mining_cell = cell
 		_mining_ratio = 0.0
 		_mining_active = true
-	var held := _held_item()
 	var seconds := ItemDB.break_seconds(block_id, held)
 	_mining_ratio = clampf(_mining_ratio + delta / seconds, 0.0, 1.0)
 	if _mining_ratio >= 1.0:
@@ -408,23 +417,27 @@ func break_target() -> bool:
 	if not BlockDB.is_breakable(block_id):
 		interaction_failed.emit("%s cannot be mined" % BlockDB.name_of(block_id))
 		return false
+	var held := _held_item()
+	if not ItemDB.harvestable(block_id, held):
+		harvest_failed.emit(block_id, ItemDB.required_tool(block_id))
+		return false
 	return _finish_break(cell, block_id)
 
 
 ## Removes the block, works out its drop (tool rules + deterministic bonus drops),
-## spends tool durability and reports the outcome.
+## spends tool durability and reports the outcome.  The tool requirement is
+## rechecked here so no caller can remove a harvest-gated block for free.
 func _finish_break(cell: Vector3i, block_id: int) -> bool:
+	var held := _held_item()
+	if not ItemDB.harvestable(block_id, held):
+		harvest_failed.emit(block_id, ItemDB.required_tool(block_id))
+		return false
 	if not world.set_block(cell, BlockDB.AIR):
 		interaction_failed.emit("That block is outside the loaded world")
 		return false
-	var held := _held_item()
-	var drop := BlockDB.NO_DROP
-	if ItemDB.harvestable(block_id, held):
-		drop = ItemDB.drop_for_block(block_id)
-		if drop == BlockDB.NO_DROP:
-			drop = ItemDB.bonus_drop(block_id, cell.x, cell.y, cell.z)
-	else:
-		harvest_failed.emit(block_id, ItemDB.required_tool(block_id))
+	var drop := ItemDB.drop_for_block(block_id)
+	if drop == BlockDB.NO_DROP:
+		drop = ItemDB.bonus_drop(block_id, cell.x, cell.y, cell.z)
 	_wear_held(held)
 	block_broken.emit(cell, block_id, drop)
 	_update_target()

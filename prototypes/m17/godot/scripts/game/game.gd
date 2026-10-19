@@ -1966,10 +1966,11 @@ func _on_creature_attacked(creature, damage: int = 1) -> void:
 			int(creature.state.health), CreatureDB.health(str(creature.state.get("species", CreatureModel.SPECIES)))], 1.0)
 
 
-## The block broke, but its drop needed a tool class the player was not holding.
-func _on_harvest_failed(block_id: int, required_tool: int) -> void:
-	hud.flash("%s needs a %s to drop anything" % [
-		BlockDB.name_of(block_id), ItemDB.tool_name(required_tool)], 1.8)
+## The player tried to mine a block whose tool requirement is not met.  The
+## block stays in the world; the HUD names the minimum tool and tier.
+func _on_harvest_failed(block_id: int, _required_tool: int) -> void:
+	hud.flash("%s needs a %s to mine" % [
+		BlockDB.name_of(block_id), ItemDB.requirement_label(block_id)], 1.8)
 
 
 func _on_tool_broken(item_id: int) -> void:

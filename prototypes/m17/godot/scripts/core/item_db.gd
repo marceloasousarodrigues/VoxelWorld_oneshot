@@ -314,12 +314,27 @@ static func required_tier(block_id: int) -> int:
 	return int(_required_tier.get(block_id, Tier.HAND))
 
 
-## True when the held item is good enough for the block to drop anything.
+## True when the held item is good enough to mine the block *and* receive its
+## normal drop.  A false result means the block may not be broken at all: the
+## game refuses the break instead of consuming the block for no reward (the
+## user-reported "coal with bare hands disappears" defect).
 static func harvestable(block_id: int, item_id: int) -> bool:
 	var required := required_tool(block_id)
 	if required == Tool.NONE:
 		return true
 	return tool_class(item_id) == required and tier(item_id) >= required_tier(block_id)
+
+
+## Human-readable requirement for the HUD, e.g. "Pickaxe" or "Stone Pickaxe",
+## or "" when the block can be mined by hand.
+static func requirement_label(block_id: int) -> String:
+	var required := required_tool(block_id)
+	if required == Tool.NONE:
+		return ""
+	var required_tier_value := required_tier(block_id)
+	if required_tier_value <= Tier.HAND:
+		return tool_name(required)
+	return "%s %s" % [tier_name(required_tier_value), tool_name(required)]
 
 
 ## Seconds to break the block with the given held item (never zero, so the

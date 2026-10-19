@@ -1,5 +1,36 @@
 # M17 Godot — Progress and Resume Point
 
+## M21 follow-up — harvest-required blocks cannot be broken without the tool (2026-10-19)
+
+User-reported defect: a coal/stone block could be broken with a bare hand and
+then simply failed to enter the inventory.  That is worse than a missing drop:
+it lets the player destroy the world for no reward and contradicts the tool
+progression.
+
+**Rule now implemented:** a block that declares a required tool class/tier
+(`ItemDB.required_tool` / `required_tier`) is *not removed at all* when the held
+item does not satisfy it.  This is enforced in three places:
+
+1. held-button mining (`VoxelPlayer._update_mining`) refuses before any progress
+   accumulates, so the HUD progress bar stays at zero;
+2. `VoxelPlayer.break_target()` refuses the instant-break path used by tests and
+   scripted captures;
+3. `VoxelPlayer._finish_break()` re-checks defensively before `world.set_block`,
+   so no caller can remove a gated block.
+
+Nothing is consumed or worn on a refused break.  The HUD now names the minimum
+requirement, including tier: `Stone needs a Pickaxe to mine`, `Iron Ore needs a
+Stone Pickaxe to mine`.  Hand-mineable blocks (soil, sand, wood, glass, stations,
+crops) are unchanged.
+
+Regression coverage: `test_items.gd` pins the gate and
+`requirement_label()`; `run_integration.gd` holds the mine action with a bare
+hand for the full stone break duration and asserts the block remains, no mining
+progress appears and the failure is reported; the exact reported coal-ore case
+asserts the ore stays in the world; a wooden pickaxe against iron ore also
+asserts the ore stays.  Unit **1693 assertions**, integration **391 assertions**,
+both exit 0 with empty stderr.  The real-scene smoke fingerprint is unchanged.
+
 ## M21 — Gameplay depth, survival and progression (2026-10-19, autonomous session)
 
 Mission: connect the existing Godot systems into coherent survival loops instead
@@ -63,17 +94,18 @@ and these result documents; the production Ursina implementation was not touched
 
 ### Verification actually run (Godot 4.7.2 stable mono, Windows)
 
-- Unit: **1690 assertions**, exit 0, 0 bytes stderr.  New
+- Unit: **1693 assertions**, exit 0, 0 bytes stderr.  New
   `test_m21_gameplay.gd` covers species loot, cooking, farming growth/harvest/
   fertilise/persistence, chest slots/round-trip and the chest recipe; existing
   item, block, crafting, creature, hostile and persistence tests were updated.
   Persistence now pins VERSION 8 and rejects invalid crop timers.
-- Integration: **389 assertions**, exit 0, 0 bytes stderr.  Real scene coverage:
+- Integration: **391 assertions**, exit 0, 0 bytes stderr.  Real scene coverage:
   boar loot (meat/hide, no Oak Log), planting via `place_selected`, save/reload
   while planted, growth, harvesting via `break_target`, timed meat cooking,
   chest targeting/opening, 27-slot interface, shift-click, save/reload and
-  breaking with contents recovery; wrong-tier iron ore (wooden pick yields no
-  lump) and the existing mining/tool/durability chain.
+  breaking with contents recovery; bare-hand stone and wrong-tier iron ore both
+  refuse to break and leave the block in the world; the existing
+  mining/tool/durability chain still passes.
 - Headless smoke: exit 0, 0 bytes stderr, untouched-world fingerprint unchanged
   (`world_hash=7995773462820745781`, faces 170492), starter inventory now 10 used
   slots (nine hotbar + seeds).
@@ -107,8 +139,8 @@ M21's implemented loops are mining → tool tiers → ore/smelting, hunting → 
 hide/bone → cooking, seeds → wheat → bread/replanting, and chest storage.
 Next independent work: equipment/armour and combat depth, or a human play-through
 of the new interactions.  Feature savepoint: **9ba924b** — “M21 Godot: species
-loot, cooking, farming and storage chest”; current HEAD **66714db** (version-7
-save coverage and refreshed evidence; unit 1690 / integration 389 assertions).
+loot, cooking, farming and storage chest”; harvest-gate follow-up is the commit
+after **abfd13a** (unit 1693 / integration 391 assertions).
 
 ---
 
@@ -2215,10 +2247,11 @@ mining needs the tool rules, the catalogue needs both).
   `ItemDB.break_seconds()` to break and a progress bar appears under the crosshair.  Changing
   the target restarts the progress.  `break_target()` stays as the instant path used by tests
   and diagnostics.
-- Drops now depend on the held tool: an inadequate tool still breaks the block but yields
-  nothing and emits `harvest_failed` (the HUD explains "Stone needs a Pickaxe to drop
-  anything"); the right tool yields the item drop and spends one durability, and the tool
-  breaking emits `tool_broken` ("Your Wooden Pickaxe broke").
+- Drops depend on the held tool.  **Superseded by the M21 follow-up:** an inadequate tool
+  used to break the block for no reward; it now refuses the break entirely and the block
+  stays in the world (see the top of this file).  The right tool yields the item drop and
+  spends one durability, and the tool breaking emits `tool_broken` ("Your Wooden Pickaxe
+  broke").
 - Creature hits scale with the held item's attack damage and share the same durability spend.
 - Placement accepts only block items ("Coal is not a placeable block").
 
