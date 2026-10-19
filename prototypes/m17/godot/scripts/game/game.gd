@@ -37,6 +37,7 @@ var inventory_panel: InventoryPanel
 const NpcModel = preload("res://scripts/core/npc.gd")
 const NpcNodeScript = preload("res://scripts/game/npc_node.gd")
 const SettlementModel = preload("res://scripts/core/settlement.gd")
+const RaidModel = preload("res://scripts/core/raid.gd")
 
 ## Resident state by npc id, kept across sessions and across node retirement.
 var npc_states: Dictionary = {}
@@ -49,6 +50,12 @@ var npc_root: Node3D
 var _settlement_timer := 0.0
 ## Settlement names by id (kept so a loaded resident can still say where it lives).
 var _settlement_names: Dictionary = {}
+## Tonight's raiders by id, the settlement under attack, and the last day that
+## already had its raid, so a save never repeats one.
+var raid_nodes: Dictionary = {}
+var _raid_settlement := ""
+var _raid_report_timer := 0.0
+var _raided_day := -1
 var settings_panel: SettingsPanelNode
 var death_screen: DeathScreen
 var saves: SaveManager
@@ -445,6 +452,10 @@ func _parse_arguments() -> void:
 				# Diagnostic: keep the capture camera on the nearest resident, so a
 				# screenshot shows somebody actually working.
 				_options["follow_resident"] = true
+			"--raid-now":
+				# Diagnostic: force tonight's raid to start immediately, so a
+				# capture or a manual check does not have to wait for nightfall.
+				_options["raid_now"] = true
 			"--open-settings":
 				_options["open_settings"] = true
 			"--tools":
@@ -990,6 +1001,7 @@ func _process(delta: float) -> void:
 			_update_creatures(delta)
 			_update_hostiles(delta)
 			_update_npcs(delta)
+			_update_raid(delta)
 			_update_status()
 			if hud != null and player != null:
 				hud.set_mining_progress(player.mining_ratio())
@@ -1766,6 +1778,8 @@ func _smoke_summary() -> void:
 		"hunger": {"hunger": hunger, "exhaustion": exhaustion},
 		"npcs": {"states": npc_states.size(), "nodes": npc_nodes.size(),
 			"settlements": settlements.size(), "stored": settlement_stores.size()},
+		"raid": {"day": clock.day_index if clock != null else -1, "active": raid_nodes.size(),
+			"settlement": _raid_settlement, "last_day": _raided_day},
 	}))
 	print("M17_RENDER_STATS draw_calls=%d primitives=%d objects=%d" % [
 		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
@@ -1836,8 +1850,8 @@ func _update_npcs(delta: float) -> void:
 			continue
 		_settle_npc_on_ground(state)
 		var store: Dictionary = settlement_stores.get(str(state.get("settlement", "")), {})
-		var events: Dictionary = NpcModel.step(state, world, store, delta)
-		_report_npc_events(state, events)
+		var events: Dictionary = NpcModel.step(state, world, store, delta, _raid_threats())
+		_apply_npc_events(state, events)
 	_sync_npc_nodes()
 
 
@@ -1927,9 +1941,14 @@ func _sync_npc_nodes() -> void:
 				body.velocity = Vector3.ZERO
 
 
-## Reports what residents did this step.  Deliberately quiet: only a delivery is
-## worth a message, so the HUD is not flooded by routine work.
-func _report_npc_events(state: Dictionary, events: Dictionary) -> void:
+## Reports what residents did this step.  Deliberately quiet: only a delivery, a
+## resident joining a fight or a raider being struck is worth a message.
+func _apply_npc_events(state: Dictionary, events: Dictionary) -> void:
+	var attack := int(events.get("attack", -1))
+	if attack >= 0:
+		var threats := _raid_threats()
+		if attack < threats.size():
+			_damage_nearest_raider(threats[attack], float(events.get("attack_damage", 0.0)), state)
 	var delivered: Dictionary = events.get("delivered", {})
 	if delivered.is_empty():
 		return
@@ -1940,6 +1959,25 @@ func _report_npc_events(state: Dictionary, events: Dictionary) -> void:
 		parts.append("%d %s" % [int(delivered[item_id]), ItemDB.name_of(int(item_id))])
 	hud.flash("%s delivered %s to %s" % [str(state["name"]), " + ".join(parts),
 		str(state.get("settlement_name", "the settlement"))], 2.4)
+
+
+## A resident struck at a raider: the nearest raider node to that position takes
+## the damage, so a raid can end without the player lifting a finger.
+func _damage_nearest_raider(position: Vector3, damage: float, state: Dictionary) -> void:
+	var best: Node = null
+	var best_distance := 2.5
+	for id: Variant in raid_nodes.keys():
+		var node: Variant = raid_nodes[id]
+		if node == null or not is_instance_valid(node) or not (node as HostileCreature).is_alive():
+			continue
+		var distance: float = position.distance_to((node as Node3D).global_position)
+		if distance <= best_distance:
+			best_distance = distance
+			best = node
+	if best == null:
+		return
+	if (best as HostileCreature).apply_hit(int(round(damage))) > 0:
+		hud.flash("%s struck a raider down" % str(state.get("name", "A resident")), 2.4)
 
 
 ## A player killed a resident: its carried load drops into the inventory and its
@@ -2062,3 +2100,146 @@ func _apply_npcs(payload: Dictionary) -> int:
 		return restored
 	_refresh_settlements()
 	return npc_states.size()
+
+
+# =========================================================================
+# Raids
+# =========================================================================
+#
+# Every other night the raiders come for a settlement near the player.  The
+# schedule, the group size and the spawn ring are `core/raid.gd` (pure functions
+# of the seed, the day index and the settlement), the raiders are the existing
+# grunt node, and the residents defend with the model's DEFEND task.  The result
+# is a small, self-resolving fight: residents can die, raiders drop their loot,
+# and the player can stand with the settlement or ignore it.
+
+## Starts, tracks and ends the night's raid.  It never steps the residents
+## itself: `_update_npcs` does that and passes the raiders as threats.
+func _update_raid(delta: float) -> void:
+	if world == null or player == null or hostile_root == null or clock == null:
+		return
+	var day_index := clock.day_index
+	var raid_night := RaidModel.is_raid_day(day_index) or bool(_options.get("raid_now", false))
+	if not raid_night:
+		if not raid_nodes.is_empty():
+			_retire_raid()
+			hud.flash("Dawn � the raiders are gone", 2.4)
+		return
+	var settlement := _raid_target(day_index)
+	if settlement.is_empty():
+		return
+	if _raid_settlement != str(settlement["id"]):
+		_start_raid(settlement, day_index)
+	else:
+		_raid_report_timer -= delta
+	# The raid is over when nothing is left standing.
+	var living := 0
+	for id: Variant in raid_nodes.keys():
+		var node: Variant = raid_nodes[id]
+		if node != null and is_instance_valid(node):
+			living += 1
+	if _raid_settlement == str(settlement["id"]) and living == 0:
+		hud.flash("%s beat off the raid" % str(settlement.get("name", "The settlement")), 3.0)
+		_raided_day = day_index
+		_retire_raid()
+
+
+## The settlement a raid should hit tonight: the nearest one to the player, if it
+## is a raid night, the player is close enough to see the fight and this world has
+## not already raided today.
+func _raid_target(day_index: int) -> Dictionary:
+	if _raided_day == day_index:
+		return {}
+	if settlements.is_empty():
+		return {}
+	var settlement: Dictionary = settlements[0]
+	if float(settlement.get("distance", 0.0)) > float(RaidModel.ENGAGE_RADIUS):
+		return {}
+	if bool(_options.get("raid_now", false)):
+		return settlement
+	if not RaidModel.should_start(day_index, str(settlement["id"]), float(settlement.get("distance", 0.0)), false):
+		return {}
+	return settlement
+
+
+## Spawns tonight's raiders around the settlement and points them at its
+## residents, so a raid resolves with or without the player.
+func _start_raid(settlement: Dictionary, day_index: int) -> void:
+	_retire_raid()
+	var anchor: Vector3i = settlement["anchor"]
+	var id := str(settlement["id"])
+	var count := RaidModel.group_size_for_night(world.world_seed, day_index, id)
+	if count <= 0:
+		return
+	_raid_settlement = id
+	_raid_report_timer = 0.0
+	hud.flash("Raiders are coming for %s (%d of them)" % [
+		str(settlement.get("name", "the settlement")), count], 4.0)
+	for index in count:
+		var offset := RaidModel.spawn_offset(world.world_seed, day_index, id, index)
+		var spawn := Vector3(float(anchor.x) + offset.x + 0.5, float(anchor.y) + 2.0,
+			float(anchor.z) + offset.z + 0.5)
+		var raider_id := RaidModel.raider_id(day_index, id, index)
+		var raider_state := {
+			"id": raider_id, "species": "grunt", "position": spawn,
+			"health": HostileModel.HIT_POINTS, "alive": true, "key": raider_id,
+		}
+		var raider = HostileNode.new()
+		raider.configure(raider_state, world, _nearest_resident_node(spawn))
+		hostile_root.add_child(raider)
+		raider.killed.connect(_on_hostile_killed)
+		raider.attacked_player.connect(func(amount: float) -> void: _on_raid_hit(raider, amount))
+		raid_nodes[raider_id] = raider
+	print("M17_RAID_STARTED settlement=%s day=%d raiders=%d" % [id, day_index, count])
+
+
+## A raider landed a blow: on whoever it is chasing, which may be a resident.
+func _on_raid_hit(raider, amount: float) -> void:
+	if raider == null or not is_instance_valid(raider):
+		return
+	var victim: Node = raider.target
+	if victim != null and is_instance_valid(victim) and victim.is_in_group("npc"):
+		var state: Dictionary = victim.state
+		if NpcModel.damage(state, amount):
+			hud.flash("%s has been killed by the raiders" % str(state.get("name", "A resident")), 3.0)
+			var replacement := _nearest_resident_node(victim.global_position)
+			raider.target = replacement if replacement != null else player
+		_sync_npc_nodes()
+		return
+	_on_hostile_attacked_player(amount)
+
+
+## The nearest live resident's node to a position, or null.
+func _nearest_resident_node(position: Vector3) -> Node3D:
+	var best: Node3D = null
+	var best_distance := INF
+	for id: Variant in npc_nodes.keys():
+		var node: Variant = npc_nodes[id]
+		if node == null or not is_instance_valid(node) or not (node as NpcNode).is_alive():
+			continue
+		var distance: float = position.distance_to((node as Node3D).global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = node as Node3D
+	return best
+
+
+## The raiders' positions, for the residents' DEFEND step.
+func _raid_threats() -> Array:
+	var threats: Array = []
+	for id: Variant in raid_nodes.keys():
+		var node: Variant = raid_nodes[id]
+		if node != null and is_instance_valid(node):
+			threats.append((node as Node3D).global_position)
+	return threats
+
+
+## Frees the raiders and clears the raid state (dawn, victory, or a new target).
+func _retire_raid() -> void:
+	for id: Variant in raid_nodes.keys():
+		var node: Variant = raid_nodes[id]
+		if node != null and is_instance_valid(node):
+			(node as Node).queue_free()
+	raid_nodes.clear()
+	_raid_settlement = ""
+	_raid_report_timer = 0.0

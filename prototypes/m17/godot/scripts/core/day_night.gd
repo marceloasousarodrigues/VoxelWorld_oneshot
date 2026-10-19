@@ -52,6 +52,9 @@ const NIGHT_LIGHT_ELEVATION := 15.0
 var time_of_day := 0.28
 ## Full cycle length in seconds; `0` freezes the clock.
 var day_length_seconds := DAY_LENGTH_SECONDS
+## How many whole days have passed since the world started.  Bumped when the
+## clock wraps past midnight, so gameplay (raids) can key off the day number.
+var day_index := 0
 
 
 func _init(start_time: float = 0.28, cycle_seconds: float = DAY_LENGTH_SECONDS) -> void:
@@ -61,12 +64,19 @@ func _init(start_time: float = 0.28, cycle_seconds: float = DAY_LENGTH_SECONDS) 
 
 func set_time(value: float) -> void:
 	time_of_day = fposmod(value, 1.0)
+	# A deliberate jump is not "time passing", so the day counter only follows a
+	# wrap, which `set_time` cannot produce (the value is already wrapped).
+	if value < 0.0:
+		day_index += 1
 
 
 func advance(delta: float) -> void:
 	if day_length_seconds <= 0.0:
 		return
-	set_time(time_of_day + delta / day_length_seconds)
+	var advanced := time_of_day + delta / day_length_seconds
+	if advanced >= 1.0:
+		day_index += int(floor(advanced))
+	set_time(advanced)
 
 
 ## Height of the sun above the horizon, in degrees; negative at night.
@@ -163,7 +173,8 @@ func phase_name() -> String:
 
 
 func to_dictionary() -> Dictionary:
-	return {"time_of_day": time_of_day, "day_length_seconds": day_length_seconds}
+	return {"time_of_day": time_of_day, "day_length_seconds": day_length_seconds,
+		"day_index": day_index}
 
 
 ## Restores from a save payload; unreadable values keep the current clock.
@@ -175,4 +186,9 @@ func from_dictionary(data: Dictionary) -> bool:
 	var length: Variant = data.get("day_length_seconds")
 	if typeof(length) == TYPE_FLOAT or typeof(length) == TYPE_INT:
 		day_length_seconds = maxf(0.0, float(length))
+	# The day counter decides when raids happen, so it has to survive a save: an
+	# older save simply has none and starts its calendar again.
+	var days: Variant = data.get("day_index")
+	if typeof(days) == TYPE_FLOAT or typeof(days) == TYPE_INT:
+		day_index = maxi(0, int(days))
 	return true

@@ -17,6 +17,7 @@ const MODULES := [
 	"res://scripts/tests/test_generation.gd",
 	"res://scripts/tests/test_structures.gd",
 	"res://scripts/tests/test_npcs.gd",
+	"res://scripts/tests/test_raids.gd",
 	"res://scripts/tests/test_mesher.gd",
 	"res://scripts/tests/test_mesh_winding.gd",
 	"res://scripts/tests/test_fixture_contract.gd",

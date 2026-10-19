@@ -1357,6 +1357,71 @@ persist across saves.  This is the NPC foundation plus its first integrated task
   generation, and residents do not build.
 - Verification is scripted (headless integration + windowed captures); no human play-through.
 
+## M17 Phase D: night raids on settlements (2026-10-19)
+
+The threat that gives the survival loop its point: every other night the raiders come for a
+settlement near the player, the residents fight back, and the player can stand with them.
+
+### Schedule (`scripts/core/raid.gd`, new)
+
+- Pure, deterministic decisions: `is_raid_day(day_index)` (every `RAID_PERIOD_DAYS`), 
+  `group_size_for_night()` (2-4, from the seed, the day and the settlement id),
+  `spawn_offset()` (a ring 22-27 blocks out around the anchor, one point per raider),
+  `raider_id()` and `should_start()`.  Nothing here touches the world or the scene tree, so the
+  whole raid can be reasoned about and tested.
+- `DayNight` gained a `day_index` that only advances when the clock wraps midnight (a forced
+  `set_time` is not "time passing"), and it is **saved**: the day counter decides when raids
+  happen, so an older save without one simply starts its calendar again.
+
+### The fight
+
+- Raiders are the existing grunt node aimed at a *resident* instead of the player, so hostile
+  behaviour, movement, contact damage and loot all come from the code the player already faces.
+  A raider that kills its target retargets the next living resident, and falls back to the
+  player when a settlement has no one left.
+- Residents gained `Task.DEFEND` and an optional `threats` argument on the model's step: a
+  resident with a raider inside `DEFEND_RADIUS` (wider than the spawn ring, so the settlement
+  reacts as the raid starts) walks at it and strikes for `DEFEND_DAMAGE` every
+  `DEFEND_INTERVAL`, then goes back to work when the raid is over.  A dead resident takes no
+  part; nothing chases a raider out of the settlement.
+- `game.gd` starts the raid at night when a settlement is close enough (`ENGAGE_RADIUS`), spawns
+  the group, feeds the raiders' positions to the residents each frame, routes raider blows to
+  whoever they are chasing, applies residents' strikes to the nearest raider, and ends the raid
+  when the raiders are gone ("Oakhollow beat off the raid").  Dawn retires any leftovers, and
+  the last-raided day is remembered so a night is not fought twice.
+- `--raid-now` forces tonight's raid for captures and manual checks.
+
+### Tests and evidence
+
+- New `scripts/tests/test_raids.gd` (62 assertions): the schedule, group sizes within their
+  bounds and varying, the spawn ring and its determinism, unique/stable raider ids,
+  `should_start` (quiet night, raid night, already raided, engage radius), the whole DEFEND task
+  (nearest-threat selection relative to home, walking in, repeated strikes with the right
+  damage, leaving defend when the threats are gone, a distance check that stays relative to
+  home), and the clock's day counter (advance, wrap, frozen, save round-trip, legacy payload).
+- `run_integration.gd` gained **10 assertions** (174 -> 184) driving a real raid: raiders spawn
+  within their bounds, they are real hostile nodes, they target a resident rather than the
+  player, a resident strikes one through the game's own `_apply_npc_events`, and the raid ends
+  and is marked as fought once the raiders are gone.
+- Unit **1238 assertions**, integration **184 assertions**, both exit 0 with **0 bytes stderr**.
+  Smoke unchanged: `world_hash=441363152919021799`, `edits=0`, and
+  `"raid":{"day":0,"active":0,...}` (no settlement in the streamed spawn region).
+- Windowed capture `raid-night.png` (`--capture --find-structure=campsite --raid-now --time=0.50`)
+  inspected: a resident crossing the beach in front of the campsite with two raiders (dark
+  grunts) closing in, and the run summary reporting three live raiders.
+
+### Limitations
+
+- Raids come only when the player is near the settlement, so an unwatched settlement is never
+  attacked, and there is no raid "resolution" off-screen.
+- Residents fight with their hands; there is no weapon or armour item for them, and no
+  guard role, so a raid can kill a settlement's whole population (it is not replenished).
+- Raiders are ordinary grunts with no siege behaviour: they do not break blocks or target
+  buildings, and their loot is the normal coal drop.
+- The last-raided day is in memory only; a reload restores the day counter but not "this night
+  was already fought", so a save taken mid-raid can be raided again.
+- Verification is scripted (headless integration + windowed captures); no human play-through.
+
 
 ## M17 Priority 3: items, tools, mining and a real crafting system (2026-10-19)
 

@@ -31,7 +31,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (1185 assertions, verified 2026-10-19) + runtime integration harness (174 assertions, verified 2026-10-19) + headless determinism fingerprint
+- [x] Automated test suite (1238 assertions, verified 2026-10-19) + runtime integration harness (184 assertions, verified 2026-10-19) + headless determinism fingerprint
 - [x] Frame-time benchmark harness (`scripts/tests/run_perf.gd`): six scripted activities, per-frame
       timings and streaming counters, before/after JSON reports (verified 2026-10-16)
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
@@ -172,7 +172,15 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Resource storage and task delegation (2026-10-19) — each settlement has a shared store that
       residents deliver to (persisted, with lifetime counters per resident). The player cannot
       open or withdraw from a store yet and there is no trading
-- [ ] Defensive behaviour and enemy raids
+- [x] Defensive behaviour and enemy raids (2026-10-19) — `core/raid.gd` schedules a raid every
+      other night with a deterministic group size and spawn ring; the raiders are the existing
+      grunt node aimed at a resident (retargeting the next resident, then the player), and
+      residents defend with the new `Task.DEFEND` (walk at the nearest raider inside
+      `DEFEND_RADIUS`, strike every 1.4 s for 2 damage, back to work afterwards). The game
+      starts/ends the raid, routes damage both ways and reports the outcome; `--raid-now` forces
+      one for captures. `raid-night.png` inspected. Limitations: raids only happen near the
+      player, residents have no weapons/armour, raiders do not break blocks, a settlement's dead
+      are not replaced, and "already raided tonight" is not saved
 - [ ] City-management foundation
 
 ---

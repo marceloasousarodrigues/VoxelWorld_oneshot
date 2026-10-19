@@ -19,6 +19,7 @@ const HostileScript = preload("res://scripts/game/hostile_creature.gd")
 const HostileModel = preload("res://scripts/core/hostile_creatures.gd")
 const NpcModel = preload("res://scripts/core/npc.gd")
 const SettlementModel = preload("res://scripts/core/settlement.gd")
+const RaidModel = preload("res://scripts/core/raid.gd")
 
 
 func _initialize() -> void:
@@ -919,6 +920,7 @@ func _residents_section() -> void:
 	_check(int(restored_store.get(BlockDB.OAK_LOG, 0)) == 5, "the settlement store survived")
 	_check(str(_game._settlement_names.get("settlement-test", "")) == "Testhold",
 		"the settlement name survived")
+	_raid_section()
 	_game.npc_states.clear()
 	_game.settlement_stores.clear()
 	_game.npc_nodes.clear()
@@ -926,3 +928,67 @@ func _residents_section() -> void:
 	player.look_pitch(-20.0)
 	for i in range(2):
 		await process_frame
+
+
+## A night raid: raiders spawn around the settlement, the residents fight back and
+## the raid ends.  The raiders are real grunt nodes and the fight resolves through
+## the same attack path the player uses.
+func _raid_section() -> void:
+	# A live resident to defend the place.
+	var defender := NpcModel.spawn_state(_game.world.world_seed, {
+		"id": "settlement-test", "name": "Testhold", "kind": "hut", "anchor": Vector3i(12, 75, 12),
+		"width": 5, "depth": 4,
+	}, 0)
+	defender["role"] = NpcModel.Role.MINER
+	_game.npc_states[str(defender["id"])] = defender
+	_game.settlement_stores["settlement-test"] = {}
+	# The raid targets the settlements the game has already derived; a stand-in
+	# entry keeps the test independent of where the world put a hut.
+	_game.settlements = [{"id": "settlement-test", "name": "Testhold", "kind": "hut",
+		"anchor": Vector3i(12, 75, 12), "width": 5, "depth": 4, "distance": 4.0}]
+	_game._update_npcs(0.1)
+	# Force the raid so the test does not depend on the clock.
+	_game._options["raid_now"] = true
+	_game._raid_settlement = ""
+	_game._raided_day = -1
+	_game._update_raid(0.1)
+	_check(not _game.raid_nodes.is_empty(), "a raid spawns raiders (%d)" % _game.raid_nodes.size())
+	_check(_game.raid_nodes.size() <= RaidModel.GROUP_MAX, "the raider group is within its bounds")
+	var a_raider: Node = null
+	for id: Variant in _game.raid_nodes.keys():
+		a_raider = _game.raid_nodes[id]
+		break
+	_check(a_raider != null and is_instance_valid(a_raider) and a_raider.is_alive(), "the raider exists")
+	_check(a_raider != null and a_raider.is_in_group("hostile_creature"), "a raider is a real hostile node")
+	_check(a_raider != null and a_raider.target != null and a_raider.target.is_in_group("npc"),
+		"a raider targets a resident, not the player")
+	var raider_id := str(a_raider.state["id"]) if a_raider != null else ""
+
+	# The resident defends: it walks at a raider and strikes it.
+	var struck := false
+	var steps := 0
+	while not struck and steps < 400:
+		var threats: Array = _game._raid_threats()
+		if not threats.is_empty():
+			var result: Dictionary = NpcModel.step(defender, _game.world,
+				_game.settlement_stores["settlement-test"], 0.25, threats)
+			if int(result["attack"]) >= 0:
+				struck = true
+				_game._apply_npc_events(defender, result)
+		steps += 1
+	_check(struck, "the resident strikes at a raider (%d steps)" % steps)
+	_check(int(defender["task"]) == NpcModel.Task.DEFEND or int(defender["task"]) == NpcModel.Task.SEEK,
+		"the resident is defending the settlement")
+	_check(_game.raid_nodes.has(raider_id), "the raider the resident fought is still tracked")
+
+	# A raid resolves: with the raiders gone, the raid ends and is not restarted.
+	for id: Variant in _game.raid_nodes.keys():
+		var node: Variant = _game.raid_nodes[id]
+		if node != null and is_instance_valid(node):
+			(node as Node).queue_free()
+	_game.raid_nodes.clear()
+	_game._update_raid(0.5)
+	_check(_game.raid_nodes.is_empty(), "the raid is over once the raiders are gone")
+	_check(int(_game._raided_day) >= 0, "the day is marked as raided")
+	_game._options.erase("raid_now")
+	_game.npc_states.erase(str(defender["id"]))

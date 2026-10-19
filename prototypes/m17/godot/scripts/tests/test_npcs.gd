@@ -205,8 +205,10 @@ func _test_miner_and_bounds(h: TestHarness) -> void:
 	# A dead resident does nothing.
 	var dead := state.duplicate(true)
 	dead["alive"] = false
-	h.eq(Npc.step(dead, world, store, 1.0), {"gathered": BlockDB.NO_DROP, "delivered": {}},
-		"a dead resident takes no actions")
+	var idle: Dictionary = Npc.step(dead, world, store, 1.0)
+	h.eq(int(idle["gathered"]), BlockDB.NO_DROP, "a dead resident gathers nothing")
+	h.eq(int(idle["attack"]), -1, "a dead resident does not fight")
+	h.check((idle["delivered"] as Dictionary).is_empty(), "a dead resident delivers nothing")
 
 	# The leash pulls a straying resident home.
 	var stray := Npc.spawn_state(17017, plot["settlement"], 2)

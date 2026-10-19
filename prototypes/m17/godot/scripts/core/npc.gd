@@ -48,7 +48,7 @@ const ACTIVE_RADIUS := 96.0
 const NO_CELL := Vector3i(2147483647, 0, 0)
 
 enum Role { WOODCUTTER, MINER }
-enum Task { SEEK, WALK, WORK, RETURN }
+enum Task { SEEK, WALK, WORK, RETURN, DEFEND }
 
 const ROLE_NAMES := ["Woodcutter", "Miner"]
 const NAMES := ["Bram", "Cora", "Dill", "Elsa", "Fern", "Gwen", "Hale", "Ines",
@@ -103,6 +103,7 @@ static func spawn_state(world_seed: int, settlement: Dictionary, index: int) -> 
 		"gathered": 0,
 		"delivered": 0,
 		"seek_timer": 0.0,
+		"attack_timer": 0.0,
 	}
 
 
@@ -140,6 +141,8 @@ static func task_name(task: int) -> String:
 			return "working"
 		Task.RETURN:
 			return "carrying to the store"
+		Task.DEFEND:
+			return "defending the settlement"
 	return "idling"
 
 
@@ -243,12 +246,28 @@ static func distance_to_home(state: Dictionary) -> float:
 
 ## Advances one resident by `delta`.  Mutates `state` and `store` and returns the
 ## events that happened this step:
-##     { "gathered": item_id, "delivered": { item_id: count } }
-## Both are 0/-1 and empty when nothing happened.
-static func step(state: Dictionary, world: VoxelWorld, store: Dictionary, delta: float) -> Dictionary:
-	var events := {"gathered": BlockDB.NO_DROP, "delivered": {}}
+##     { "gathered": item_id, "delivered": { item_id: count },
+##       "attack": int, "attack_damage": float }
+## `attack` is an index into the `threats` array the caller passed, so the game
+## layer can apply the damage to the right raider.  Everything else is 0/-1 or
+## empty when nothing happened.
+##
+## `threats` is a list of world positions (raiders); a resident within
+## `Raid.DEFEND_RADIUS` of home switches to defending, walking to the nearest one
+## and striking it on a cadence.  Work resumes when the threats are gone.
+static func step(state: Dictionary, world: VoxelWorld, store: Dictionary, delta: float,
+		threats: Array = []) -> Dictionary:
+	var events := {"gathered": BlockDB.NO_DROP, "delivered": {}, "attack": -1, "attack_damage": 0.0}
 	if world == null or not bool(state.get("alive", true)) or delta <= 0.0:
 		return events
+	var threatened := nearest_threat(state, threats)
+	if threatened >= 0:
+		_defend(state, threats, threatened, delta, events)
+		return events
+	if int(state["task"]) == Task.DEFEND:
+		# The raid is over: back to work.
+		state["task"] = Task.SEEK
+		state["target"] = NO_CELL
 	match int(state["task"]):
 		Task.SEEK:
 			_seek(state, world, delta)
@@ -262,6 +281,44 @@ static func step(state: Dictionary, world: VoxelWorld, store: Dictionary, delta:
 	if distance_to_home(state) > Settlement.LEASH:
 		state["task"] = Task.RETURN
 	return events
+
+
+## The index of the nearest threat a resident would defend against, or -1.
+static func nearest_threat(state: Dictionary, threats: Array) -> int:
+	if threats.is_empty():
+		return -1
+	var home: Vector3 = state["home"]
+	var best := -1
+	var best_distance := Raid.DEFEND_RADIUS
+	for index in threats.size():
+		var threat: Vector3 = threats[index]
+		var distance := Vector2(threat.x - home.x, threat.z - home.z).length()
+		if distance <= best_distance:
+			best_distance = distance
+			best = index
+	return best
+
+
+## Walks to the threat and strikes it: a resident fights with its hands, on a
+## cadence, and never chases a raider out of the settlement.
+static func _defend(state: Dictionary, threats: Array, threat_index: int, delta: float,
+		events: Dictionary) -> void:
+	state["task"] = Task.DEFEND
+	state["target"] = NO_CELL
+	var threat: Vector3 = threats[threat_index]
+	var timer := maxf(0.0, float(state.get("attack_timer", 0.0)) - delta)
+	var position: Vector3 = state["position"]
+	var flat := Vector2(threat.x - position.x, threat.z - position.z)
+	if flat.length() > 1.6:
+		_move_towards(state, threat, delta)
+		state["attack_timer"] = timer
+		return
+	if timer > 0.0:
+		state["attack_timer"] = timer
+		return
+	state["attack_timer"] = Raid.DEFEND_INTERVAL
+	events["attack"] = threat_index
+	events["attack_damage"] = Raid.DEFEND_DAMAGE
 
 
 static func _seek(state: Dictionary, world: VoxelWorld, delta: float) -> void:
@@ -475,4 +532,5 @@ static func from_dictionary(data: Dictionary, settlement_name: String = "") -> D
 		"gathered": maxi(0, int(data.get("gathered", 0))),
 		"delivered": maxi(0, int(data.get("delivered", 0))),
 		"seek_timer": maxf(0.0, float(data.get("seek_timer", 0.0))),
+		"attack_timer": maxf(0.0, float(data.get("attack_timer", 0.0))),
 	}

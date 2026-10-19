@@ -2,9 +2,9 @@
 	"biome": "Beach",
 	"evidence": "offscreen Godot viewport PNG written from inside the running game scene; not a human visual inspection",
 	"eye": [
-		-14.7085475921631,
-		72.3208465576172,
-		-116.156700134277
+		-7.06192541122437,
+		69.3208465576172,
+		-114.111434936523
 	],
 	"fluid": {
 		"changes": 0,
@@ -13,7 +13,7 @@
 		"pending": 0,
 		"seeded_chunks": 0
 	},
-	"fps_last_sample": 39.9333303541802,
+	"fps_last_sample": 60.0,
 	"godot_version": {
 		"build": "official",
 		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
@@ -26,44 +26,44 @@
 		"timestamp": 0
 	},
 	"look": [
-		45.0000114440918,
-		-23.2876873016357
+		45.0000076293945,
+		-23.287691116333
 	],
 	"mesher": {
-		"assemble_ms": 81.726,
+		"assemble_ms": 81.618,
 		"builds": 482,
-		"emit_ms": 2320.245,
+		"emit_ms": 2337.892,
 		"faces": 206715,
-		"fill_ms": 503.020000000001,
-		"ms": 2833.11,
+		"fill_ms": 524.532,
+		"ms": 2872.021,
 		"triangles": 413430
 	},
 	"player": [
-		-14.7085475921631,
-		70.7008438110352,
-		-116.156700134277
+		-7.06192541122437,
+		67.7008438110352,
+		-114.111434936523
 	],
 	"seed": 17017,
 	"streaming": {
-		"attach_ms_total": 3497.816,
+		"attach_ms_total": 3345.087,
 		"center": "(-1, 4, -8)",
 		"faces": 205541,
 		"faces_hash": 188602412230919731,
-		"generated": 616,
+		"generated": 620,
 		"generation_in_flight": 0,
-		"generation_ms_total": 755.684,
-		"generation_worker_ms": 3993.556,
+		"generation_ms_total": 769.438,
+		"generation_worker_ms": 4046.329,
 		"loaded": 392,
-		"mesh_ms_total": 2807.221,
+		"mesh_ms_total": 2854.094,
 		"meshed": 480,
 		"meshes_in_flight": 0,
 		"queued": 0,
 		"render_radius": 4,
-		"unloaded": 224,
+		"unloaded": 228,
 		"vertical_radius": 4,
 		"views": 392,
 		"wanted": 392,
-		"worst_mesh_ms": 20.694
+		"worst_mesh_ms": 16.723
 	},
 	"window_size": [
 		1280,
