@@ -81,6 +81,8 @@ func _test_catalogue_integrity(h: TestHarness) -> void:
 func _test_everything_is_reachable(h: TestHarness) -> void:
 	var reachable := {}
 	for block_id in BlockDB.COUNT:
+		if not BlockDB.is_defined(block_id):
+			continue
 		var drop := ItemDB.drop_for_block(block_id)
 		if drop != BlockDB.NO_DROP:
 			reachable[drop] = true
@@ -90,6 +92,15 @@ func _test_everything_is_reachable(h: TestHarness) -> void:
 			var bonus := ItemDB.bonus_drop(block_id, x, 70, x * 3 + 1)
 			if bonus != BlockDB.NO_DROP:
 				reachable[bonus] = true
+	# Hunting (a boar/grunt loot table) and farming (a ripe crop) are real sources.
+	var loot: Array = CreatureDB.loot_for("boar", Vector3i(4, 70, 4))
+	loot.append_array(CreatureDB.loot_for("grunt", Vector3i(5, 70, 5)))
+	for row: Dictionary in loot:
+		reachable[int(row["item"])] = true
+	var crop_loot := Farming.new(17017).harvest_loot(BlockDB.WHEAT_3, Vector3i(4, 70, 4))
+	for item_id in crop_loot:
+		reachable[int(item_id)] = true
+	reachable[ItemDB.WHEAT_SEEDS] = true
 	var changed := true
 	while changed:
 		changed = false

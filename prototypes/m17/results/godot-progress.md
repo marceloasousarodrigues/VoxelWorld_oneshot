@@ -1,5 +1,115 @@
 # M17 Godot — Progress and Resume Point
 
+## M21 — Gameplay depth, survival and progression (2026-10-19, autonomous session)
+
+Mission: connect the existing Godot systems into coherent survival loops instead
+of adding disconnected features.  Work is confined to `prototypes/m17/godot/`
+and these result documents; the production Ursina implementation was not touched.
+
+### Root causes found in the actual code
+
+- **Boars really dropped Oak Logs.** `PassiveCreatures.DROP_ID` was
+  `BlockDB.OAK_LOG` and `_on_creature_killed` hard-coded the same item/message;
+  there was no creature definition beyond a single shared `drops: int`.
+- **No cooking, animal materials or farming existed.** Items stopped at the M20
+  tool/food set; the furnace only smelted ore, sand, cobble and clay.
+- **No player storage container existed.** Station infrastructure was already
+  reusable, but there was no chest kind or block.
+- M20 item accounting, station, furnace and cursor fixes were re-run, not assumed.
+
+### Implemented
+
+**Data-driven creatures and loot (`core/creature_db.gd`)**
+
+- One species table owns name, health and a `{item, min, max, chance}` loot list.
+  Boar: raw meat 1–2, hide 1, bone 0.7 chance.  Grunt: bones 1–2, coal 0.5
+  chance.  Loot is deterministic per kill cell and species.
+- The creature models ask `CreatureDB` for health and the killing blow's loot;
+  the node stores `pending_loot` and `take_loot()` clears it, so a kill can be
+  awarded exactly once.  The game grants every row through `Inventory.add` and
+  reports overflow, instead of hard-coding one id.
+
+**Food, hunting and cooking**
+
+- New items: Raw Meat (2 hunger), Cooked Meat (8 hunger + 1 health), Hide, Bone,
+  Wheat Seeds, Bone Meal.
+- Furnace recipe `raw_meat → cooked_meat` (5 s) uses the existing timed
+  `Station` / `Smelting` path and consumes fuel and input exactly once.
+- Bone → 2 Bone Meal at hand; bone meal advances a growing crop one stage.
+
+**Wheat farming (`core/farming.gd`)**
+
+- New blocks: farmland, four wheat stages, storage chest.  Ids 35–60 stay the
+  existing item ids (the historic save namespace), so new blocks start at 61;
+  `BlockDB.is_defined()` distinguishes real blocks from those item slots.
+- Right-click with seeds on grass/dirt tills it to farmland and plants a crop
+  block.  Crops advance every 24 s while loaded and within 64 blocks, render as
+  growing crossed quads, and are removed if their soil disappears.
+- Left-click harvests: ripe = 2–3 Wheat + 1–2 Seeds, immature = one seed back.
+  Harvest and planting go through the real player controller and inventory.
+- Growth timers persist in save VERSION 8; the crop stages themselves are normal
+  block edits.  A save/reload during the integration run preserves both.
+- The starter kit now includes 8 Wheat Seeds in the first storage slot (the
+  hotbar building kit is unchanged); tall grass also supplies seeds.
+
+**Persistent storage chest**
+
+- Chest block id 66, custom mesher model, 8-plank shaped table recipe.
+- `Station.CHEST` uses the existing 27-slot station inventory; the station panel
+  gains a storage layout (27 slots, no crafting/processing branch), with the
+  same cursor, right-click, shift-click and drag & drop rules as other stations.
+- Contents persist through close, save/reload, chunk unload; breaking the chest
+  returns its contents and drops the chest block.
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows)
+
+- Unit: **1687 assertions**, exit 0, 0 bytes stderr.  New
+  `test_m21_gameplay.gd` covers species loot, cooking, farming growth/harvest/
+  fertilise/persistence, chest slots/round-trip and the chest recipe; existing
+  item, block, crafting, creature, hostile and persistence tests were updated.
+  Persistence now pins VERSION 8 and rejects invalid crop timers.
+- Integration: **389 assertions**, exit 0, 0 bytes stderr.  Real scene coverage:
+  boar loot (meat/hide, no Oak Log), planting via `place_selected`, save/reload
+  while planted, growth, harvesting via `break_target`, timed meat cooking,
+  chest targeting/opening, 27-slot interface, shift-click, save/reload and
+  breaking with contents recovery; wrong-tier iron ore (wooden pick yields no
+  lump) and the existing mining/tool/durability chain.
+- Headless smoke: exit 0, 0 bytes stderr, untouched-world fingerprint unchanged
+  (`world_hash=7995773462820745781`, faces 170492), starter inventory now 10 used
+  slots (nine hotbar + seeds).
+- Inspected windowed captures at 1280×720: `m21-farming.png` (four visibly
+  different wheat stages on tilled farmland, chest model at the right) and
+  `m21-chest.png` (27-slot storage interface, player inventory, persistent
+  storage notes).  Capture aids: `--farming-capture`,
+  `--station-capture=chest`.
+- Frame-time harness (windowed, seed 17017, vsync/fps cap off): look p50
+  **1.602 ms**, p95 **2.319 ms**, p99 **2.799 ms**, 1 % low **291 fps**;
+  settle p50 **1.763 ms**, p95 **6.178 ms**, p99 **10.741 ms**, 1 % low
+  **49.7 fps**.  This is within the M19/M18 range (M19: look p95 2.04, settle
+  p95 5.40; M18: look p95 2.79, settle p95 6.61), so the farming tick over an
+  empty crop table and the new mesher cases show no measurable regression.
+  Reports: `perf-look-m21.json`, `perf-settle-m21.json`.
+
+### Limitations / not verified
+
+- No human keyboard/mouse play-through; runtime evidence is scripted real-scene
+  integration and inspected windowed captures.
+- Hide has no recipe/use yet (reserved for a future equipment chain); bone meal
+  is the current hunting→farming link.
+- No armour/equipment slots, additional hostile species, weather or player
+  access to settlement stores (all remain Phase C/D work).
+- As before, there is no dropped-item entity: an overflow from a kill or chest
+  break is explicitly reported and lost rather than left in the world.
+
+### Resume point
+
+M21's implemented loops are mining → tool tiers → ore/smelting, hunting → meat/
+hide/bone → cooking, seeds → wheat → bread/replanting, and chest storage.
+Next independent work: equipment/armour and combat depth, or a human play-through
+of the new interactions.  Code savepoint: see the commit following this record.
+
+---
+
 ## M20 Stabilization — persistence duplication and cursor integrity (2026-10-19, continuation)
 
 Second stabilization pass.  The five reported defects were re-verified against the

@@ -659,6 +659,114 @@
       "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
       "source": "voxel_textures/MINETEST_TEXTURES/default_water_source_animated.png",
       "width": 128
+    },
+    "farmland_top": {
+      "description": "farmland top (tilled soil)",
+      "file": "m21_farmland_top.png",
+      "height": 64,
+      "key": "farmland_top",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "farmland_side": {
+      "description": "farmland side (tilled soil)",
+      "file": "m21_farmland_side.png",
+      "height": 64,
+      "key": "farmland_side",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "wheat_stage_0": {
+      "description": "wheat crop stage 0 (sprout)",
+      "file": "m21_wheat_stage_0.png",
+      "height": 64,
+      "key": "wheat_stage_0",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "wheat_stage_1": {
+      "description": "wheat crop stage 1",
+      "file": "m21_wheat_stage_1.png",
+      "height": 64,
+      "key": "wheat_stage_1",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "wheat_stage_2": {
+      "description": "wheat crop stage 2",
+      "file": "m21_wheat_stage_2.png",
+      "height": 64,
+      "key": "wheat_stage_2",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "wheat_stage_3": {
+      "description": "wheat crop stage 3 (ripe)",
+      "file": "m21_wheat_stage_3.png",
+      "height": 64,
+      "key": "wheat_stage_3",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_raw_meat": {
+      "description": "raw meat icon",
+      "file": "m21_item_raw_meat.png",
+      "height": 64,
+      "key": "item_raw_meat",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_cooked_meat": {
+      "description": "cooked meat icon",
+      "file": "m21_item_cooked_meat.png",
+      "height": 64,
+      "key": "item_cooked_meat",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_hide": {
+      "description": "hide icon",
+      "file": "m21_item_hide.png",
+      "height": 64,
+      "key": "item_hide",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_bone": {
+      "description": "bone icon",
+      "file": "m21_item_bone.png",
+      "height": 64,
+      "key": "item_bone",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_wheat_seeds": {
+      "description": "wheat seeds icon",
+      "file": "m21_item_wheat_seeds.png",
+      "height": 64,
+      "key": "item_wheat_seeds",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_bone_meal": {
+      "description": "bone meal icon",
+      "file": "m21_item_bone_meal.png",
+      "height": 64,
+      "key": "item_bone_meal",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
+      "width": 64
     }
   },
   "version": 1

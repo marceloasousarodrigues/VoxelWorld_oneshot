@@ -23,8 +23,14 @@ func _setup() -> void:
 ### ItemDB ------------------------------------------------------------------
 
 func _test_item_namespace(h: TestHarness) -> void:
-	h.eq(ItemDB.BLOCK_COUNT, BlockDB.COUNT, "every block id is an item id")
-	h.eq(ItemDB.COUNT, 61, "the item namespace has the expected size")
+	h.eq(ItemDB.BLOCK_COUNT, BlockDB.COUNT, "the item namespace covers the block id space")
+	h.eq(ItemDB.COUNT, 73, "the item namespace has the expected size")
+	h.check(not ItemDB.is_block(ItemDB.STICK), "a material below the M21 blocks is not a block")
+	h.check(not ItemDB.is_block(ItemDB.DIAMOND_PICKAXE), "a tool below the M21 blocks is not a block")
+	h.check(ItemDB.is_block(BlockDB.FARMLAND), "farmland is a placeable block")
+	h.check(ItemDB.is_block(BlockDB.CHEST), "the storage chest is a placeable block")
+	h.check(not ItemDB.is_block(ItemDB.RAW_MEAT), "raw meat is not a block")
+	h.check(not ItemDB.is_block(ItemDB.WHEAT_SEEDS), "wheat seeds are not a block")
 	var valid := true
 	var seen := {}
 	for item_id in ItemDB.COUNT:
@@ -148,16 +154,16 @@ func _test_bonus_drops(h: TestHarness) -> void:
 	h.eq(ItemDB.bonus_drop(BlockDB.OAK_LEAVES, 4, 70, 9), ItemDB.bonus_drop(BlockDB.OAK_LEAVES, 4, 70, 9),
 		"a bonus drop is deterministic for one position")
 	var apples := 0
-	var wheat := 0
+	var seeds := 0
 	for x in range(0, 400, 3):
 		for z in range(0, 400, 7):
 			if ItemDB.bonus_drop(BlockDB.OAK_LEAVES, x, 70, z) == ItemDB.APPLE:
 				apples += 1
-			if ItemDB.bonus_drop(BlockDB.TALL_GRASS, x, 70, z) == ItemDB.WHEAT:
-				wheat += 1
+			if ItemDB.bonus_drop(BlockDB.TALL_GRASS, x, 70, z) == ItemDB.WHEAT_SEEDS:
+				seeds += 1
 	h.check(apples > 0, "oak leaves do drop apples sometimes (%d)" % apples)
-	h.check(wheat > 0, "tall grass does drop wheat sometimes (%d)" % wheat)
-	h.check(wheat > apples, "wheat is the more common of the two bonus drops")
+	h.check(seeds > 0, "tall grass does drop wheat seeds sometimes (%d)" % seeds)
+	h.check(seeds > apples, "wheat seeds are the more common of the two bonus drops")
 	h.eq(ItemDB.bonus_drop(BlockDB.STONE, 1, 2, 3), BlockDB.NO_DROP, "stone has no bonus drop")
 	h.eq(ItemDB.bonus_drop(BlockDB.OAK_LEAVES, 1, 2, 3) == ItemDB.APPLE or
 		ItemDB.bonus_drop(BlockDB.OAK_LEAVES, 1, 2, 3) == BlockDB.NO_DROP, true,
@@ -174,6 +180,12 @@ func _test_food(h: TestHarness) -> void:
 	h.check(ItemDB.food_value(ItemDB.GOLDEN_APPLE) > ItemDB.food_value(ItemDB.BREAD),
 		"the golden apple is the best food")
 	h.greater(ItemDB.heal_value(ItemDB.GOLDEN_APPLE), 0.0, "the golden apple also heals")
+	h.check(ItemDB.is_food(ItemDB.RAW_MEAT), "raw meat is edible")
+	h.check(ItemDB.is_food(ItemDB.COOKED_MEAT), "cooked meat is edible")
+	h.check(ItemDB.food_value(ItemDB.COOKED_MEAT) > ItemDB.food_value(ItemDB.RAW_MEAT),
+		"cooking meat makes it more filling")
+	h.check(not ItemDB.is_food(ItemDB.HIDE), "hide is not food")
+	h.check(not ItemDB.is_food(ItemDB.BONE), "bone is not food")
 
 
 ### Inventory ---------------------------------------------------------------
@@ -218,13 +230,14 @@ func _test_full_inventory(h: TestHarness) -> void:
 func _test_starter_kit_leaves_storage(h: TestHarness) -> void:
 	var inventory := Inventory.new()
 	inventory.give_starter_kit()
-	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE, "the starter kit fills only the hotbar")
-	h.eq(inventory.free_slot_count(), Inventory.MAIN_SIZE, "all 27 storage slots are free")
+	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE + 1, "the starter kit fills the hotbar and one seed slot")
+	h.eq(inventory.free_slot_count(), Inventory.MAIN_SIZE - 1, "26 of the 27 storage slots are free")
+	h.eq(inventory.count_of(ItemDB.WHEAT_SEEDS), 8, "the starter kit provides wheat seeds for a first plot")
 	h.eq(inventory.add(ItemDB.IRON_LUMP, 1), 0, "a mined iron lump fits after spawn")
 	h.eq(inventory.count_of(ItemDB.IRON_LUMP), 1, "the iron lump is in the inventory")
 	h.eq(inventory.add(ItemDB.COAL, 1), 0, "coal also fits after spawn")
 	h.eq(inventory.add(ItemDB.APPLE, 1), 0, "a bonus drop also fits after spawn")
-	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE + 3, "each new item opened a storage slot")
+	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE + 4, "each new item opened a storage slot")
 	var iron_slot := inventory.slots.find(ItemDB.IRON_LUMP)
 	h.check(iron_slot >= Inventory.MAIN_FIRST, "new material drops go to the storage rows")
 	h.check(inventory.select(iron_slot) == false, "a storage slot cannot become the held item")

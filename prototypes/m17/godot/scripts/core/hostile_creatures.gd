@@ -16,12 +16,12 @@ const MIN_SPAWN_DISTANCE := 10.0
 const DESPAWN_RADIUS := 48.0
 const AGGRO_RADIUS := 14.0
 const SPEED := 2.2
-const HIT_POINTS := 4
 const ATTACK_RANGE := 1.7
 const ATTACK_DAMAGE := 2.0
 const ATTACK_INTERVAL := 1.2
-const DROP_ID := ItemDB.COAL
-const DROP_COUNT := 1
+## The grunt definition (health, loot) lives in `CreatureDB`.
+const SPECIES := "grunt"
+const HIT_POINTS := 4
 
 var seed_value: int
 var next_id := 1
@@ -57,8 +57,8 @@ func spawn_candidates(focus: Vector3i, world: VoxelWorld, requested_cap: int = C
 				continue
 			if not supports_standing(world, x, z, height):
 				continue
-			var state := {"id": next_id, "species": "grunt", "position": Vector3(x + 0.5, height + 1.0, z + 0.5),
-				"health": HIT_POINTS, "alive": true, "key": key}
+			var state := {"id": next_id, "species": SPECIES, "position": Vector3(x + 0.5, height + 1.0, z + 0.5),
+				"health": CreatureDB.health(SPECIES), "alive": true, "key": key}
 			next_id += 1
 			states[key] = state
 			result.append(state.duplicate(true))
@@ -106,14 +106,20 @@ func attack_step(in_range: bool, cooldown: float, delta: float) -> Dictionary:
 	return {"damage": 0.0, "cooldown": remaining}
 
 
+## Applies one hit.  Only the killing blow carries the species' data-driven loot,
+## so a dead creature can never drop twice.
 func damage(creature: Dictionary, amount: int) -> Dictionary:
 	var state: Dictionary = creature.duplicate(true)
 	if not state.get("alive", false) or amount <= 0:
-		return {"creature": state, "alive": bool(state.get("alive", false)), "drops": 0}
+		return {"creature": state, "alive": bool(state.get("alive", false)), "drops": 0, "loot": []}
 	state.health = maxi(0, int(state.health) - amount)
 	state.alive = state.health > 0
-	var drops := DROP_COUNT if not state.alive else 0
-	return {"creature": state, "alive": state.alive, "drops": drops}
+	var loot: Array = []
+	if not state.alive:
+		var position: Vector3 = state.get("position", Vector3.ZERO)
+		loot = CreatureDB.loot_for(str(state.get("species", SPECIES)),
+			Vector3i(floori(position.x), floori(position.y), floori(position.z)))
+	return {"creature": state, "alive": state.alive, "drops": CreatureDB.loot_total(loot), "loot": loot}
 
 
 ## Removes dead or out-of-range hostiles, checking at most `max_work` entries per

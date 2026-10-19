@@ -7,6 +7,8 @@ const MODEL := preload("res://scripts/core/passive_creatures.gd")
 
 var state: Dictionary
 var world: VoxelWorld
+## Loot produced by the lethal hit, awarded once by the game layer.
+var pending_loot: Array = []
 var _wander_target := Vector3.ZERO
 var _wander_timer := 0.0
 var _hop_phase := 0.0
@@ -84,5 +86,14 @@ func apply_hit(damage: int = 1) -> int:
 			if is_instance_valid(_body_mesh) and is_instance_valid(self):
 				(_body_mesh.material_override as StandardMaterial3D).albedo_color = Color(0.48, 0.24, 0.12))
 	else:
+		pending_loot = (result.get("loot", []) as Array).duplicate()
 		killed.emit(self)
 	return int(result.drops)
+
+
+## Returns and clears the loot of the lethal hit, so the kill can only ever be
+## awarded once even if a second signal arrives.
+func take_loot() -> Array:
+	var loot := pending_loot.duplicate(true)
+	pending_loot.clear()
+	return loot

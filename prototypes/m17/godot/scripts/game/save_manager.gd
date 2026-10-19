@@ -18,10 +18,12 @@ const FORMAT := "voxelworld.godot.save"
 ## 3: adds player health and breath.  4: adds hunger.  5: adds settlement stores
 ## and residents.  6: adds placed-station inventories (M19).  7: the inventory
 ## payload grows from one nine-slot row to 27 main slots + the nine-slot hotbar
-## (M20).  Older saves still load: every field a version did not know about is
-## optional and keeps its default, and a nine-row inventory fills the hotbar while
-## the 27 main slots start empty.
-const VERSION := 7
+## (M20).  8: adds wheat-crop growth progress (M21); the crop blocks themselves
+## are ordinary block edits, so only the growth timers are new.  Older saves still
+## load: every field a version did not know about is optional and keeps its
+## default, and a nine-row inventory fills the hotbar while the 27 main slots
+## start empty.
+const VERSION := 8
 const DEFAULT_DIRECTORY := "user://saves"
 const DEFAULT_NAME := "world.json"
 
@@ -49,7 +51,7 @@ func ensure_directory() -> bool:
 
 func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null,
 		health: Health = null, breath: float = -1.0, hunger: float = -1.0,
-		npcs: Dictionary = {}, stations: Array = []) -> Dictionary:
+		npcs: Dictionary = {}, stations: Array = [], crops: Array = []) -> Dictionary:
 	var block_edits: Array = []
 	for position: Vector3i in world.edits:
 		block_edits.append([position.x, position.y, position.z, int(world.edits[position])])
@@ -90,6 +92,7 @@ func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory,
 		"hunger": hunger,
 		"npcs": npcs,
 		"stations": stations,
+		"crops": crops,
 		"blocks": block_edits,
 		"fluid": fluid_edits,
 	}
@@ -97,11 +100,11 @@ func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory,
 
 func write(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: DayNight = null,
 		health: Health = null, breath: float = -1.0, hunger: float = -1.0,
-		npcs: Dictionary = {}, stations: Array = []) -> bool:
+		npcs: Dictionary = {}, stations: Array = [], crops: Array = []) -> bool:
 	last_error = ""
 	if not ensure_directory():
 		return false
-	var payload := to_dictionary(world, player, inventory, clock, health, breath, hunger, npcs, stations)
+	var payload := to_dictionary(world, player, inventory, clock, health, breath, hunger, npcs, stations, crops)
 	var path := save_path()
 	var temporary := path + ".tmp"
 	var file := FileAccess.open(temporary, FileAccess.WRITE)
@@ -215,7 +218,8 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 		if bool(state.get("flying", false)) and not player.flying:
 			player.toggle_fly()
 	return {"ok": true, "error": "", "block_edits": block_edits.size(), "fluid_edits": fluid_edits.size(),
-		"breath": breath, "hunger": hunger, "npcs": npc_payload, "stations": data.get("stations", [])}
+		"breath": breath, "hunger": hunger, "npcs": npc_payload, "stations": data.get("stations", []),
+		"crops": data.get("crops", [])}
 
 
 # --- validation ----------------------------------------------------------
@@ -282,6 +286,22 @@ func _sanitise(data: Dictionary) -> Variant:
 	if typeof(stations_state) != TYPE_ARRAY:
 		last_error = "stations is not an array"
 		return null
+	var crops_state: Variant = data.get("crops", [])
+	if typeof(crops_state) != TYPE_ARRAY:
+		last_error = "crops is not an array"
+		return null
+	for entry: Variant in (crops_state as Array):
+		if typeof(entry) != TYPE_ARRAY or (entry as Array).size() != 4:
+			last_error = "a crop row is malformed"
+			return null
+		for value: Variant in (entry as Array):
+			if typeof(value) != TYPE_FLOAT and typeof(value) != TYPE_INT:
+				last_error = "a crop row contains a non-numeric value"
+				return null
+		var elapsed := float((entry as Array)[3])
+		if elapsed < 0.0 or elapsed > Farming.STAGE_SECONDS:
+			last_error = "a crop row has an invalid growth time"
+			return null
 	return {
 		"seed": seed_value,
 		"player": player_state,
@@ -292,6 +312,7 @@ func _sanitise(data: Dictionary) -> Variant:
 		"hunger": float(hunger_value),
 		"npcs": npcs_state,
 		"stations": stations_state,
+		"crops": crops_state,
 		"blocks": rows,
 		"fluid": fluid,
 		"version": version,

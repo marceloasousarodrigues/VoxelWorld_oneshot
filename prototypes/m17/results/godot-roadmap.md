@@ -11,6 +11,52 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ---
 
+## M21 — Gameplay depth, survival and progression
+
+- [x] Data-driven creature definitions and loot (`core/creature_db.gd`):
+      species name, health and weighted `{item, min, max, chance}` drop tables.
+      A boar drops raw meat, hide and (70 %) a bone; a grunt drops bones and
+      (50 %) coal. **The reported Oak Log boar drop is gone** and no species can
+      leak another species' item ids. Loot is deterministic per kill cell and is
+      awarded exactly once through the shared inventory path
+- [x] Animal, cooking and farming items: Raw Meat, Cooked Meat, Hide, Bone,
+      Wheat Seeds, Bone Meal, with real food values (raw 2, cooked 8 + 1 health)
+- [x] Cooking chain: furnace `1 Raw Meat + fuel → 1 Cooked Meat` (5 s), using
+      the existing timed `Station`/`Smelting` data path. Verified through a real
+      timed furnace, not a menu shortcut
+- [x] Wheat farming: `Farming` model + farmland and four crop-stage blocks.
+      Plant seeds on grass/dirt (tills to farmland), crops grow every 24 s while
+      loaded and nearby, ripe crops yield 2–3 Wheat + 1–2 Seeds, immature crops
+      return one seed, unsupported crops are cleared. Growth progress persists
+      (save VERSION 8) and crop block state persists through the existing edits.
+      Right-click planting and left-click harvesting run through the real player
+      controller; bone meal advances a crop one stage
+- [x] Persistent storage chest: craftable from eight planks at a table, custom
+      chest model, 27-slot `Station` storage with the existing cursor/quick-move
+      rules. Contents survive close, save/reload, chunk unload and breaking
+      (contents return to the player)
+- [x] Tool progression re-verified end to end: bare hand gets no stone drop;
+      a wooden pickaxe breaks iron ore but yields no iron; a stone pickaxe
+      yields the lump; tool wear and breaking are unchanged
+- [x] UI/HUD: chest interface reuses the station panel (27 slots, persistent
+      storage notes); crop and chest blocks have icons and real textures. Capture
+      aids `--farming-capture` and `--station-capture=chest` reproduce the views
+- [x] Tests: `test_m21_gameplay.gd` (loot, cooking, farming, chest + recipe),
+      updated item/block/creature/hostile/persistence/crafting tests, and real
+      scene integration for boar loot, planting → save/reload → growth →
+      harvest, timed cooking, chest UI, chest persistence and chest recovery
+- [x] Verification: unit **1687 assertions**, integration **389 assertions**,
+      both exit 0 with empty stderr; headless smoke starts and reports
+      `world_hash=7995773462820745781` (untouched generation unchanged);
+      inspected `m21-farming.png` (four crop stages, farmland, chest model) and
+      `m21-chest.png` (27-slot storage UI); look p95 2.32 ms / settle p95 6.18 ms
+      in `perf-{look,settle}-m21.json` (within the M18/M19 range)
+- [~] No human keyboard/mouse play-through of the new farming/chest interactions
+- [ ] Remaining M21 depth: equipment/armour slots, hostile species variety,
+      village storage access, weather; see the Phase C/D entries below
+
+---
+
 ## M20 — Inventory, hotbar, crafting and interaction overhaul
 
 - [x] Authoritative 27 storage + 9 hotbar inventory model (`SIZE = 36`), with only
@@ -244,16 +290,17 @@ Design contract: `prototypes/m17/results/m18-visual-design.md`.
       sunset→night transition is a tuning choice (the curve is pinned by tests), not a defect.
 - [x] One passive boar species (bounded deterministic nearby spawn, unique per-column
       identity, cap 6, 54-block despawn range, bounded pruning, voxel-aware wandering,
-      primitive animated silhouette, player damage and one Oak Log drop; unit + runtime
-      integration verified 2026-10-16). Ground is taken from the **live world voxels**
+      primitive animated silhouette, player damage and species-specific loot —
+      **M21** replaced the old hard-coded Oak Log with meat/hide/bone; unit + runtime
+      integration verified 2026-10-19). Ground is taken from the **live world voxels**
       (`supports_standing` / `wander_destination` in `core/passive_creatures.gd`), not the
       procedural generator, so mining the ground block removes the spawn/move site
       (reviewer defect fixed 2026-10-16 with new unit assertions)
 - [x] Hostile creatures (targeting, melee, spawning in the dark) — `core/hostile_creatures.gd`
       + `game/hostile_creature.gd`: one "grunt" species, night-only gate (or `--spawn-hostiles`),
       live-ground spawn 12-32 blocks from the player (cap 4), chase that stops at attack range
-      and refuses mined/flooded floor, contact melee (2 damage / 1.2 s), 4 HP, one Coal drop,
-      bounded pruning, transient (not saved). `test_hostiles.gd` (38 assertions) and 8 real-scene
+      and refuses mined/flooded floor, contact melee (2 damage / 1.2 s), 4 HP, bones + a chance
+      of coal (M21 `CreatureDB` loot), bounded pruning, transient (not saved). `test_hostiles.gd` and 8 real-scene
       integration assertions; `hostile-creature.png` inspected (grunt at midnight, "Grunt hurt
       (3/4)"). Verified 2026-10-18
 - [x] Combat, damage exchange and loot (minimal melee exchange, 2026-10-18) — the player's LMB
@@ -304,8 +351,9 @@ Design contract: `prototypes/m17/results/m18-visual-design.md`.
       footprint, and it is assigned 1-3 residents with deterministic names and roles. There is no
       plot/building layout generation and residents do not build
 - [x] Resource storage and task delegation (2026-10-19) — each settlement has a shared store that
-      residents deliver to (persisted, with lifetime counters per resident). The player cannot
-      open or withdraw from a store yet and there is no trading
+      residents deliver to (persisted, with lifetime counters per resident). **M21** adds a
+      player-craftable 27-slot storage chest with the same persistent station inventory; the
+      settlement store itself is still not player-accessible and there is no trading
 - [x] Defensive behaviour and enemy raids (2026-10-19) — `core/raid.gd` schedules a raid every
       other night with a deterministic group size and spawn ring; the raiders are the existing
       grunt node aimed at a resident (retargeting the next resident, then the player), and

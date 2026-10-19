@@ -22,6 +22,13 @@ signal creature_attacked(creature: Node3D, damage: int)
 ## layer decides whether eating is worth it (a full body refuses) and consumes the
 ## item; the player never mutates the inventory itself.
 signal eat_requested(item_id: int)
+## Emitted when the player uses the build action holding wheat seeds over
+## plantable soil.  The game layer tills and plants; the player never mutates the
+## world or the inventory itself.
+signal plant_requested(item_id: int, soil_cell: Vector3i)
+## Emitted when the player uses the build action holding bone meal over a growing
+## crop.  The game advances the crop and consumes one item.
+signal fertilize_requested(item_id: int, crop_cell: Vector3i)
 ## Emitted when a block was broken but its drop needed a tool the player was not
 ## holding (`required_tool` is an `ItemDB.Tool` value).  The block still breaks;
 ## this is only the explanation for the missing drop.
@@ -473,6 +480,16 @@ func place_selected() -> bool:
 		eat_requested.emit(item_id)
 		return true
 	var hit := target()
+	var aimed_block := int(hit.get("block_id", BlockDB.AIR)) if hit.get("hit", false) else BlockDB.AIR
+	# Farming uses right-click on a world cell rather than placing a block, so it
+	# is checked before the ordinary placement path.
+	if item_id == ItemDB.WHEAT_SEEDS and hit.get("hit", false) \
+			and Farming.PLANTABLE_SOIL.has(aimed_block):
+		plant_requested.emit(item_id, hit["block"])
+		return true
+	if item_id == ItemDB.BONE_MEAL and hit.get("hit", false) and Farming.is_crop(aimed_block):
+		fertilize_requested.emit(item_id, hit["block"])
+		return true
 	if not hit.get("hit", false):
 		interaction_failed.emit("Nothing to build against")
 		return false

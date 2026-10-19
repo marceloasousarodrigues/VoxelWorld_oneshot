@@ -7,8 +7,10 @@ const CAP := 6
 const SPAWN_RADIUS := 38.0
 const DESPAWN_RADIUS := 54.0
 const WANDER_SPEED := 1.2
-const HIT_POINTS := 3
-const DROP_ID := BlockDB.OAK_LOG
+## The boar definition lives in `CreatureDB`; these remain for the existing
+## callers that read the population constants.
+const SPECIES := "boar"
+const HIT_POINTS := 5
 
 var seed_value: int
 var next_id := 1
@@ -36,8 +38,8 @@ func spawn_candidates(focus: Vector3i, world: VoxelWorld, requested_cap: int = C
 				continue
 			if not supports_standing(world, x, z, height):
 				continue
-			var state := {"id": next_id, "species": "boar", "position": Vector3(x + 0.5, height + 1.0, z + 0.5),
-				"health": HIT_POINTS, "alive": true, "wander": Vector3.ZERO, "key": key}
+			var state := {"id": next_id, "species": SPECIES, "position": Vector3(x + 0.5, height + 1.0, z + 0.5),
+				"health": CreatureDB.health(SPECIES), "alive": true, "wander": Vector3.ZERO, "key": key}
 			next_id += 1
 			states[key] = state
 			result.append(state.duplicate(true))
@@ -86,14 +88,24 @@ func _already_selected(entries: Array, key: String) -> bool:
 			return true
 	return false
 
+## Applies one hit.  The killing blow carries the species' data-driven loot list,
+## so the caller awards it exactly once; a non-lethal or already-dead creature
+## carries an empty list and can never drop twice.
 func damage(creature: Dictionary, amount: int) -> Dictionary:
 	var state: Dictionary = creature.duplicate(true)
 	if not state.get("alive", false) or amount <= 0:
-		return {"creature": state, "alive": bool(state.get("alive", false)), "drops": 0}
+		return {"creature": state, "alive": bool(state.get("alive", false)), "drops": 0, "loot": []}
 	state.health = maxi(0, int(state.health) - amount)
 	state.alive = state.health > 0
-	var drops := 1 if not state.alive else 0
-	return {"creature": state, "alive": state.alive, "drops": drops}
+	var loot: Array = []
+	if not state.alive:
+		loot = CreatureDB.loot_for(str(state.get("species", SPECIES)), _cell_of(state))
+	return {"creature": state, "alive": state.alive, "drops": CreatureDB.loot_total(loot), "loot": loot}
+
+
+func _cell_of(state: Dictionary) -> Vector3i:
+	var position: Vector3 = state.get("position", Vector3.ZERO)
+	return Vector3i(floori(position.x), floori(position.y), floori(position.z))
 
 func wander_step(position: Vector3, target: Vector3, delta: float) -> Vector3:
 	var direction := Vector3(target.x - position.x, 0.0, target.z - position.z)

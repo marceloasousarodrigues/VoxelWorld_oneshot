@@ -49,7 +49,22 @@ const DRY_SHRUB := 32
 const CRAFTING_TABLE := 33
 const FURNACE := 34
 
-const COUNT := 35
+# --- M21 farming and storage blocks ---------------------------------------
+# Ids 35..60 are the M21 material/tool item definitions in `ItemDB`; they are
+# therefore *undefined block slots* in this table.  Keeping the historical item
+# ids stable is what lets existing saves load unchanged.  New world blocks
+# continue after that range.
+const FARMLAND := 61
+const WHEAT_0 := 62
+const WHEAT_1 := 63
+const WHEAT_2 := 64
+const WHEAT_3 := 65
+const CHEST := 66
+
+const COUNT := 67
+## Number of ids in 0..COUNT-1 that are real blocks (the item-id range 35..60 is
+## deliberately undefined here).
+const DEFINED_COUNT := 41
 
 # --- render layers ---------------------------------------------------------
 const LAYER_OPAQUE := 0
@@ -70,6 +85,8 @@ const FACE_NZ := 5
 const NO_DROP := -1
 
 static var names: PackedStringArray = PackedStringArray()
+## 1 for a real block id, 0 for the item-id range that shares the numeric space.
+static var defined: PackedByteArray = PackedByteArray()
 static var render_layers: PackedByteArray = PackedByteArray()
 static var solid: PackedByteArray = PackedByteArray()
 static var opaque: PackedByteArray = PackedByteArray()
@@ -84,6 +101,9 @@ static var hardness: PackedFloat32Array = PackedFloat32Array()
 static var face_keys: Array = []
 static var drops: PackedInt32Array = PackedInt32Array()
 static var light_emission: PackedByteArray = PackedByteArray()
+## Fraction of the voxel height a decorative crossed-quad model occupies.  Crop
+## stages grow from 0.35 to a full block; every other deco block stays at 1.0.
+static var deco_height: PackedFloat32Array = PackedFloat32Array()
 
 
 static func _static_init() -> void:
@@ -125,10 +145,31 @@ static func _static_init() -> void:
 		["Crafting Table", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.CRAFTING_TABLE, ["crafting_table_top", "crafting_table_side", "planks"]],
 		["Furnace", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 3.5, BlockDB.FURNACE, ["furnace_top", "furnace_side", "furnace_top"]],
 	]
+	# Ids 35..60 are the existing material/tool item definitions.  They are not
+	# blocks; placeholders keep the packed arrays indexable by the unchanged ids.
+	while definitions.size() < FARMLAND:
+		definitions.append(["", BlockDB.LAYER_OPAQUE, 0, 0, 0, 0, 0.0, BlockDB.NO_DROP, ["", "", ""]])
+	definitions.append_array([
+		# name, layer, solid, opaque, cull, liquid, hardness, drop, faces
+		["Farmland", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 0.6, BlockDB.DIRT,
+			["farmland_top", "farmland_side", "dirt"]],
+		["Wheat Sprout", BlockDB.LAYER_DECO, 0, 0, 0, 0, 0.05, BlockDB.NO_DROP,
+			["wheat_stage_0", "wheat_stage_0", "wheat_stage_0"]],
+		["Wheat Crop", BlockDB.LAYER_DECO, 0, 0, 0, 0, 0.05, BlockDB.NO_DROP,
+			["wheat_stage_1", "wheat_stage_1", "wheat_stage_1"]],
+		["Wheat Crop", BlockDB.LAYER_DECO, 0, 0, 0, 0, 0.05, BlockDB.NO_DROP,
+			["wheat_stage_2", "wheat_stage_2", "wheat_stage_2"]],
+		["Ripe Wheat", BlockDB.LAYER_DECO, 0, 0, 0, 0, 0.05, BlockDB.NO_DROP,
+			["wheat_stage_3", "wheat_stage_3", "wheat_stage_3"]],
+		["Storage Chest", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.CHEST,
+			["planks", "planks", "planks"]],
+	])
 	if definitions.size() != COUNT:
 		push_error("BlockDB: definition table has %d rows, expected %d" % [definitions.size(), COUNT])
 	for definition: Array in definitions:
-		names.append(str(definition[0]))
+		var display_name := str(definition[0])
+		names.append(display_name)
+		defined.append(1 if not display_name.is_empty() else 0)
 		render_layers.append(int(definition[1]))
 		solid.append(int(definition[2]))
 		opaque.append(int(definition[3]))
@@ -138,8 +179,17 @@ static func _static_init() -> void:
 		drops.append(int(definition[7]))
 		face_keys.append(_expand_faces(definition[8]))
 		open_model.append(0)
+		deco_height.append(1.0)
 	open_model[CRAFTING_TABLE] = 1
 	open_model[FURNACE] = 1
+	open_model[CHEST] = 1
+	# Crop stages visibly grow inside the voxel cell.
+	deco_height[WHEAT_0] = 0.34
+	deco_height[WHEAT_1] = 0.56
+	deco_height[WHEAT_2] = 0.78
+	deco_height[WHEAT_3] = 1.0
+	if defined.size() != COUNT or _defined_total() != DEFINED_COUNT:
+		push_error("BlockDB: defined block count is %d, expected %d" % [_defined_total(), DEFINED_COUNT])
 
 
 static func _expand_faces(triple: Array) -> PackedStringArray:
@@ -153,30 +203,36 @@ static func is_air(block_id: int) -> bool:
 	return block_id == AIR
 
 
+## True when the id names a real block.  The numeric space also contains the
+## material/tool item ids (35..60); those must never be treated as world blocks.
+static func is_defined(block_id: int) -> bool:
+	return block_id >= 0 and block_id < defined.size() and defined[block_id] == 1
+
+
 static func is_solid(block_id: int) -> bool:
-	return block_id >= 0 and block_id < solid.size() and solid[block_id] == 1
+	return is_defined(block_id) and solid[block_id] == 1
 
 
 static func is_opaque(block_id: int) -> bool:
-	return block_id >= 0 and block_id < opaque.size() and opaque[block_id] == 1
+	return is_defined(block_id) and opaque[block_id] == 1
 
 
 ## True for stations whose custom render model is not a full cube.  They still
 ## occlude for gameplay/collision, but their neighbours' faces stay visible.
 static func is_open_model(block_id: int) -> bool:
-	return block_id >= 0 and block_id < open_model.size() and open_model[block_id] == 1
+	return is_defined(block_id) and open_model[block_id] == 1
 
 
 static func is_liquid(block_id: int) -> bool:
-	return block_id >= 0 and block_id < liquid.size() and liquid[block_id] == 1
+	return is_defined(block_id) and liquid[block_id] == 1
 
 
 static func is_deco(block_id: int) -> bool:
-	return block_id >= 0 and block_id < solid.size() and solid[block_id] == 0 and block_id != AIR and not is_liquid(block_id)
+	return is_defined(block_id) and solid[block_id] == 0 and block_id != AIR and not is_liquid(block_id)
 
 
 static func is_breakable(block_id: int) -> bool:
-	return block_id != AIR and not is_liquid(block_id) and block_id >= 0 and block_id < hardness.size() and hardness[block_id] >= 0.0
+	return is_defined(block_id) and block_id != AIR and not is_liquid(block_id) and hardness[block_id] >= 0.0
 
 
 ## Faces hidden when the neighbour has the same id *and* the block culls equal
@@ -198,19 +254,26 @@ static func hides_neighbour_face(block_id: int, neighbour_id: int) -> bool:
 
 
 static func name_of(block_id: int) -> String:
-	if block_id >= 0 and block_id < names.size():
+	if is_defined(block_id):
 		return names[block_id]
 	return "Unknown"
 
 
 static func drop_of(block_id: int) -> int:
-	if block_id >= 0 and block_id < drops.size():
+	if is_defined(block_id):
 		return drops[block_id]
 	return NO_DROP
 
 
 ## Block id used for the mesh layer index of the given id.
 static func layer_of(block_id: int) -> int:
-	if block_id >= 0 and block_id < render_layers.size():
+	if is_defined(block_id):
 		return render_layers[block_id]
 	return LAYER_OPAQUE
+
+
+static func _defined_total() -> int:
+	var total := 0
+	for value in defined:
+		total += value
+	return total

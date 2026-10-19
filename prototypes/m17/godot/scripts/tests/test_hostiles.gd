@@ -51,8 +51,15 @@ func run(h: TestHarness) -> void:
 	h.check(model.damage(first[0], 1).alive, "nonlethal damage keeps the hostile alive")
 	var killed: Dictionary = model.damage(first[0], 99)
 	h.check(not killed.alive, "lethal damage kills the hostile")
-	h.eq(killed.drops, HostileModel.DROP_COUNT, "death yields the hostile drop")
+	h.eq(killed.drops, CreatureDB.loot_total(killed.loot), "the hostile drop count matches its loot list")
+	var items: Array = []
+	for row: Dictionary in killed.loot:
+		items.append(int(row["item"]))
+	h.check(items.has(ItemDB.BONE), "a grunt drops bones")
+	h.check(not items.has(BlockDB.OAK_LOG), "a grunt never drops an Oak Log")
 	h.eq(model.damage(killed.creature, 1).drops, 0, "a dead hostile cannot drop twice")
+	h.eq(int(first[0]["health"]), CreatureDB.health("grunt"),
+		"the grunt health comes from the species definition")
 
 	# Chase: advances toward the player, stops inside attack range, and refuses a
 	# step whose destination has no live ground.

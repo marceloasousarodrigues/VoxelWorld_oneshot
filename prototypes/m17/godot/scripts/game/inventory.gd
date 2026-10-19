@@ -70,6 +70,10 @@ func give_starter_kit() -> void:
 		slots[index] = int(kit[index][0])
 		counts[index] = int(kit[index][1])
 		durability[index] = _initial_durability(int(kit[index][0]))
+	# A small farming starter: eight wheat seeds in the first storage slot, so a
+	# new player can plant a plot without first finding tall grass.  The hotbar
+	# stays exactly the building kit.
+	add(ItemDB.WHEAT_SEEDS, 8)
 	changed.emit()
 
 

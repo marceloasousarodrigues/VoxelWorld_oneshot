@@ -46,7 +46,19 @@ const DIAMOND_AXE := 58
 const DIAMOND_SHOVEL := 59
 const DIAMOND_SWORD := 60
 
-const COUNT := 61
+# --- M21 animal, cooking and farming items --------------------------------
+# Block ids 61..66 are the M21 world blocks (farmland, four wheat stages, chest),
+# so the new non-block items continue after them.  The item namespace stays a
+# superset of every existing id; only `is_valid`/`is_block` need to distinguish a
+# definition from a block id.
+const RAW_MEAT := 67
+const COOKED_MEAT := 68
+const HIDE := 69
+const BONE := 70
+const WHEAT_SEEDS := 71
+const BONE_MEAL := 72
+
+const COUNT := 73
 
 ## `BlockDB.AIR` as an item id: "no item".
 const AIR := BlockDB.AIR
@@ -99,6 +111,14 @@ static func _static_init() -> void:
 		APPLE: _def("Apple", "item_apple", 0.0, 4.0),
 		BREAD: _def("Bread", "item_bread", 0.0, 6.0),
 		GOLDEN_APPLE: _def("Golden Apple", "item_apple", 0.0, 10.0, 4.0, Color(1.0, 0.85, 0.25)),
+		# M21 hunting, cooking and farming materials.  Raw meat is edible but a
+		# poor meal; cooking it is the useful, deliberate step.
+		RAW_MEAT: _def("Raw Meat", "item_raw_meat", 0.0, 2.0),
+		COOKED_MEAT: _def("Cooked Meat", "item_cooked_meat", 0.0, 8.0, 1.0),
+		HIDE: _def("Hide", "item_hide"),
+		BONE: _def("Bone", "item_bone"),
+		WHEAT_SEEDS: _def("Wheat Seeds", "item_wheat_seeds"),
+		BONE_MEAL: _def("Bone Meal", "item_bone_meal"),
 	}
 	var tool_specs: Array = [
 		[WOOD_PICKAXE, Tier.WOOD, Tool.PICKAXE], [WOOD_AXE, Tier.WOOD, Tool.AXE],
@@ -174,12 +194,16 @@ static func _def(name: String, icon: String, durability: float = 0.0, food: floa
 # --- identity -------------------------------------------------------------
 
 static func is_valid(item_id: int) -> bool:
-	return (item_id >= 0 and item_id < BLOCK_COUNT) or _definitions.has(item_id)
+	# Definitions win over the block range: the M21 block ids (farmland, crops,
+	# chest) live above the existing material ids, so a plain `id < BLOCK_COUNT`
+	# test would misclassify every material and tool between 35 and 60 as a block.
+	return _definitions.has(item_id) or BlockDB.is_defined(item_id)
 
 
 ## True when the id can be placed into the voxel world as a block.
 static func is_block(item_id: int) -> bool:
-	return item_id > BlockDB.AIR and item_id < BLOCK_COUNT and item_id != BlockDB.WATER
+	return not _definitions.has(item_id) and BlockDB.is_defined(item_id) \
+		and item_id > BlockDB.AIR and item_id != BlockDB.WATER
 
 
 ## The block a placeable item produces, or `BlockDB.NO_DROP` when it is not
@@ -189,18 +213,20 @@ static func placeable_block(item_id: int) -> int:
 
 
 static func name_of(item_id: int) -> String:
-	if item_id >= 0 and item_id < BLOCK_COUNT:
+	if _definitions.has(item_id):
+		return str(_definitions[item_id].get("name", "Unknown"))
+	if BlockDB.is_defined(item_id):
 		return BlockDB.name_of(item_id)
-	return str(_definition(item_id).get("name", "Unknown"))
+	return "Unknown"
 
 
 ## Texture-atlas key for the HUD icon of an item.
 static func icon_key(item_id: int) -> String:
-	if item_id >= 0 and item_id < BLOCK_COUNT:
-		if item_id == BlockDB.AIR:
-			return ""
-		return (BlockDB.face_keys[item_id] as PackedStringArray)[BlockDB.FACE_PY]
-	return str(_definition(item_id).get("icon", ""))
+	if _definitions.has(item_id):
+		return str(_definitions[item_id].get("icon", ""))
+	if item_id == BlockDB.AIR or not BlockDB.is_defined(item_id):
+		return ""
+	return (BlockDB.face_keys[item_id] as PackedStringArray)[BlockDB.FACE_PY]
 
 
 ## Optional icon tint (the golden apple reuses the apple texture).
@@ -209,9 +235,9 @@ static func icon_tint(item_id: int) -> Color:
 
 
 static func max_stack(item_id: int) -> int:
-	if item_id >= 0 and item_id < BLOCK_COUNT:
-		return MAX_STACK
-	return int(_definition(item_id).get("stack", MAX_STACK))
+	if _definitions.has(item_id):
+		return int(_definitions[item_id].get("stack", MAX_STACK))
+	return MAX_STACK if BlockDB.is_defined(item_id) else 1
 
 
 static func max_durability(item_id: int) -> int:
@@ -328,15 +354,16 @@ static func drop_for_block(block_id: int) -> int:
 
 
 ## Deterministic chance drops for blocks whose block-level drop is "nothing":
-## leaves sometimes carry an apple, tall grass sometimes carries wheat.  The roll
-## is a pure function of the world position, so a replay mines the same world.
+## leaves sometimes carry an apple, and grass carries the seeds that start a
+## wheat farm.  The roll is a pure function of the world position, so a replay
+## mines the same world.
 static func bonus_drop(block_id: int, x: int, y: int, z: int) -> int:
 	var roll := _hash3(x, y, z, 9173) % 100
 	match block_id:
 		BlockDB.OAK_LEAVES, BlockDB.PINE_LEAVES:
 			return APPLE if roll < 5 else BlockDB.NO_DROP
 		BlockDB.TALL_GRASS, BlockDB.FERN, BlockDB.JUNGLE_GRASS, BlockDB.GRASS_TUFT:
-			return WHEAT if roll < 12 else BlockDB.NO_DROP
+			return WHEAT_SEEDS if roll < 18 else BlockDB.NO_DROP
 	return BlockDB.NO_DROP
 
 

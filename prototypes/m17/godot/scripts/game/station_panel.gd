@@ -283,6 +283,8 @@ func _rebuild_station_area() -> void:
 		return
 	if station.is_furnace():
 		_build_furnace_area()
+	elif station.is_storage():
+		_build_storage_area()
 	else:
 		_build_table_area()
 
@@ -335,6 +337,21 @@ func _build_table_area() -> void:
 	take_button.custom_minimum_size = Vector2(124, 32)
 	take_button.pressed.connect(take_output)
 	actions.add_child(take_button)
+
+
+## A storage chest is a plain 9-column grid of general slots.  There is no
+## crafting or processing rule: the value is persistent, portable storage.
+func _build_storage_area() -> void:
+	_title.text = "STORAGE CHEST"
+	_station_info.text = "%d slots" % Station.CHEST_SLOTS
+	var grid := GridContainer.new()
+	grid.name = "StorageGrid"
+	grid.columns = 9
+	grid.add_theme_constant_override("h_separation", 5)
+	grid.add_theme_constant_override("v_separation", 5)
+	_station_area.add_child(grid)
+	for index in Station.CHEST_SLOTS:
+		grid.add_child(_make_station_slot(index, ""))
 
 
 func _build_furnace_area() -> void:
@@ -432,6 +449,8 @@ func _refresh() -> void:
 	_refresh_station_slots()
 	if station.is_furnace():
 		_refresh_furnace()
+	elif station.is_storage():
+		_refresh_storage()
 	else:
 		_refresh_table()
 	_hint.text = "Left click: take/place · Right click: split/one · " \
@@ -440,7 +459,7 @@ func _refresh() -> void:
 
 func _refresh_station_slots() -> void:
 	var preview: Dictionary = {}
-	if not station.is_furnace() and station.inventory.is_empty(Station.TABLE_OUTPUT_SLOT):
+	if station.is_table() and station.inventory.is_empty(Station.TABLE_OUTPUT_SLOT):
 		var result := station.result_preview()
 		if not result.is_empty():
 			preview = {"item": int(result["output"]), "count": int(result["count"])}
@@ -468,7 +487,9 @@ func _slot_rejects_carry(index: int) -> bool:
 
 
 func _is_grid_slot(index: int) -> bool:
-	return not station.is_furnace() and index >= 0 and index < Station.TABLE_GRID_SLOTS
+	# Only the crafting table has per-cell grid semantics.  A storage slot (and a
+	# furnace slot) takes a whole stack, like a normal inventory cell.
+	return station.is_table() and index >= 0 and index < Station.TABLE_GRID_SLOTS
 
 
 func _refresh_table() -> void:
@@ -489,6 +510,16 @@ func _refresh_table() -> void:
 			_status.text += "\n\nTake the finished result before crafting again."
 	_station_info.text = "3×3 grid  ·  %d item%s in the grid" % [
 		grid_items, "" if grid_items == 1 else "s"]
+
+
+func _refresh_storage() -> void:
+	var used := 0
+	for index in station.inventory.size():
+		if not station.inventory.is_empty(index):
+			used += 1
+	_status.text = "Persistent storage.\n\nContents stay in the chest when you close it, save, or leave the area."
+	_station_info.text = "%d / %d slots  ·  %d items" % [
+		used, Station.CHEST_SLOTS, station.inventory.total_items()]
 
 
 func _refresh_furnace() -> void:
@@ -595,7 +626,9 @@ func _is_output(index: int) -> bool:
 		return false
 	if station.is_furnace():
 		return index == Station.FURNACE_OUTPUT_SLOT
-	return index == Station.TABLE_OUTPUT_SLOT
+	if station.is_table():
+		return index == Station.TABLE_OUTPUT_SLOT
+	return false
 
 
 func _model(side: String) -> Variant:
@@ -730,10 +763,10 @@ func quick_move(side: String, index: int) -> bool:
 	if side == "player":
 		if station == null:
 			leftover_count = count
-		elif station.is_furnace():
-			leftover_count = station.inventory.deposit(stack)
-		else:
+		elif station.is_table():
 			leftover_count = _deposit_to_grid(stack)
+		else:
+			leftover_count = station.inventory.deposit(stack)
 	else:
 		var leftover := inventory.add_stack(stack) if inventory != null else stack
 		# `add_stack` returns an empty dictionary when everything fit.  Do not use
@@ -781,7 +814,9 @@ func take_output() -> bool:
 		message.emit("Place the cursor stack first")
 		_refresh()
 		return false
-	if not station.is_furnace() and station.inventory.is_empty(Station.TABLE_OUTPUT_SLOT):
+	if station.is_storage():
+		return false
+	if station.is_table() and station.inventory.is_empty(Station.TABLE_OUTPUT_SLOT):
 		var crafted: Dictionary = station.craft_grid()
 		if not bool(crafted["ok"]):
 			message.emit(str(crafted.get("reason", "Cannot craft")))
@@ -799,7 +834,7 @@ func take_output() -> bool:
 
 
 func _on_return_grid() -> void:
-	if station == null or station.is_furnace():
+	if station == null or not station.is_table():
 		return
 	var returned := station.return_crafting_items(inventory)
 	if returned > 0:

@@ -16,6 +16,8 @@ const HURT_COLOR := Color(0.45, 0.58, 0.36)
 var state: Dictionary
 var world: VoxelWorld
 var target: Node3D
+## Loot produced by the lethal hit, awarded once by the game layer.
+var pending_loot: Array = []
 
 var _cooldown := 0.0
 var _bob_phase := 0.0
@@ -104,5 +106,13 @@ func apply_hit(damage: int = 1) -> int:
 			if is_instance_valid(_body_mesh) and is_instance_valid(self):
 				(_body_mesh.material_override as StandardMaterial3D).albedo_color = BODY_COLOR)
 	else:
+		pending_loot = (result.get("loot", []) as Array).duplicate()
 		killed.emit(self)
 	return int(result.drops)
+
+
+## Returns and clears the loot of the lethal hit (awarded once).
+func take_loot() -> Array:
+	var loot := pending_loot.duplicate(true)
+	pending_loot.clear()
+	return loot

@@ -70,6 +70,8 @@ static func _build_catalogue() -> Array:
 		_shapeless("sandstone", "Building", STATION_TABLE, {BlockDB.SAND: 4}, BlockDB.SANDSTONE, 1),
 		_shapeless("glass", "Building", STATION_HAND, {BlockDB.SAND: 2}, BlockDB.GLASS, 1),
 		_shapeless("brick", "Building", STATION_TABLE, {BlockDB.CLAY: 4}, BlockDB.BRICK, 1),
+		_shaped("chest", "Building", STATION_TABLE, ["PPP", "P P", "PPP"],
+			{"P": BlockDB.PLANKS}, BlockDB.CHEST, 1),
 		# --- Tools ---------------------------------------------------------
 		# Wooden: the first pickaxe, from planks and sticks.
 		_shaped("wood_pickaxe", "Tools", STATION_TABLE, ["PPP", " S ", " S "],
@@ -112,8 +114,10 @@ static func _build_catalogue() -> Array:
 		_smelting("glass_from_sand", {BlockDB.SAND: 1}, BlockDB.GLASS, 1),
 		_smelting("stone_from_cobble", {BlockDB.COBBLESTONE: 1}, BlockDB.STONE, 1),
 		_smelting("brick_from_clay", {BlockDB.CLAY: 1}, BlockDB.BRICK, 1),
+		_smelting("cooked_meat", {ItemDB.RAW_MEAT: 1}, ItemDB.COOKED_MEAT, 1, 5.0),
 		# --- Food ----------------------------------------------------------
 		_shapeless("bread", "Food", STATION_HAND, {ItemDB.WHEAT: 3}, ItemDB.BREAD, 1),
+		_shapeless("bone_meal", "Food", STATION_HAND, {ItemDB.BONE: 1}, ItemDB.BONE_MEAL, 2),
 		_shapeless("golden_apple", "Food", STATION_TABLE,
 			{ItemDB.APPLE: 1, ItemDB.GOLD_LUMP: 8}, ItemDB.GOLDEN_APPLE, 1),
 	]

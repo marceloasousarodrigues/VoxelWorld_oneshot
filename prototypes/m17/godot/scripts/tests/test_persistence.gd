@@ -120,7 +120,7 @@ func run(h: TestHarness) -> void:
 	var data: Dictionary = result["data"]
 	h.eq(int(data["seed"]), 17017, "the saved seed round-trips")
 	h.eq(int(data["version"]), SaveManager.VERSION, "the save is written at the current version")
-	h.eq(int(SaveManager.VERSION), 7, "the current save version is 7")
+	h.eq(int(SaveManager.VERSION), 8, "the current save version is 8")
 
 	# --- apply to a fresh session ------------------------------------------
 	var restored_world := VoxelWorld.new(17017)
@@ -274,6 +274,30 @@ func run(h: TestHarness) -> void:
 			h.eq(restored_station.inventory.total_of(BlockDB.GLASS), 1, "the station output survived")
 			h.approx(restored_station.cook_progress, saved_station.cook_progress, 1e-6,
 				"the furnace cook progress survived")
+
+	# A current-version save round-trips wheat-crop growth progress.
+	var crop_rows: Array = [[8, 71, 8, 12.5]]
+	var crop_written: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath,
+		hunger, npc_payload, station_rows, crop_rows)
+	_write_raw(saves, JSON.stringify(crop_written))
+	var crop_result: Dictionary = saves.read()
+	h.check(bool(crop_result["ok"]), "a save with crop progress is accepted")
+	if bool(crop_result["ok"]):
+		var crop_applied: Dictionary = saves.apply(crop_result, restored_world, restored_player,
+			restored_inventory, null, null)
+		h.check(bool(crop_applied["ok"]), "a save with crop progress applies")
+		var farming := Farming.new(17017)
+		var crop_summary: Dictionary = farming.from_dictionary(crop_applied["crops"])
+		h.eq(int(crop_summary["accepted"]), 1, "the crop growth timer survived the round-trip")
+		h.approx(farming.progress.get(Vector3i(8, 71, 8), -1.0), 12.5, 1e-6,
+			"the restored crop resumes at its saved growth time")
+
+	# A crop row outside a stage's growth window is rejected.
+	var bad_crops: Dictionary = crop_written.duplicate(true)
+	bad_crops["crops"] = [[8, 71, 8, 9999.0]]
+	_write_raw(saves, JSON.stringify(bad_crops))
+	h.check(not bool(saves.read()["ok"]), "an invalid crop growth timer is rejected")
+	h.check(not FileAccess.file_exists(saves.save_path()), "the malformed-crop save is quarantined")
 
 	# A malformed stations payload is rejected and quarantined.
 	var bad_stations: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath, hunger,

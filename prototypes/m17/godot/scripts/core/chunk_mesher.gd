@@ -378,7 +378,8 @@ func _emit_faces(input: Dictionary) -> void:
 		if is_water:
 			layer = BlockDB.LAYER_WATER
 		var surface: Dictionary = _buffers[layer]
-		var is_station := block_id == BlockDB.CRAFTING_TABLE or block_id == BlockDB.FURNACE
+		var is_station := block_id == BlockDB.CRAFTING_TABLE or block_id == BlockDB.FURNACE \
+			or block_id == BlockDB.CHEST
 		if is_station:
 			_emit_station(surface, centre, block_id)
 		var padded_centre := padded_index(local_x, local_y, local_z)
@@ -560,7 +561,10 @@ func _emit_deco(block_id: int, centre: Vector3, tint: Color) -> void:
 	var tone := Color(tint.r, tint.g, tint.b, 1.0)
 	var half := 0.5 - 0.06
 	var bottom := centre + Vector3(0.0, -0.5, 0.0)
-	var top := centre + Vector3(0.0, 0.5, 0.0)
+	# Crops are crossed quads too, but their height grows with the stage.  The
+	# bottom stays on the farmland surface; only the top edge moves up.
+	var height := BlockDB.deco_height[block_id] if block_id < BlockDB.deco_height.size() else 1.0
+	var top := bottom + Vector3(0.0, height, 0.0)
 	var plane_a := [
 		bottom + Vector3(-half, 0.0, -half), top + Vector3(-half, 0.0, -half),
 		top + Vector3(half, 0.0, half), bottom + Vector3(half, 0.0, half),
@@ -595,6 +599,8 @@ func _emit_station(surface: Dictionary, centre: Vector3, block_id: int) -> void:
 		_emit_crafting_table(surface, lifted)
 	elif block_id == BlockDB.FURNACE:
 		_emit_furnace(surface, lifted)
+	elif block_id == BlockDB.CHEST:
+		_emit_chest(surface, lifted)
 
 
 func _emit_crafting_table(surface: Dictionary, centre: Vector3) -> void:
@@ -662,6 +668,31 @@ func _emit_furnace(surface: Dictionary, centre: Vector3) -> void:
 	# Lintel above the mouth.
 	_emit_box(surface, centre, Vector3(-0.31, 0.17, 0.44), Vector3(0.31, 0.25, 0.49),
 		stone, stone, stone)
+
+
+## A storage chest: a plank body with a lid, a dark band and a small latch.
+## Custom geometry inside the cell, full-cube collision and logical identity.
+func _emit_chest(surface: Dictionary, centre: Vector3) -> void:
+	var planks := library.layer_index("planks")
+	var band := library.layer_index("oak_log_side")
+	var band_top := library.layer_index("oak_log_top")
+	# Body and lid, slightly inset from the cell so the edges read clearly.
+	_emit_box(surface, centre, Vector3(-0.44, -0.5, -0.38), Vector3(0.44, 0.16, 0.38),
+		planks, planks, planks)
+	_emit_box(surface, centre, Vector3(-0.46, 0.16, -0.40), Vector3(0.46, 0.40, 0.40),
+		planks, planks, planks)
+	# Dark band between body and lid, and a latch on the front face.
+	_emit_box(surface, centre, Vector3(-0.46, 0.14, -0.41), Vector3(0.46, 0.18, 0.41),
+		band_top, band, band_top)
+	_emit_box(surface, centre, Vector3(-0.07, 0.10, 0.38), Vector3(0.07, 0.24, 0.43),
+		band_top, band, band_top)
+	# Small feet so the chest does not sit perfectly flush on the ground.
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			var x0: float = 0.36 if sx > 0 else -0.44
+			var z0: float = 0.30 if sz > 0 else -0.38
+			_emit_box(surface, centre, Vector3(x0, -0.5, z0), Vector3(x0 + 0.08, -0.44, z0 + 0.08),
+				band_top, band, band_top)
 
 
 ## Adds an axis-aligned box to a surface.  Textures are mapped 0..1 per face;

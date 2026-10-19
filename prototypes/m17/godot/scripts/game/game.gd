@@ -34,6 +34,7 @@ var crafting: CraftingPanel
 var inventory_panel: InventoryPanel
 var station_panel: StationPanel
 var stations: StationRegistry
+var farming: Farming
 var _open_station_position := Vector3i.ZERO
 
 # --- settlements and residents -------------------------------------------
@@ -125,6 +126,7 @@ var _options := {
 	"open_settings": false,
 	"station_capture": "",
 	"creature_feedback_capture": false,
+	"farming_capture": false,
 	"spawn_hostiles": false,
 	"hostile_feedback_capture": false,
 	"sun_angle": Vector2(-48.0, -132.0),
@@ -337,6 +339,8 @@ func _build_nodes() -> void:
 	player.harvest_failed.connect(_on_harvest_failed)
 	player.tool_broken.connect(_on_tool_broken)
 	player.eat_requested.connect(_on_eat_requested)
+	player.plant_requested.connect(_on_plant_requested)
+	player.fertilize_requested.connect(_on_fertilize_requested)
 
 
 func _build_ui() -> void:
@@ -508,6 +512,8 @@ func _parse_arguments() -> void:
 				_options["hunger"] = clampf(value.to_float(), 0.0, Survival.MAX_HUNGER)
 			"--creature-feedback-capture":
 				_options["creature_feedback_capture"] = true
+			"--farming-capture":
+				_options["farming_capture"] = true
 			"--spawn-hostiles":
 				_options["spawn_hostiles"] = true
 			"--hostile-feedback-capture":
@@ -614,6 +620,7 @@ func _start_world(seed_value: int, save: Variant) -> void:
 
 	world = VoxelWorld.new(seed_value)
 	stations = StationRegistryModel.new(world)
+	farming = Farming.new(seed_value)
 	if station_panel != null and station_panel.is_open():
 		station_panel.close()
 	creature_model = CreatureModel.new(seed_value)
@@ -674,6 +681,7 @@ func _start_world(seed_value: int, save: Variant) -> void:
 				hunger = float(applied["hunger"])
 			_apply_npcs(applied.get("npcs", {}))
 			_apply_stations(applied.get("stations", []))
+			_apply_crops(applied.get("crops", []))
 			streamer.focus_at(player.global_position)
 			hud.flash("Loaded %d block edits and %d fluid changes" % [int(applied["block_edits"]), int(applied["fluid_edits"])], 5.0)
 	hud.set_hunger(hunger, Survival.MAX_HUNGER)
@@ -894,6 +902,8 @@ func _enter_play(area_ready: bool) -> void:
 		_spawn_creature_feedback_capture()
 	if bool(_options["hostile_feedback_capture"]):
 		_spawn_hostile_feedback_capture()
+	if bool(_options["farming_capture"]):
+		_spawn_farming_capture()
 	if not str(_options.get("station_capture", "")).is_empty():
 		_spawn_station_capture(str(_options["station_capture"]))
 
@@ -1098,6 +1108,8 @@ func _process(delta: float) -> void:
 			var station_changes := stations.tick(delta, player.global_position) if stations != null else 0
 			if station_changes > 0 and station_panel != null and station_panel.is_open():
 				station_panel.refresh()
+			if farming != null:
+				farming.step(delta, world, player.global_position)
 			_station_sweep_timer -= delta
 			if _station_sweep_timer <= 0.0 and stations != null:
 				_station_sweep_timer = 5.0
@@ -1190,6 +1202,33 @@ func _on_eat_requested(item_id: int) -> void:
 	hud.set_hunger(hunger, Survival.MAX_HUNGER)
 	hud.flash("Ate %s%s" % [ItemDB.name_of(item_id),
 		"" if healed <= 0.0 else "  +%d health" % int(round(healed))], 1.8)
+	hud.refresh()
+
+
+## Right-click with wheat seeds: till the targeted soil and plant a crop.  The
+## seed is consumed only after the world actually changed.
+func _on_plant_requested(item_id: int, soil_cell: Vector3i) -> void:
+	if farming == null or inventory == null:
+		return
+	var result: Dictionary = farming.plant(world, soil_cell)
+	if not bool(result["ok"]):
+		hud.flash(str(result.get("reason", "Cannot plant there")), 1.6)
+		return
+	inventory.remove(item_id, 1)
+	hud.flash("Planted wheat on %s" % BlockDB.name_of(world.get_block(soil_cell)), 1.6)
+	hud.refresh()
+
+
+## Right-click with bone meal on a growing crop: advance one stage.  The item is
+## consumed only when the crop actually advanced.
+func _on_fertilize_requested(item_id: int, crop_cell: Vector3i) -> void:
+	if farming == null or inventory == null:
+		return
+	if not farming.fertilize(world, crop_cell):
+		hud.flash("That crop is already ripe", 1.6)
+		return
+	inventory.remove(item_id, 1)
+	hud.flash("Bone meal advanced the crop", 1.4)
 	hud.refresh()
 
 
@@ -1597,13 +1636,53 @@ func _apply_stations(payload: Variant) -> void:
 		print("M17_STATIONS_LOADED accepted=%d rejected=%d" % [accepted, rejected])
 
 
+func _apply_crops(payload: Variant) -> void:
+	if farming == null:
+		return
+	var summary: Dictionary = farming.from_dictionary(payload)
+	if int(summary.get("rejected", 0)) > 0:
+		print("M17_CROPS_LOADED accepted=%d rejected=%d" % [
+			int(summary.get("accepted", 0)), int(summary.get("rejected", 0))])
+
+
+## Diagnostic for captures: lay out the four wheat stages and a storage chest in
+## front of the player, so the crop geometry and chest model can be inspected in
+## a real rendered frame.  Capture-only; normal play plants and builds these.
+func _spawn_farming_capture() -> void:
+	if world == null or player == null:
+		return
+	var forward: Vector3 = player.look_basis() * Vector3(0.0, 0.0, -1.0)
+	var right: Vector3 = player.look_basis() * Vector3(1.0, 0.0, 0.0)
+	var base := player.global_position + forward * 3.0
+	var ground := floori(player.global_position.y) - 1
+	var stages := [BlockDB.WHEAT_0, BlockDB.WHEAT_1, BlockDB.WHEAT_2, BlockDB.WHEAT_3]
+	for index in stages.size():
+		var cell := Vector3i(floori(base.x + right.x * (index - 1.5)), ground, floori(base.z + right.z * (index - 1.5)))
+		world.ensure_chunk(VoxelWorld.world_to_chunk(cell))
+		for dy in range(1, 4):
+			world.set_block(cell + Vector3i(0, dy, 0), BlockDB.AIR)
+		world.set_block(cell, BlockDB.FARMLAND)
+		world.set_block(cell + Vector3i.UP, int(stages[index]))
+	var chest_base := base + right * 2.4
+	var chest := Vector3i(floori(chest_base.x), ground, floori(chest_base.z))
+	world.ensure_chunk(VoxelWorld.world_to_chunk(chest))
+	for dy in range(1, 4):
+		world.set_block(chest + Vector3i(0, dy, 0), BlockDB.AIR)
+	world.set_block(chest, BlockDB.CHEST)
+	player.look_pitch(-18.0)
+
+
 ## Diagnostic for captures: place a station block a few metres in front of the
 ## player and open its interface, so the rendered UI can be inspected without a
 ## scripted walk.  This is capture-only; normal play builds and uses stations.
 func _spawn_station_capture(kind_name: String) -> void:
 	if world == null or player == null:
 		return
-	var block_id := BlockDB.FURNACE if kind_name.begins_with("f") else BlockDB.CRAFTING_TABLE
+	var block_id := BlockDB.CRAFTING_TABLE
+	if kind_name.begins_with("f"):
+		block_id = BlockDB.FURNACE
+	elif kind_name.begins_with("c"):
+		block_id = BlockDB.CHEST
 	var forward: Vector3 = player.look_basis() * Vector3(0.0, 0.0, -1.0)
 	var base := player.global_position + forward * 3.0
 	var cell := Vector3i(floori(base.x), floori(player.global_position.y), floori(base.z))
@@ -1628,6 +1707,11 @@ func _spawn_station_capture(kind_name: String) -> void:
 			station.inventory.insert(Station.FURNACE_FUEL_SLOT, {"item": ItemDB.COAL, "count": 2})
 			station.inventory.insert(Station.FURNACE_OUTPUT_SLOT, {"item": BlockDB.GLASS, "count": 2}, true)
 			station.step(2.5)
+		elif station.is_storage():
+			for slot in [0, 1, 2, 9, 10, 18]:
+				station.inventory.insert(slot, {"item": BlockDB.COBBLESTONE, "count": 32})
+			station.inventory.insert(3, {"item": ItemDB.IRON_INGOT, "count": 8})
+			station.inventory.insert(4, {"item": ItemDB.RAW_MEAT, "count": 3})
 		else:
 			for grid_slot in [0, 1, 3, 4]:
 				station.inventory.insert(grid_slot, {"item": BlockDB.PLANKS, "count": 1})
@@ -1789,6 +1873,23 @@ func _handle_hotbar_input(event: InputEvent) -> void:
 
 func _on_block_broken(world_position: Vector3i, block_id: int, drop: int) -> void:
 	var collected := ""
+	if Farming.is_crop(block_id):
+		# A crop's loot depends on its growth stage; the block drop is none.
+		var crop_loot: Dictionary = farming.harvest_loot(block_id, world_position) if farming != null else {}
+		var parts: Array = []
+		for item_id in crop_loot:
+			var leftover: int = inventory.add(int(item_id), int(crop_loot[item_id]))
+			var gained := int(crop_loot[item_id]) - leftover
+			parts.append("+%d %s" % [gained, ItemDB.name_of(int(item_id))])
+			if leftover > 0:
+				parts.append("(%d %s lost)" % [leftover, ItemDB.name_of(int(item_id))])
+		if farming != null:
+			farming.forget(world_position)
+		collected = "  " + " ".join(parts)
+		hud.flash("Harvested %s at (%d, %d, %d)%s" % [BlockDB.name_of(block_id),
+			world_position.x, world_position.y, world_position.z, collected], 2.4)
+		hud.refresh()
+		return
 	if drop != BlockDB.NO_DROP:
 		var leftover := inventory.add(drop, 1)
 		collected = "  +1 %s" % ItemDB.name_of(drop) if leftover == 0 else "  (inventory full)"
@@ -1854,13 +1955,15 @@ func _on_creature_attacked(creature, damage: int = 1) -> void:
 	if creature.is_in_group("hostile_creature"):
 		var hostile_drops: int = creature.apply_hit(damage)
 		if hostile_drops <= 0:
-			hud.flash("Grunt hurt (%d/%d)" % [int(creature.state.health), HostileModel.HIT_POINTS], 1.0)
+			hud.flash("%s hurt (%d/%d)" % [CreatureDB.name_of(str(creature.state.get("species", HostileModel.SPECIES))),
+				int(creature.state.health), CreatureDB.health(str(creature.state.get("species", HostileModel.SPECIES)))], 1.0)
 		return
 	if not creature.is_in_group("passive_creature"):
 		return
 	var drops: int = creature.apply_hit(damage)
 	if drops <= 0:
-		hud.flash("Boar hurt (%d/%d)" % [int(creature.state.health), CreatureModel.HIT_POINTS], 1.0)
+		hud.flash("%s hurt (%d/%d)" % [CreatureDB.name_of(str(creature.state.get("species", CreatureModel.SPECIES))),
+			int(creature.state.health), CreatureDB.health(str(creature.state.get("species", CreatureModel.SPECIES)))], 1.0)
 
 
 ## The block broke, but its drop needed a tool class the player was not holding.
@@ -1874,14 +1977,39 @@ func _on_tool_broken(item_id: int) -> void:
 	hud.refresh()
 
 
-func _on_creature_killed(creature, drop_count: int = 1) -> void:
-	var leftover: int = inventory.add(CreatureModel.DROP_ID, drop_count)
+## Awards a data-driven loot list through the authoritative inventory, reporting
+## any part that did not fit.  Used by every creature kill so the drop rules have
+## exactly one implementation.
+func _grant_loot(loot: Array, species: String) -> void:
+	var parts: Array = []
+	for row: Dictionary in loot:
+		var item_id := int(row.get("item", BlockDB.AIR))
+		var count := int(row.get("count", 0))
+		if count <= 0 or not ItemDB.is_valid(item_id):
+			continue
+		var leftover: int = inventory.add(item_id, count)
+		var gained := count - leftover
+		if gained > 0:
+			parts.append("+%d %s" % [gained, ItemDB.name_of(item_id)])
+		if leftover > 0:
+			parts.append("(%d %s lost — inventory full)" % [leftover, ItemDB.name_of(item_id)])
+	var summary := " ".join(parts)
+	if summary.is_empty():
+		summary = "nothing"
+	hud.flash("%s down  %s" % [CreatureDB.name_of(species), summary], 2.0)
+	hud.refresh()
+
+
+func _on_creature_killed(creature, _drop_count: int = 0) -> void:
+	if not is_instance_valid(creature):
+		return
 	var key := str(creature.state.get("key", ""))
+	var species := str(creature.state.get("species", CreatureModel.SPECIES))
+	var loot: Array = creature.take_loot()
 	creature_model.states.erase(key)
 	creature_nodes.erase(key)
 	creature.queue_free()
-	hud.flash("Boar down  +%d Oak Log%s" % [drop_count - leftover, "" if leftover == 0 else " (inventory full)"], 2.0)
-	hud.refresh()
+	_grant_loot(loot, species)
 
 
 ## Hostiles are a night/darkness threat: they spawn while the clock says night
@@ -1943,17 +2071,16 @@ func _on_hostile_attacked_player(amount: float) -> void:
 	_apply_impact_damage(amount, "grunt")
 
 
-func _on_hostile_killed(creature, drop_count: int = 1) -> void:
-	var leftover: int = inventory.add(HostileModel.DROP_ID, drop_count)
+func _on_hostile_killed(creature, _drop_count: int = 0) -> void:
+	if not is_instance_valid(creature):
+		return
 	var key := str(creature.state.get("key", ""))
+	var species := str(creature.state.get("species", HostileModel.SPECIES))
+	var loot: Array = creature.take_loot()
 	hostile_model.states.erase(key)
 	hostile_nodes.erase(key)
 	creature.queue_free()
-	hud.flash("Grunt down  +%d %s%s" % [
-		drop_count - leftover, ItemDB.name_of(HostileModel.DROP_ID),
-		"" if leftover == 0 else " (inventory full)",
-	], 2.0)
-	hud.refresh()
+	_grant_loot(loot, species)
 
 
 func _on_target_changed(hit: Dictionary) -> void:
@@ -1977,7 +2104,7 @@ func _save_now() -> void:
 		hud.flash("Make space first — a stack held by the cursor cannot be saved yet", 5.0)
 		return
 	var written := saves.write(world, player, inventory, clock, health, breath, hunger,
-		_npcs_to_dictionary(), _stations_payload())
+		_npcs_to_dictionary(), _stations_payload(), _crops_payload())
 	if written:
 		hud.flash("Saved %d block edits to %s" % [world.edits.size(), ProjectSettings.globalize_path(saves.save_path())], 4.0)
 		print("M17_GAME_SAVED path=%s block_edits=%d fluid_edits=%d stations=%d" % [
@@ -1997,7 +2124,7 @@ func _save_silently(reason: String) -> void:
 	if not _flush_cursor_stacks():
 		return
 	if saves.write(world, player, inventory, clock, health, breath, hunger,
-			_npcs_to_dictionary(), _stations_payload()):
+			_npcs_to_dictionary(), _stations_payload(), _crops_payload()):
 		print("M17_GAME_AUTOSAVE reason=%s block_edits=%d" % [reason, world.edits.size()])
 	else:
 		push_error("M17_GAME_AUTOSAVE_FAILED %s" % saves.last_error)
@@ -2020,6 +2147,10 @@ func _flush_cursor_stacks() -> bool:
 
 func _stations_payload() -> Array:
 	return stations.to_dictionary() if stations != null else []
+
+
+func _crops_payload() -> Array:
+	return farming.to_dictionary() if farming != null else []
 
 
 ## Machine-readable station state for the smoke/capture summary.
@@ -2069,6 +2200,7 @@ func _reload_now() -> void:
 		exhaustion = 0.0
 	_apply_npcs(applied.get("npcs", {}))
 	_apply_stations(applied.get("stations", []))
+	_apply_crops(applied.get("crops", []))
 	streamer.focus_at(player.global_position)
 	hud.refresh()
 	hud.flash("Reloaded save (%d block edits)" % int(applied["block_edits"]), 4.0)

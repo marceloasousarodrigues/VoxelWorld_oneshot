@@ -36,8 +36,20 @@ func run(h: TestHarness) -> void:
 	h.check(model.damage(first[0], 1).alive, "nonlethal damage keeps creature alive")
 	var killed: Dictionary = model.damage(first[0], 99)
 	h.check(not killed.alive, "lethal damage kills creature")
-	h.check(killed.drops == 1, "death yields exactly one drop")
-	h.check(model.damage(killed.creature, 1).drops == 0, "dead creature cannot drop twice")
+	h.check(killed.drops == CreatureDB.loot_total(killed.loot), "the drop count matches the loot list")
+	h.check(killed.loot.size() > 0, "a boar death yields a species-specific drop list")
+	# The reported M20 defect: a boar must never drop an Oak Log.
+	var items: Array = []
+	for row: Dictionary in killed.loot:
+		items.append(int(row["item"]))
+	h.check(items.has(ItemDB.RAW_MEAT), "a boar drops raw meat")
+	h.check(items.has(ItemDB.HIDE), "a boar drops a hide")
+	h.check(not items.has(BlockDB.OAK_LOG), "a boar never drops an Oak Log")
+	h.eq(model.damage(killed.creature, 1).drops, 0, "dead creature cannot drop twice")
+	h.eq(model.damage(killed.creature, 1).loot.size(), 0, "a dead creature carries no second loot list")
+	# Determinism: the same kill cell produces the exact same loot.
+	var repeat: Dictionary = CreatureModel.new(17017).damage(first[0], 99)
+	h.eq(repeat.loot, killed.loot, "boar loot is deterministic for a kill cell")
 	var wander: Vector3 = model.wander_step(Vector3.ZERO, Vector3(50, 0, 0), 1.0)
 	h.check(wander.length() <= CreatureModel.WANDER_SPEED + 0.001, "wandering step is speed bounded")
 	var before_prune: int = model.states.size()

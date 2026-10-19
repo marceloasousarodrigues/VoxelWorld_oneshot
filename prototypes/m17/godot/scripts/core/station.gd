@@ -20,6 +20,8 @@ extends RefCounted
 const TABLE := "crafting_table"
 ## Furnace: input, fuel, output.
 const FURNACE := "furnace"
+## Storage chest: 27 general slots.
+const CHEST := "chest"
 
 const TABLE_GRID_SIZE := 9
 const TABLE_GRID_SLOTS: int = TABLE_GRID_SIZE
@@ -29,9 +31,13 @@ const FURNACE_INPUT_SLOT := 0
 const FURNACE_FUEL_SLOT := 1
 const FURNACE_OUTPUT_SLOT := 2
 
+## Storage chest capacity: 27 general slots, one page.
+const CHEST_SLOTS := 27
+
 const KIND_NAMES := {
 	TABLE: "Crafting Table",
 	FURNACE: "Furnace",
+	CHEST: "Storage Chest",
 }
 const KIND_LAYOUTS := {
 	TABLE: [
@@ -42,6 +48,17 @@ const KIND_LAYOUTS := {
 	],
 	FURNACE: [
 		StationInventory.ROLE_INPUT, StationInventory.ROLE_FUEL, StationInventory.ROLE_OUTPUT,
+	],
+	CHEST: [
+		StationInventory.ROLE_GRID, StationInventory.ROLE_GRID, StationInventory.ROLE_GRID,
+		StationInventory.ROLE_GRID, StationInventory.ROLE_GRID, StationInventory.ROLE_GRID,
+		StationInventory.ROLE_GRID, StationInventory.ROLE_GRID, StationInventory.ROLE_GRID,
+		StationInventory.ROLE_GRID, StationInventory.ROLE_GRID, StationInventory.ROLE_GRID,
+		StationInventory.ROLE_GRID, StationInventory.ROLE_GRID, StationInventory.ROLE_GRID,
+		StationInventory.ROLE_GRID, StationInventory.ROLE_GRID, StationInventory.ROLE_GRID,
+		StationInventory.ROLE_GRID, StationInventory.ROLE_GRID, StationInventory.ROLE_GRID,
+		StationInventory.ROLE_GRID, StationInventory.ROLE_GRID, StationInventory.ROLE_GRID,
+		StationInventory.ROLE_GRID, StationInventory.ROLE_GRID, StationInventory.ROLE_GRID,
 	],
 }
 
@@ -78,6 +95,8 @@ static func kind_for_block(block_id: int) -> String:
 			return TABLE
 		BlockDB.FURNACE:
 			return FURNACE
+		BlockDB.CHEST:
+			return CHEST
 	return ""
 
 
@@ -91,6 +110,14 @@ func label() -> String:
 
 func is_furnace() -> bool:
 	return kind == FURNACE
+
+
+func is_table() -> bool:
+	return kind == TABLE
+
+
+func is_storage() -> bool:
+	return kind == CHEST
 
 
 # =========================================================================

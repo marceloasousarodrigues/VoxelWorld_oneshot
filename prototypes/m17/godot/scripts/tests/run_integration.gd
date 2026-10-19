@@ -222,12 +222,14 @@ func _main() -> void:
 	# Exercise the creature damage/death/drop path through the real scene node and
 	# game inventory integration (three separate player attacks, one drop).
 	var creature_state := {"id": 9001, "species": "boar", "position": landed + Vector3(0.0, 0.0, -0.8),
-		"health": 3, "alive": true, "wander": Vector3.ZERO, "key": "integration-boar"}
+		"health": CreatureDB.health("boar"), "alive": true, "wander": Vector3.ZERO, "key": "integration-boar"}
 	var test_creature = CreatureScript.new()
 	test_creature.configure(creature_state, _game.world)
 	_game.creature_root.add_child(test_creature)
 	test_creature.killed.connect(_game._on_creature_killed)
-	var drops_before: int = _game.inventory.count_of(CreatureModel.DROP_ID)
+	var meat_before: int = _game.inventory.count_of(ItemDB.RAW_MEAT)
+	var hide_before: int = _game.inventory.count_of(ItemDB.HIDE)
+	var oak_before: int = _game.inventory.count_of(BlockDB.OAK_LOG)
 	player.flying = true
 	player.teleport_to(landed)
 	player.look_yaw(0.0)
@@ -235,13 +237,18 @@ func _main() -> void:
 	for i in range(2):
 		await physics_frame
 	_check(player._creature_in_front() == test_creature, "LMB targeting prioritizes the closer passive creature")
-	_check(player.break_target() and int(test_creature.state.health) == 2,
+	var health_before_hit: int = int(test_creature.state.health)
+	_check(player.break_target() and int(test_creature.state.health) < health_before_hit,
 		"first player interaction damages a living passive creature")
-	player.break_target()
-	_check(player.break_target() and not bool(test_creature.state.alive), "lethal player interaction kills the creature")
+	while is_instance_valid(test_creature) and bool(test_creature.state.get("alive", false)):
+		player.break_target()
+	_check(not bool(test_creature.state.get("alive", true)), "lethal player interaction kills the creature")
 	await process_frame
-	_check(_game.inventory.count_of(CreatureModel.DROP_ID) == drops_before + 1,
-		"one creature death adds exactly one useful item to inventory")
+	_check(_game.inventory.count_of(ItemDB.RAW_MEAT) > meat_before,
+		"a boar death adds species-appropriate raw meat, not an Oak Log")
+	_check(_game.inventory.count_of(ItemDB.HIDE) > hide_before, "a boar death adds a hide")
+	_check(_game.inventory.count_of(BlockDB.OAK_LOG) == oak_before,
+		"the boar drop did not add an unrelated Oak Log (the M20 defect)")
 
 	# Hostile creatures: contact damage, player combat and loot through the real
 	# scene node and game inventory integration.
@@ -272,13 +279,13 @@ func _main() -> void:
 	# The starter kit fills the hotbar, so free a slot before collecting loot.
 	_game.inventory.slots[0] = BlockDB.AIR
 	_game.inventory.counts[0] = 0
-	var hostile_loot_before: int = _game.inventory.count_of(HostileModel.DROP_ID)
-	for i in range(HostileModel.HIT_POINTS):
+	var bone_before: int = _game.inventory.count_of(ItemDB.BONE)
+	for i in range(CreatureDB.health("grunt")):
 		player.break_target()
 	await process_frame
 	_check(not is_instance_valid(test_hostile), "player hits kill the hostile grunt")
-	_check(_game.inventory.count_of(HostileModel.DROP_ID) == hostile_loot_before + HostileModel.DROP_COUNT,
-		"a hostile death adds its loot item")
+	_check(_game.inventory.count_of(ItemDB.BONE) > bone_before,
+		"a hostile death adds species-appropriate bone loot")
 
 	# The night clock drives the game's own spawner (not just the model).
 	_game.clock.set_time(0.75)
@@ -524,6 +531,9 @@ func _main() -> void:
 	await _crafting_and_mining_section()
 	await _hunger_section()
 
+	# --- M21 farming, cooking and persistent storage ------------------------
+	await _m21_gameplay_section()
+
 	# --- Inventory interface: slots, stack moves and item details ----------
 	await _inventory_section()
 
@@ -733,6 +743,22 @@ func _crafting_and_mining_section() -> void:
 		"each pickaxe use produced its stone drop")
 	_check(tool_broken[0], "the wooden pickaxe breaks after its last use")
 	_check(inventory.is_empty(pick_slot), "the broken tool freed its slot")
+
+	# A wooden pickaxe is not enough for iron: the block breaks but yields no ore.
+	inventory.clear_slot(1)
+	inventory.add(ItemDB.WOOD_PICKAXE, 1)
+	var wood_iron_slot: int = inventory.slots.find(ItemDB.WOOD_PICKAXE)
+	_check(wood_iron_slot >= 0 and wood_iron_slot < Inventory.HOTBAR_SIZE,
+		"the insufficient pickaxe is in the hotbar")
+	inventory.select(wood_iron_slot)
+	var iron_before_wrong: int = inventory.count_of(ItemDB.IRON_LUMP)
+	_game.world.set_block(mine_cell, BlockDB.IRON_ORE)
+	for i in range(2):
+		await process_frame
+	_check(player.break_target(), "iron ore breaks with an insufficient pickaxe")
+	_check(inventory.count_of(ItemDB.IRON_LUMP) == iron_before_wrong,
+		"a wooden pickaxe does not yield iron ore")
+	_check(int(_game.world.get_block(mine_cell)) == BlockDB.AIR, "the wrong-tier ore block is still removed")
 
 	# Regression for the reported "mining iron does not appear" defect: the
 	# starter kit used to fill all nine slots, so the lump had nowhere to go.  The
@@ -1234,6 +1260,114 @@ func _press_interact() -> void:
 	event.action = "interact"
 	event.pressed = true
 	_game._unhandled_input(event)
+
+
+## M21: plant/grow/harvest through the real player controller, cook meat in a
+## real furnace station, and persist a real chest through save/reload.
+func _m21_gameplay_section() -> void:
+	var player: Node = _game.player
+	var inventory: Inventory = _game.inventory
+	var world: VoxelWorld = _game.world
+	player.flying = true
+	if _game.inventory_panel.is_open():
+		_game._close_inventory()
+
+	# --- farming -----------------------------------------------------------
+	var soil := Vector3i(32, 75, 20)
+	world.ensure_chunk(VoxelWorld.world_to_chunk(soil))
+	for dy in range(1, 12):
+		world.set_block(soil + Vector3i(0, dy, 0), BlockDB.AIR)
+	world.set_block(soil, BlockDB.DIRT)
+	await _aim_at(soil)
+	var soil_hit: Dictionary = player.target()
+	_check(soil_hit.get("hit", false) and Vector3i(soil_hit["block"]) == soil,
+		"the crosshair targets the soil cell for planting")
+	# Put seeds in the selected slot and plant with the real build action.
+	inventory.clear_slot(0)
+	inventory.put_stack(0, {"item": ItemDB.WHEAT_SEEDS, "count": 4})
+	inventory.select(0)
+	var seeds_before := inventory.count_of(ItemDB.WHEAT_SEEDS)
+	_check(player.place_selected(), "right-click with seeds is handled by the farming action")
+	_check(world.get_block(soil) == BlockDB.FARMLAND, "planting tills the targeted soil")
+	_check(world.get_block(soil + Vector3i.UP) == BlockDB.WHEAT_0, "planting creates a real crop block")
+	_check(inventory.count_of(ItemDB.WHEAT_SEEDS) == seeds_before - 1, "planting consumes exactly one seed")
+	_check(_game.farming.count() == 1, "the planted crop is tracked for growth")
+
+	# Save/reload must preserve both the crop block and its growth timer.
+	_game._save_now()
+	await process_frame
+	_game._reload_now()
+	await process_frame
+	_check(world.get_block(soil + Vector3i.UP) == BlockDB.WHEAT_0,
+		"the planted crop block survives save/reload")
+	_check(_game.farming.count() == 1, "the crop growth timer survives save/reload")
+
+	# Time advances the crop through the real game model.
+	_game.farming.step(Farming.STAGE_SECONDS * 3.1, world, player.global_position)
+	_check(world.get_block(soil + Vector3i.UP) == BlockDB.WHEAT_3, "the crop ripens over time")
+
+	# Harvest by breaking the targeted crop with the real player path.
+	await _aim_at(soil + Vector3i.UP)
+	var wheat_before := inventory.count_of(ItemDB.WHEAT)
+	var seed_count_before := inventory.count_of(ItemDB.WHEAT_SEEDS)
+	_check(player.break_target(), "a ripe crop can be harvested through the real break path")
+	await process_frame
+	_check(world.get_block(soil + Vector3i.UP) == BlockDB.AIR, "the harvested crop leaves the world")
+	_check(inventory.count_of(ItemDB.WHEAT) >= wheat_before + 2, "harvesting adds wheat to the inventory")
+	_check(inventory.count_of(ItemDB.WHEAT_SEEDS) > seed_count_before, "harvesting returns seeds for replanting")
+
+	# --- cooking -----------------------------------------------------------
+	var furnace := StationModel.new(StationModel.FURNACE)
+	furnace.inventory.insert(StationModel.FURNACE_INPUT_SLOT, {"item": ItemDB.RAW_MEAT, "count": 1})
+	furnace.inventory.insert(StationModel.FURNACE_FUEL_SLOT, {"item": ItemDB.COAL, "count": 1})
+	furnace.step(Smelting.cook_seconds(Smelting.recipe_for(ItemDB.RAW_MEAT)) + 0.2)
+	_check(furnace.inventory.total_of(ItemDB.COOKED_MEAT) == 1,
+		"a real timed furnace cooks raw meat into cooked meat")
+	_check(furnace.inventory.total_of(ItemDB.RAW_MEAT) == 0, "cooking consumes the raw meat exactly once")
+
+	# --- storage chest -----------------------------------------------------
+	var chest_cell := Vector3i(34, 75, 20)
+	world.ensure_chunk(VoxelWorld.world_to_chunk(chest_cell))
+	for dy in range(1, 12):
+		world.set_block(chest_cell + Vector3i(0, dy, 0), BlockDB.AIR)
+	world.set_block(chest_cell, BlockDB.CHEST)
+	await _aim_at(chest_cell)
+	_check(_game.targeted_station_position() == chest_cell, "the crosshair identifies the placed chest")
+	_press_interact()
+	await process_frame
+	var panel = _game.station_panel
+	_check(panel.is_open(), "E opens the storage chest")
+	_check(panel.station_slot_count() == StationModel.CHEST_SLOTS, "the chest interface shows 27 slots")
+	var chest = _game.stations.peek(chest_cell)
+	_check(chest != null and chest.is_storage(), "the opened station is a storage chest")
+	# Move a real player stack into the chest and save/reload it.
+	inventory.clear_slot(1)
+	inventory.put_stack(1, {"item": BlockDB.COBBLESTONE, "count": 11})
+	var chest_player_slot := 1
+	var chest_cobble := inventory.count_of(BlockDB.COBBLESTONE)
+	_check(panel.quick_move("player", chest_player_slot), "shift-click moves a stack into the chest")
+	_check(chest.inventory.total_of(BlockDB.COBBLESTONE) == 11, "the chest received the exact stack")
+	_check(inventory.count_of(BlockDB.COBBLESTONE) == chest_cobble - 11,
+		"moving the stack conserved the player's cobblestone")
+	_game._save_now()
+	await process_frame
+	_game._reload_now()
+	await process_frame
+	var restored_chest = _game.stations.peek(chest_cell)
+	_check(restored_chest != null and restored_chest.is_storage(), "the chest survives save/reload")
+	if restored_chest != null:
+		_check(restored_chest.inventory.total_of(BlockDB.COBBLESTONE) == 11,
+			"the chest contents survive save/reload exactly once")
+	_game._close_station()
+	await process_frame
+	# Break the chest and recover its contents through the real player path.
+	await _aim_at(chest_cell)
+	var recovered_before := inventory.count_of(BlockDB.COBBLESTONE)
+	_check(player.break_target(), "the chest can be broken through the player path")
+	await process_frame
+	_check(inventory.count_of(BlockDB.COBBLESTONE) == recovered_before + 11,
+		"breaking the chest recovers its contents exactly once")
+	_game.saves.delete_save()
 
 
 func _stations_section() -> void:
