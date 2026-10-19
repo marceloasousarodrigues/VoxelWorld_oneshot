@@ -16,11 +16,12 @@ extends RefCounted
 const FORMAT := "voxelworld.godot.save"
 ## 1: block/fluid edits, player, inventory.  2: adds the day/night clock.
 ## 3: adds player health and breath.  4: adds hunger.  5: adds settlement stores
-## and residents.  6: adds placed-station inventories (M19).  Older saves still
-## load: every field a version did not know about is optional and keeps its
-## default (a legacy save simply starts with a full hunger bar, no residents and
-## no station state).
-const VERSION := 6
+## and residents.  6: adds placed-station inventories (M19).  7: the inventory
+## payload grows from one nine-slot row to 27 main slots + the nine-slot hotbar
+## (M20).  Older saves still load: every field a version did not know about is
+## optional and keeps its default, and a nine-row inventory fills the hotbar while
+## the 27 main slots start empty.
+const VERSION := 7
 const DEFAULT_DIRECTORY := "user://saves"
 const DEFAULT_NAME := "world.json"
 

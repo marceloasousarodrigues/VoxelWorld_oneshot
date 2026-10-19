@@ -380,8 +380,8 @@ func refresh() -> void:
 		if max_wear > 0:
 			text += "   %d / %d" % [inventory.durability_of(inventory.selected), max_wear]
 		_selected_label.text = "%s   (slot %d)" % [text, inventory.selected + 1]
-	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  hold LMB mine  ·  RMB build/eat  ·  E use  ·  C craft  ·  I inventory  ·  O settings\n" \
-		+ "1-9 select  ·  F fly  ·  F5 save  ·  F9 load  ·  F3 debug  ·  Esc pause"
+	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  hold LMB mine  ·  RMB build/eat  ·  E use  ·  C recipes  ·  I inventory  ·  O settings\n" \
+		+ "1-9 or mouse wheel select  ·  F fly  ·  F5 save  ·  F9 load  ·  F3 debug  ·  Esc pause"
 
 
 func _refresh_durability(index: int, item_id: int) -> void:
@@ -409,13 +409,7 @@ func _icon_for(item_id: int) -> Texture2D:
 
 
 func _slot_style(selected: bool, occupied: bool) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.06, 0.08, 0.55 if occupied else 0.3)
-	style.border_color = Color(1, 1, 1, 0.92) if selected else Color(1, 1, 1, 0.2)
-	var width := 3 if selected else 1
-	style.set_border_width_all(width)
-	style.set_corner_radius_all(4)
-	return style
+	return UiStyle.slot_style(occupied, selected)
 
 
 func set_status(text: String) -> void:

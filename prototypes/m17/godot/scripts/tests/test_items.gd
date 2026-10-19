@@ -200,18 +200,35 @@ func _test_stack_cap(h: TestHarness) -> void:
 
 func _test_full_inventory(h: TestHarness) -> void:
 	var inventory := Inventory.new()
-	var distinct := [BlockDB.GRASS, BlockDB.DIRT, BlockDB.STONE, BlockDB.SAND,
-		BlockDB.COBBLESTONE, BlockDB.GLASS, BlockDB.BRICK, BlockDB.CLAY, BlockDB.PLANKS]
-	for block_id: int in distinct:
-		inventory.add(block_id, 64)
-	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE, "the inventory is full")
+	# 36 distinct items fill the 27 main slots and the nine-slot hotbar.
+	for item_id in range(1, Inventory.SIZE + 1):
+		inventory.add(item_id, 64)
+	h.eq(inventory.used_slots(), Inventory.SIZE, "the inventory is full")
 	h.eq(inventory.free_slot_count(), 0, "no free slot remains")
-	h.eq(inventory.add(ItemDB.STICK, 1), 1, "an item with nowhere to go is returned as leftover")
-	h.eq(inventory.count_of(ItemDB.STICK), 0, "nothing was added")
+	h.eq(inventory.add(ItemDB.DIAMOND_SWORD, 1), 1, "an item with nowhere to go is returned as leftover")
+	h.eq(inventory.count_of(ItemDB.DIAMOND_SWORD), 0, "nothing was added")
 	h.eq(inventory.add(BlockDB.STONE, 1), 1, "a full stack rejects the overflow")
 
 	inventory.remove(BlockDB.STONE, 1)
 	h.eq(inventory.add(BlockDB.STONE, 1), 0, "the freed room accepts the item again")
+
+
+## The reported M20 defect: a fresh starter kit filled every slot, so a mined
+## iron/coal drop was refused even though nothing was "wrong" with the drop rule.
+func _test_starter_kit_leaves_storage(h: TestHarness) -> void:
+	var inventory := Inventory.new()
+	inventory.give_starter_kit()
+	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE, "the starter kit fills only the hotbar")
+	h.eq(inventory.free_slot_count(), Inventory.MAIN_SIZE, "all 27 storage slots are free")
+	h.eq(inventory.add(ItemDB.IRON_LUMP, 1), 0, "a mined iron lump fits after spawn")
+	h.eq(inventory.count_of(ItemDB.IRON_LUMP), 1, "the iron lump is in the inventory")
+	h.eq(inventory.add(ItemDB.COAL, 1), 0, "coal also fits after spawn")
+	h.eq(inventory.add(ItemDB.APPLE, 1), 0, "a bonus drop also fits after spawn")
+	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE + 3, "each new item opened a storage slot")
+	var iron_slot := inventory.slots.find(ItemDB.IRON_LUMP)
+	h.check(iron_slot >= Inventory.MAIN_FIRST, "new material drops go to the storage rows")
+	h.check(inventory.select(iron_slot) == false, "a storage slot cannot become the held item")
+	h.eq(inventory.selected_item(), BlockDB.GRASS, "selecting a storage slot left the hand unchanged")
 
 
 func _test_durability(h: TestHarness) -> void:
@@ -266,6 +283,29 @@ func _test_serialisation(h: TestHarness) -> void:
 	h.eq(legacy_inventory.durability_of(1), ItemDB.max_durability(ItemDB.DIAMOND_PICKAXE),
 		"a tool without a saved durability starts at full")
 
+	# A save written before M20 has only the nine-row hotbar.  It must load into
+	# the hotbar with the 27 storage slots empty.
+	var legacy_rows := Inventory.new()
+	legacy_rows.add(BlockDB.GRASS, 3)
+	legacy_rows.add(ItemDB.IRON_LUMP, 2)
+	var legacy_payload := legacy_rows.to_dictionary()
+	(legacy_payload["hotbar"] as Array).resize(Inventory.HOTBAR_SIZE)
+	(legacy_payload["durability"] as Array).resize(Inventory.HOTBAR_SIZE)
+	legacy_payload.erase("size")
+	var legacy_loaded := Inventory.new()
+	h.check(legacy_loaded.from_dictionary(legacy_payload), "a nine-row pre-M20 inventory still loads")
+	h.eq(legacy_loaded.count_of(BlockDB.GRASS), 3, "the legacy hotbar contents survived")
+	h.eq(legacy_loaded.count_of(ItemDB.IRON_LUMP), 2, "the legacy iron survived")
+	h.eq(legacy_loaded.used_slots(), 2, "no phantom items appeared in the storage rows")
+	h.eq(legacy_loaded.free_slot_count(), Inventory.SIZE - 2, "the storage rows start empty")
+
+	# A payload with more rows than this build has is rejected rather than
+	# silently truncated (which could lose items).
+	var oversized := legacy_rows.to_dictionary()
+	for index in Inventory.SIZE + 2:
+		(oversized["hotbar"] as Array).append([BlockDB.DIRT, 1])
+	h.check(not Inventory.new().from_dictionary(oversized), "an oversized inventory payload is rejected")
+
 	# Malformed payloads are rejected without touching the live inventory.
 	var live := Inventory.new()
 	live.add(BlockDB.GRASS, 4)
@@ -305,6 +345,7 @@ func run(h: TestHarness) -> void:
 	_test_food(h)
 	_test_stack_cap(h)
 	_test_full_inventory(h)
+	_test_starter_kit_leaves_storage(h)
 	_test_durability(h)
 	_test_serialisation(h)
 	_test_slot_moves(h)

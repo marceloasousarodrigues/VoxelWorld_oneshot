@@ -20,6 +20,23 @@ func _recipe(id: String) -> Dictionary:
 	return Crafting.recipe(id)
 
 
+## Fills every remaining slot with a full stack of distinct items.  `seed` items
+## are placed first so a test can guarantee an ingredient is present; `seed` item
+## ids are not added again by the filler.
+func _fill_inventory(inventory: Inventory, seed: Dictionary = {}) -> void:
+	for item_id in seed:
+		inventory.add(int(item_id), int(seed[item_id]))
+	var used := {}
+	for item_id in seed:
+		used[int(item_id)] = true
+	for item_id in range(1, ItemDB.COUNT):
+		if inventory.free_slot_count() <= 0:
+			break
+		if used.has(item_id):
+			continue
+		inventory.add(item_id, ItemDB.max_stack(item_id))
+
+
 # --- catalogue -------------------------------------------------------------
 
 func _test_catalogue_integrity(h: TestHarness) -> void:
@@ -144,6 +161,25 @@ func _test_shaped_and_shapeless(h: TestHarness) -> void:
 		[BlockDB.AIR, BlockDB.AIR, BlockDB.AIR],
 		[BlockDB.AIR, BlockDB.AIR, BlockDB.AIR],
 	]), "a shapeless recipe matches wherever the items are")
+
+	# Minecraft-shaped recipes may be mirrored horizontally (an axe can be
+	# crafted in either orientation), but not rotated.
+	var axe := _recipe("wood_axe")
+	h.check(Crafting.match_grid(axe, [
+		[BlockDB.PLANKS, BlockDB.PLANKS, BlockDB.AIR],
+		[BlockDB.PLANKS, ItemDB.STICK, BlockDB.AIR],
+		[BlockDB.AIR, ItemDB.STICK, BlockDB.AIR],
+	]), "the axe pattern matches its declared orientation")
+	h.check(Crafting.match_grid(axe, [
+		[BlockDB.AIR, BlockDB.PLANKS, BlockDB.PLANKS],
+		[BlockDB.AIR, ItemDB.STICK, BlockDB.PLANKS],
+		[BlockDB.AIR, ItemDB.STICK, BlockDB.AIR],
+	]), "the axe pattern also matches its horizontal mirror")
+	h.check(not Crafting.match_grid(axe, [
+		[BlockDB.AIR, BlockDB.AIR, BlockDB.AIR],
+		[BlockDB.AIR, BlockDB.PLANKS, BlockDB.PLANKS],
+		[ItemDB.STICK, BlockDB.PLANKS, ItemDB.STICK],
+	]), "a rotated axe shape does not match")
 
 
 func _test_validate_rejects(h: TestHarness) -> void:
@@ -309,10 +345,7 @@ func _test_craftable_count_and_batch(h: TestHarness) -> void:
 	# The batch also has to fit: the same ingredients that allow 64 crafts are
 	# refused when the output has nowhere to go, and nothing is consumed.
 	var crammed := Inventory.new()
-	crammed.add(BlockDB.OAK_LOG, 64)
-	for block_id: int in [BlockDB.PLANKS, BlockDB.GRASS, BlockDB.DIRT, BlockDB.STONE,
-			BlockDB.SAND, BlockDB.COBBLESTONE, BlockDB.GLASS, BlockDB.BRICK]:
-		crammed.add(block_id, 64)
+	_fill_inventory(crammed, {BlockDB.OAK_LOG: 64})
 	h.eq(crammed.free_slot_count(), 0, "the batch inventory has no free slot")
 	h.eq(Crafting.craftable_count(crammed, planks), 64, "the ingredients still allow 64 crafts")
 	h.check(not Crafting.can_craft_times(crammed, planks, 1, Crafting.STATION_HAND),
@@ -336,11 +369,8 @@ func _test_atomicity(h: TestHarness) -> void:
 	# A full inventory with no room for the output is rejected atomically, even
 	# though consuming the input happens first in the implementation.
 	var full := Inventory.new()
-	for block_id: int in [BlockDB.GRASS, BlockDB.DIRT, BlockDB.STONE, BlockDB.SAND,
-			BlockDB.COBBLESTONE, BlockDB.GLASS, BlockDB.BRICK, BlockDB.CLAY]:
-		full.add(block_id, 5)
-	full.add(BlockDB.OAK_LOG, 2)
-	h.eq(full.used_slots(), Inventory.HOTBAR_SIZE, "the test inventory is full")
+	_fill_inventory(full, {BlockDB.OAK_LOG: 2})
+	h.eq(full.used_slots(), Inventory.SIZE, "the test inventory is full")
 	h.eq(Crafting.missing(full, planks), {}, "the full inventory holds every ingredient")
 	h.check(not Crafting.can_craft(full, planks), "the craft is refused because the output has no room")
 	var full_before := full.to_dictionary()
@@ -352,11 +382,8 @@ func _test_atomicity(h: TestHarness) -> void:
 
 	# Consuming the input is allowed to free the slot the output needs.
 	var tight := Inventory.new()
-	for block_id: int in [BlockDB.GRASS, BlockDB.DIRT, BlockDB.STONE, BlockDB.SAND,
-			BlockDB.COBBLESTONE, BlockDB.GLASS, BlockDB.BRICK, BlockDB.CLAY]:
-		tight.add(block_id, 5)
-	tight.add(BlockDB.PLANKS, 2)
-	h.eq(tight.used_slots(), Inventory.HOTBAR_SIZE, "the tight inventory is full")
+	_fill_inventory(tight, {BlockDB.PLANKS: 2, ItemDB.STICK: 0})
+	h.eq(tight.used_slots(), Inventory.SIZE, "the tight inventory is full")
 	h.eq(tight.free_slot_count(), 0, "the tight inventory has no free slot")
 	var freed: Dictionary = Crafting.craft(tight, _recipe("sticks"))
 	h.check(bool(freed["ok"]), "a craft succeeds when consuming the input frees a slot")
@@ -366,12 +393,8 @@ func _test_atomicity(h: TestHarness) -> void:
 	# A slot that is nearly full but has no room for the whole output is not
 	# treated as space: the capacity check must respect the stack cap.
 	var cramped := Inventory.new()
-	cramped.add(BlockDB.PLANKS, 62)
-	cramped.add(BlockDB.OAK_LOG, 2)
-	for block_id: int in [BlockDB.GRASS, BlockDB.DIRT, BlockDB.STONE, BlockDB.SAND,
-			BlockDB.COBBLESTONE, BlockDB.GLASS, BlockDB.BRICK]:
-		cramped.add(block_id, 5)
-	h.eq(cramped.used_slots(), Inventory.HOTBAR_SIZE, "the cramped inventory is full")
+	_fill_inventory(cramped, {BlockDB.PLANKS: 62, BlockDB.OAK_LOG: 2})
+	h.eq(cramped.used_slots(), Inventory.SIZE, "the cramped inventory is full")
 	h.eq(cramped.count_of(BlockDB.PLANKS), 62, "the planks stack holds 62")
 	var cramped_before := cramped.to_dictionary()
 	var cramped_result: Dictionary = Crafting.craft(cramped, planks)

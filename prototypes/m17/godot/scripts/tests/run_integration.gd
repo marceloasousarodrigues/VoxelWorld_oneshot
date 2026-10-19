@@ -577,22 +577,28 @@ func _crafting_and_mining_section() -> void:
 	_check(not player.can_interact, "the crafting panel disables player interaction")
 	_check(_game.crafting.station() == Crafting.STATION_TABLE, "the panel receives the world station")
 	_check(_game.crafting.row_count() == Crafting.recipes().size(), "the panel lists every recipe")
-	_check(_game.crafting.row_enabled("stone_axe"), "an affordable table recipe is enabled")
-	_check(not _game.crafting.row_enabled("iron_pickaxe"), "an unaffordable recipe stays disabled")
+	_check(not _game.crafting.row_enabled("stone_axe"),
+		"a table recipe is listed but not crafted from the catalogue")
+	_check(_game.crafting.row_status("stone_axe").contains("Crafting Table"),
+		"the table recipe points at the crafting-table interface")
+	_check(not _game.crafting.row_enabled("iron_pickaxe"), "an unaffordable station recipe stays disabled")
 	_check(_game.crafting.row_status("iron_pickaxe").contains("missing"),
 		"the disabled row explains the missing ingredient")
+	_check(_game.crafting.row_enabled("sticks"), "a hand recipe remains craftable in the catalogue")
 
 	var cobble_before := inventory.count_of(BlockDB.COBBLESTONE)
-	_check(_game.crafting.press_craft("stone_axe"), "the panel's real Craft button activates")
+	var stick_before_hand := inventory.count_of(ItemDB.STICK)
+	var planks_before_hand := inventory.count_of(BlockDB.PLANKS)
+	_check(_game.crafting.press_craft("sticks"), "the catalogue crafts a hand recipe")
 	await process_frame
-	_check(inventory.count_of(ItemDB.STONE_AXE) == 1, "the craft produced a stone axe in the inventory")
-	_check(inventory.count_of(BlockDB.COBBLESTONE) == cobble_before - 3,
-		"the craft consumed exactly the recipe's cobblestone")
-	var axe_slot := inventory.slots.find(ItemDB.STONE_AXE)
-	_check(axe_slot >= 0 and inventory.durability_of(axe_slot) == ItemDB.max_durability(ItemDB.STONE_AXE),
-		"the crafted tool arrives at full durability")
+	_check(inventory.count_of(BlockDB.PLANKS) == planks_before_hand - 2,
+		"the hand craft consumed two planks")
+	_check(inventory.count_of(ItemDB.STICK) == stick_before_hand + 4,
+		"the hand craft produced four sticks")
+	_check(inventory.count_of(BlockDB.COBBLESTONE) == cobble_before,
+		"a station recipe never consumes ingredients from the catalogue")
 
-	# The batch button performs five crafts.
+	# The batch button performs five hand crafts.
 	inventory.add(BlockDB.PLANKS, 10)
 	var planks_before := inventory.count_of(BlockDB.PLANKS)
 	var sticks_before := inventory.count_of(ItemDB.STICK)
@@ -603,22 +609,28 @@ func _crafting_and_mining_section() -> void:
 	_check(inventory.count_of(ItemDB.STICK) == sticks_before + 20,
 		"the batch produced twenty sticks")
 
-	# Smelting needs the furnace station, which this world does not have yet.
-	_check(not _game.crafting.row_enabled("iron_ingot"), "smelting is refused without a furnace")
+	# Smelting is only done at the furnace object; the catalogue lists it.
+	_check(not _game.crafting.row_enabled("iron_ingot"), "smelting is never crafted from the catalogue")
 	_check(_game.crafting.row_status("iron_ingot").contains("Furnace"),
-		"the smelting row explains the missing furnace")
+		"the smelting row points at the furnace")
 	_game.world.set_block(Vector3i(9, 72, 8), BlockDB.FURNACE)
 	_game.crafting.set_station(_game._current_station())
-	inventory.clear_slot(5)
-	inventory.clear_slot(8)
-	inventory.add(ItemDB.IRON_LUMP, 1)
-	inventory.add(ItemDB.COAL, 1)
 	_check(_game.crafting.station() == Crafting.STATION_FURNACE, "a placed furnace becomes the station")
-	_check(_game.crafting.row_enabled("iron_ingot"), "the furnace unlocks smelting")
-	_check(_game.crafting.press_craft("iron_ingot"), "the furnace smelts through the panel")
+	_check(not _game.crafting.row_enabled("iron_ingot"),
+		"the furnace's presence does not turn the catalogue into a second furnace UI")
+
+	# Regression for "recipes requiring a crafting table do not appear": the
+	# catalogue used a four-block menu radius while the interaction reach is six.
+	# A table you can open with E must also unlock its recipes.
+	var reach_cell := Vector3i(26, 72, 22)
+	_game.world.set_block(reach_cell, BlockDB.CRAFTING_TABLE)
+	player.teleport_to(Vector3(26.5, 74.0, 27.5))
 	await process_frame
-	_check(inventory.count_of(ItemDB.IRON_INGOT) == 1, "the smelted ingot is in the inventory")
-	_check(inventory.count_of(ItemDB.COAL) == 0, "the smelt consumed the coal fuel")
+	_check(_game._current_station() == Crafting.STATION_TABLE,
+		"a crafting table five blocks away still unlocks table recipes")
+	_game.world.set_block(reach_cell, BlockDB.AIR)
+	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	await process_frame
 
 	_game._close_crafting()
 	await process_frame
@@ -689,6 +701,35 @@ func _crafting_and_mining_section() -> void:
 		"each pickaxe use produced its stone drop")
 	_check(tool_broken[0], "the wooden pickaxe breaks after its last use")
 	_check(inventory.is_empty(pick_slot), "the broken tool freed its slot")
+
+	# Regression for the reported "mining iron does not appear" defect: the
+	# starter kit used to fill all nine slots, so the lump had nowhere to go.  The
+	# real controller, drop rule and inventory now carry it through end to end.
+	inventory.clear_slot(0)
+	inventory.add(ItemDB.STONE_PICKAXE, 1)
+	var stone_pick_slot: int = inventory.slots.find(ItemDB.STONE_PICKAXE)
+	_check(stone_pick_slot >= 0 and stone_pick_slot < Inventory.HOTBAR_SIZE,
+		"a stone pickaxe is in the hotbar for the iron test")
+	inventory.select(stone_pick_slot)
+	var iron_before := inventory.count_of(ItemDB.IRON_LUMP)
+	_game.world.set_block(mine_cell, BlockDB.IRON_ORE)
+	for i in range(2):
+		await process_frame
+	_check(player.break_target(), "iron ore is mined through the real controller")
+	_check(inventory.count_of(ItemDB.IRON_LUMP) == iron_before + 1,
+		"the mined iron lump reached the inventory")
+	_check(inventory.item_at(inventory.slots.find(ItemDB.IRON_LUMP)) == ItemDB.IRON_LUMP,
+		"the iron lump is stored in a real slot")
+	_check(int(_game.world.get_block(mine_cell)) == BlockDB.AIR, "the iron ore block was removed")
+
+	# A common resource takes the same shared drop/pickup path.
+	var coal_before := inventory.count_of(ItemDB.COAL)
+	_game.world.set_block(mine_cell, BlockDB.COAL_ORE)
+	for i in range(2):
+		await process_frame
+	_check(player.break_target(), "coal ore is mined with the same controller path")
+	_check(inventory.count_of(ItemDB.COAL) == coal_before + 1,
+		"the mined coal reached the inventory")
 
 	player.look_pitch(0.0)
 	player.teleport_to(Vector3(8.5, 74.0, 8.5))
@@ -773,11 +814,28 @@ func _inventory_section() -> void:
 	var player: Node = _game.player
 	var inventory: Inventory = _game.inventory
 	var panel: InventoryPanel = _game.inventory_panel
+	# Hotbar selection through the real input path: number key and mouse wheel.
+	inventory.select(0)
+	var slot_event := InputEventAction.new()
+	slot_event.action = "slot_4"
+	slot_event.pressed = true
+	_game._unhandled_input(slot_event)
+	_check(inventory.selected == 3, "number key 4 selects the fourth hotbar slot")
+	var wheel_event := InputEventMouseButton.new()
+	wheel_event.button_index = MOUSE_BUTTON_WHEEL_DOWN
+	wheel_event.pressed = true
+	_game._unhandled_input(wheel_event)
+	_check(inventory.selected == 4, "mouse wheel down advances the hotbar selection")
+	wheel_event = InputEventMouseButton.new()
+	wheel_event.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel_event.pressed = true
+	_game._unhandled_input(wheel_event)
+	_check(inventory.selected == 3, "mouse wheel up moves the hotbar selection back")
 	_game._open_inventory()
 	await process_frame
 	_check(panel.is_open(), "the inventory panel opens")
 	_check(not player.can_interact, "the inventory panel disables player interaction")
-	_check(panel.slot_count() == Inventory.HOTBAR_SIZE, "the panel shows every hotbar slot")
+	_check(panel.slot_count() == Inventory.SIZE, "the panel shows the 27 storage slots and the hotbar")
 
 	# Move a stack between two slots through the panel's click path.
 	inventory.clear_slot(0)
@@ -820,14 +878,99 @@ func _inventory_section() -> void:
 	panel.focus_slot(8)
 	_check(panel.detail_text().contains("Oak Log"), "the detail pane names the selected block")
 	_check(panel.detail_text().contains("Used in"), "the detail pane lists the recipes that use it")
+	_check(panel.find_children("*Carry*", "", true, false).is_empty(),
+		"the interface has no permanent carrying slot")
+	var slot_with_item := panel.find_child("Slot5", true, false) as InventorySlot
+	_check(slot_with_item != null and not slot_with_item.tooltip_text.is_empty(),
+		"an occupied slot carries a tooltip with its name")
 
-	# Closing with a carried stack must never lose it.
+	# Right-click split, merge, swap and quick-move through the panel handlers.
+	inventory.clear_slot(20)
+	inventory.put_stack(20, {"item": BlockDB.STONE, "count": 10, "durability": 0})
+	_check(panel.split_half(20), "right-click splits a stack in half")
+	_check(int(panel.carried().get("count", 0)) == 5, "the split took half the stack")
+	_check(inventory.count_at(20) == 5, "the other half stayed in the slot")
+	_check(panel.put_down(21), "the split stack can be placed in an empty slot")
+	_check(inventory.count_at(21) == 5 and inventory.count_at(20) == 5,
+		"both halves survived the split and drop")
+
+	inventory.clear_slot(22)
+	inventory.clear_slot(23)
+	inventory.put_stack(22, {"item": BlockDB.STONE, "count": 60, "durability": 0})
+	inventory.put_stack(23, {"item": BlockDB.STONE, "count": 10, "durability": 0})
+	_check(panel.pick_up(23), "the merge source can be picked up")
+	_check(panel.put_down(22), "left-click merges onto a matching stack")
+	_check(not panel.carried().is_empty(), "the merge leaves the overflow on the cursor")
+	_check(panel.put_down(23), "the merge remainder can be put back in its source slot")
+	_check(inventory.count_at(22) == 64 and inventory.count_at(23) == 6,
+		"the merge filled to the stack cap and left the remainder")
+	_check(inventory.count_of(BlockDB.STONE) >= 80, "the merge conserved every stone item")
+	_check(panel.carried().is_empty(), "nothing is carried after a merge")
+
+	inventory.clear_slot(24)
+	inventory.clear_slot(25)
+	inventory.put_stack(24, {"item": BlockDB.DIRT, "count": 3, "durability": 0})
+	inventory.put_stack(25, {"item": BlockDB.SAND, "count": 7, "durability": 0})
+	_check(panel.pick_up(24), "the swap source can be picked up")
+	_check(panel.put_down(25), "left-click swaps with an occupied incompatible slot")
+	_check(inventory.slots[25] == BlockDB.DIRT and int(panel.carried().get("item", -1)) == BlockDB.SAND,
+		"the displaced stack became the cursor stack")
+	_check(panel.put_down(24), "the displaced stack can be placed back")
+	_check(inventory.slots[24] == BlockDB.SAND and inventory.slots[25] == BlockDB.DIRT,
+		"both stacks survived the swap")
+
+	inventory.clear_slot(2)
+	inventory.put_stack(2, {"item": BlockDB.GRAVEL, "count": 5, "durability": 0})
+	var gravel_before_quick := inventory.count_of(BlockDB.GRAVEL)
+	_check(panel.quick_move(2), "shift-click quick-moves a hotbar stack into storage")
+	_check(inventory.is_empty(2), "the hotbar source slot is empty")
+	_check(inventory.count_of(BlockDB.GRAVEL) == gravel_before_quick,
+		"quick-move conserved every gravel item")
+	var gravel_main_slot := -1
+	for index in range(Inventory.MAIN_FIRST, Inventory.SIZE):
+		if inventory.item_at(index) == BlockDB.GRAVEL:
+			gravel_main_slot = index
+			break
+	_check(gravel_main_slot >= 0, "the quick-moved gravel is in a storage slot")
+	_check(panel.quick_move(gravel_main_slot), "shift-click moves a storage stack back to the hotbar")
+	_check(inventory.is_empty(gravel_main_slot), "the storage source slot is empty")
+	_check(inventory.count_of(BlockDB.GRAVEL) == gravel_before_quick,
+		"the return quick-move conserved every gravel item")
+
+	# Closing with a carried stack must never lose it.  First use the original
+	# slot when it is still free.
 	var logs_before := inventory.count_of(BlockDB.OAK_LOG)
 	_check(panel.pick_up(8), "a stack can be carried when the panel closes")
 	panel.close()
 	await process_frame
 	_check(not panel.is_open(), "the inventory panel closes")
 	_check(inventory.count_of(BlockDB.OAK_LOG) == logs_before, "closing with a carried stack puts it back")
+	_check(inventory.item_at(8) == BlockDB.OAK_LOG, "the stack returned to its original slot")
+
+	# Then the fallback path: occupy the origin before closing.
+	inventory.clear_slot(26)
+	inventory.put_stack(26, {"item": ItemDB.IRON_INGOT, "count": 4, "durability": 0})
+	var ingots_before_close := inventory.count_of(ItemDB.IRON_INGOT)
+	_game._open_inventory()
+	await process_frame
+	_check(panel.pick_up(26), "a second stack is picked up for the recovery test")
+	inventory.put_stack(26, {"item": BlockDB.DIRT, "count": 64, "durability": 0})
+	var closed_with_fallback: bool = panel.close()
+	await process_frame
+	_check(closed_with_fallback and not panel.is_open(), "the panel closes when the origin is occupied")
+	_check(inventory.count_of(ItemDB.IRON_INGOT) == ingots_before_close,
+		"the fallback recovery found another slot instead of deleting the stack")
+	_check(inventory.item_at(26) == BlockDB.DIRT, "the occupied origin was not overwritten")
+
+	# Opening and closing an interface never changes the selected hotbar slot.
+	inventory.select(3)
+	_game._open_inventory()
+	await process_frame
+	_check(inventory.selected == 3, "opening the inventory leaves the selected slot alone")
+	_game._close_inventory()
+	await process_frame
+	_check(inventory.selected == 3, "closing the inventory leaves the selected slot alone")
+	_check(player.can_interact, "closing the inventory restores world interaction")
 
 
 ## Settlement residents through the real scene: a settlement's resident gets a
@@ -885,11 +1028,18 @@ func _residents_section() -> void:
 	_check(NpcModel.carried_total(state) > 0 or int(state["delivered"]) > 0, "the resident carries what it mined")
 	_check(NpcModel.carried_total(state) <= NpcModel.CARRY_CAP, "the resident never carries more than its cap")
 
-	# The player targets and kills the resident with its own attack path.
-	player.teleport_to(Vector3(float(state["position"].x), float(state["position"].y) + 2.5,
-		float(state["position"].z)))
+	# The player targets and kills the resident with its own attack path.  Aim
+	# directly above the resident's *current* node: the work loop may have walked
+	# it away from its spawn cell while gathering, and clear the air column so the
+	# attack ray is not blocked by terrain above the resident.
+	var resident_cell := Vector3i(floori(node.global_position.x), floori(node.global_position.y),
+		floori(node.global_position.z))
+	for dy in range(1, 5):
+		_game.world.set_block(resident_cell + Vector3i(0, dy, 0), BlockDB.AIR)
+	player.teleport_to(node.global_position + Vector3(0.0, 2.5, 0.0))
 	player.look_pitch(-89.0)
-	await physics_frame
+	for i in range(3):
+		await physics_frame
 	var targeted: Node = player._creature_in_front()
 	_check(targeted != null and targeted.is_in_group("npc")
 		and str(targeted.state.get("id", "")) == str(state["id"]),
@@ -1014,6 +1164,20 @@ func _aim_at(cell: Vector3i) -> void:
 		await process_frame
 
 
+## Looks at a cell from an arbitrary eye position, so a station can be tested
+## from a diagonal rather than only from straight above.
+func _aim_from(eye: Vector3, cell: Vector3i) -> void:
+	var player: Node = _game.player
+	player.flying = true
+	player.teleport_to(eye)
+	var origin: Vector3 = eye + Vector3.UP * VoxelPlayer.EYE_HEIGHT
+	var delta: Vector3 = (Vector3(cell) + Vector3.ONE * 0.5) - origin
+	player.look_yaw(rad_to_deg(atan2(-delta.x, -delta.z)))
+	player.look_pitch(rad_to_deg(atan2(delta.y, Vector2(delta.x, delta.z).length())))
+	for i in range(2):
+		await process_frame
+
+
 func _press_interact() -> void:
 	var event := InputEventAction.new()
 	event.action = "interact"
@@ -1046,10 +1210,26 @@ func _stations_section() -> void:
 	world.set_block(table_cell, BlockDB.CRAFTING_TABLE)
 
 	# --- targeting and opening --------------------------------------------
+	# Clear a small air box around the station so a diagonal eye position is
+	# valid test space, then approach it from that angle and from straight above.
+	for dy in range(1, 7):
+		for dx in range(-3, 4):
+			for dz in range(-3, 4):
+				world.set_block(table_cell + Vector3i(dx, dy, dz), BlockDB.AIR)
+	await _aim_from(Vector3(table_cell) + Vector3(-2.0, 3.2, 2.0), table_cell)
+	_check(_game.targeted_station_position() == table_cell,
+		"the crosshair identifies the crafting table from a diagonal angle")
+	_check(not _game.stations.has(table_cell), "a station has no state before it is used")
+	_press_interact()
+	await process_frame
+	_check(panel.is_open(), "E opens the table from a diagonal angle")
+	_game._close_station()
+	await process_frame
+	_check(not panel.is_open(), "the diagonal-angle table interface closes")
+
 	await _aim_at(table_cell)
 	_check(_game.targeted_station_position() == table_cell,
 		"the crosshair identifies the placed crafting table")
-	_check(not _game.stations.has(table_cell), "a station has no state before it is used")
 	_press_interact()
 	await process_frame
 	_check(panel.is_open(), "E opens the targeted crafting table")
@@ -1070,11 +1250,19 @@ func _stations_section() -> void:
 	var planks_before := inventory.count_of(BlockDB.PLANKS)
 	_check(panel.pick_up("player", planks_slot), "a stack can be picked up from the player inventory")
 	_check(not panel.carried().is_empty(), "the picked-up stack is carried")
-	_check(panel.put_one("station", 0), "one item moves from the carried stack into the grid")
+	panel.click_slot("station", 0)
+	_check(table.inventory.total_of(BlockDB.PLANKS) == 1,
+		"a left-click places one item in a crafting-grid cell, not the whole stack")
+	_check(int(panel.carried().get("count", 0)) == planks_before - 1,
+		"the rest of the stack stays on the cursor")
 	_check(panel.status_text().contains("No matching recipe"),
 		"an incomplete grid reports that nothing matches")
+	var expected_grid_planks := 1
 	for grid_slot in [1, 3, 4]:
-		_check(panel.put_one("station", grid_slot), "another plank moves into grid cell %d" % grid_slot)
+		panel.click_slot("station", grid_slot)
+		expected_grid_planks += 1
+		_check(table.inventory.total_of(BlockDB.PLANKS) == expected_grid_planks,
+			"another plank moves into grid cell %d" % grid_slot)
 	var empty_slot: int = inventory.slots.find(BlockDB.AIR)
 	_check(empty_slot >= 0, "the player has a free slot for the remainder")
 	_check(panel.put_down("player", empty_slot), "the carried remainder returns to the player")
@@ -1103,6 +1291,31 @@ func _stations_section() -> void:
 	_check(table.inventory.is_empty(StationModel.TABLE_OUTPUT_SLOT),
 		"the result slot is empty after the crafted item was taken")
 
+	# A shaped 3x3 recipe through the station model: the catalogue's stone axe
+	# pattern (three cobblestone, two sticks) must match and produce its tool.
+	table.inventory.clear_all()
+	for grid_index in [0, 1, 3]:
+		table.inventory.insert(grid_index, {"item": BlockDB.COBBLESTONE, "count": 1})
+	for grid_index in [4, 7]:
+		table.inventory.insert(grid_index, {"item": ItemDB.STICK, "count": 1})
+	var shaped_preview: Dictionary = table.result_preview()
+	_check(int(shaped_preview.get("output", -1)) == ItemDB.STONE_AXE,
+		"the 3x3 grid matches the shaped stone-axe recipe")
+	var axe_before := inventory.count_of(ItemDB.STONE_AXE)
+	_check(panel.take_output(), "the shaped result can be taken")
+	var shaped_carried: Dictionary = panel.carried()
+	_check(int(shaped_carried.get("item", -1)) == ItemDB.STONE_AXE,
+		"the shaped craft carries a stone axe")
+	var axe_slot_player: int = inventory.slots.find(BlockDB.AIR)
+	_check(panel.put_down("player", axe_slot_player), "the shaped tool reaches the player inventory")
+	_check(inventory.count_of(ItemDB.STONE_AXE) == axe_before + 1,
+		"the shaped craft produced exactly one stone axe")
+	var crafted_axe_slot: int = inventory.slots.find(ItemDB.STONE_AXE)
+	_check(crafted_axe_slot >= 0 and inventory.durability_of(crafted_axe_slot) ==
+		ItemDB.max_durability(ItemDB.STONE_AXE), "the shaped tool arrives at full durability")
+	_check(table.inventory.total_items() == 0, "the shaped craft consumed every grid ingredient")
+	table.inventory.clear_all()
+
 	# Shift-click and drag & drop move whole stacks between the two inventories.
 	inventory.clear_slot(2)
 	inventory.add(ItemDB.STICK, 6)
@@ -1115,13 +1328,14 @@ func _stations_section() -> void:
 		"shift-click removed exactly that stack from the player")
 	_check(table.inventory.total_of(ItemDB.STICK) == stick_stack,
 		"the station received the whole stack")
-	var station_stick_slot := -1
+	var station_stick_slots: Array[int] = []
 	for index in table.inventory.size():
 		if table.inventory.item_at(index) == ItemDB.STICK:
-			station_stick_slot = index
-	_check(station_stick_slot >= 0, "the moved sticks are in a station slot")
-	_check(panel.move_between("station", station_stick_slot, "player", stick_slot),
-		"drag & drop moves the stack back to the player")
+			station_stick_slots.append(index)
+	_check(not station_stick_slots.is_empty(), "the moved sticks are in station slots")
+	for station_stick_slot: int in station_stick_slots:
+		_check(panel.move_between("station", station_stick_slot, "player", stick_slot),
+			"drag & drop moves each station stick stack back to the player")
 	_check(inventory.count_of(ItemDB.STICK) == quick_sticks_before,
 		"the drag & drop move conserved every stick")
 	_check(table.inventory.total_of(ItemDB.STICK) == 0,
@@ -1162,10 +1376,12 @@ func _stations_section() -> void:
 
 	inventory.clear_slot(3)
 	inventory.clear_slot(4)
-	inventory.add(BlockDB.SAND, 3)
-	inventory.add(ItemDB.COAL, 1)
-	var sand_slot: int = inventory.slots.find(BlockDB.SAND)
-	var coal_slot: int = inventory.slots.find(ItemDB.COAL)
+	var sand_slot: int = inventory.slots.find(BlockDB.AIR)
+	_check(sand_slot >= 0, "the player has an empty slot for the furnace input")
+	inventory.put_stack(sand_slot, {"item": BlockDB.SAND, "count": 3, "durability": 0})
+	var coal_slot: int = inventory.slots.find(BlockDB.AIR)
+	_check(coal_slot >= 0, "the player has an empty slot for the furnace fuel")
+	inventory.put_stack(coal_slot, {"item": ItemDB.COAL, "count": 1, "durability": 0})
 	panel.pick_up("player", sand_slot)
 	_check(panel.put_down("station", StationModel.FURNACE_INPUT_SLOT),
 		"the input slot accepts sand")
@@ -1195,6 +1411,7 @@ func _stations_section() -> void:
 	_game._close_station()
 	await process_frame
 	var stored = _game.stations.station_at(table_cell)
+	stored.inventory.clear_all()
 	stored.inventory.insert(5, {"item": ItemDB.STICK, "count": 5})
 	_game._save_now()
 	_check(FileAccess.file_exists(_game.saves.save_path()), "the station save is written to disk")

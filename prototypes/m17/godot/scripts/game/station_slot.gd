@@ -1,21 +1,22 @@
 class_name StationSlot
 extends Panel
 
-## One slot of a station interface (M19).
+## One slot of a station interface (crafting table / furnace).
 ##
 ## The same control draws either a player `Inventory` slot or a `StationInventory`
-## slot: both expose `slots`, `counts`, `durability_of()` and `is_empty()`, so the
+## slot: both expose `item_at`, `count_at`, `durability_of` and `is_empty`, so the
 ## presentation never needs to know which model it is looking at.  It reports
-## intent (`clicked`, `quick_moved`, drag & drop) and never mutates a model.
+## intent (`clicked`, drag & drop) and never mutates a model.
 ##
 ## A slot may show a `ghost` stack instead: the crafting table's result preview
 ## uses this to show what the current grid would make before the player commits.
 
 signal clicked(side: String, index: int, button: int, shift: bool)
 signal stack_moved(from_side: String, from_index: int, to_side: String, to_index: int)
+signal hovered(side: String, index: int)
 
-const SIZE := 58
-const ICON_MARGIN := 6
+const SIZE := UiStyle.SLOT_SIZE
+const ICON_MARGIN := UiStyle.SLOT_ICON_MARGIN
 
 var side := "player"
 var index := -1
@@ -25,17 +26,19 @@ var library: TextureLibrary
 var selected := false
 ## Text drawn in the top-left corner (e.g. "input", "fuel").  Empty hides it.
 var caption := ""
-## A stack to draw instead of reading the model (the result preview and the
-## interface's "carrying" slot).
+## A stack to draw instead of reading the model (the result preview).
 var override_stack: Dictionary = {}
 ## Draw the override as a translucent preview rather than a real stack.
 var ghost := false
+## The slot refuses the currently carried item (drawn with a red border).
+var invalid := false
 
 var _icon: TextureRect
 var _count: Label
 var _wear: ColorRect
 var _caption: Label
 var _number: Label
+var _hovered := false
 
 
 func configure(slot_side: String, slot_index: int, slot_model: Variant,
@@ -70,7 +73,7 @@ func _build() -> void:
 	_count.offset_right = -4
 	_count.offset_bottom = -2
 	_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_count.add_theme_font_size_override("font_size", 15)
+	_count.add_theme_font_size_override("font_size", 16)
 	_count.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
 	_count.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
 	_count.add_theme_constant_override("shadow_offset_x", 1)
@@ -83,7 +86,7 @@ func _build() -> void:
 	_caption.offset_left = 5
 	_caption.offset_top = 2
 	_caption.add_theme_font_size_override("font_size", 10)
-	_caption.add_theme_color_override("font_color", Color(0.72, 0.82, 0.92, 0.72))
+	_caption.add_theme_color_override("font_color", Color(0.72, 0.82, 0.92, 0.75))
 	_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_caption)
 
@@ -93,7 +96,7 @@ func _build() -> void:
 	_number.offset_bottom = -2
 	_number.add_theme_font_size_override("font_size", 10)
 	_number.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
-	_number.text = str(index + 1) if side == "player" else ""
+	_number.text = str(index + 1) if side == "player" and index < Inventory.HOTBAR_SIZE else ""
 	_number.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_number)
 
@@ -104,6 +107,8 @@ func _build() -> void:
 	_wear.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_wear.visible = false
 	add_child(_wear)
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
 	refresh()
 
 
@@ -116,12 +121,13 @@ func refresh() -> void:
 	var wear_value: int = int(override_stack.get("durability", 0)) if preview \
 		else int(model.durability_of(index))
 	var empty: bool = item_id == BlockDB.AIR or count <= 0
-	add_theme_stylebox_override("panel", _slot_style(selected, not empty and not ghost))
+	add_theme_stylebox_override("panel",
+		UiStyle.slot_style(not empty and not ghost, selected, ghost, _hovered, invalid))
 	_icon.texture = null if empty or library == null else library.icon(ItemDB.icon_key(item_id))
 	var tint := ItemDB.icon_tint(item_id)
-	var alpha := 0.15
+	var alpha := 0.18
 	if not empty:
-		alpha = 0.42 if ghost else 1.0
+		alpha = 0.44 if ghost else 1.0
 	_icon.modulate = Color(tint.r, tint.g, tint.b, alpha)
 	_count.text = "" if count <= 1 else str(count)
 	_caption.text = caption
@@ -138,17 +144,6 @@ func refresh() -> void:
 			else (Color(0.95, 0.78, 0.25, 0.95) if ratio > 0.15 else Color(0.92, 0.30, 0.26, 0.95))
 
 
-func _slot_style(is_selected: bool, occupied: bool) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.07, 0.1, 0.8 if occupied else 0.45)
-	if ghost:
-		style.bg_color = Color(0.12, 0.14, 0.1, 0.55)
-	style.border_color = Color(1, 0.92, 0.6, 0.95) if is_selected else Color(1, 1, 1, 0.22)
-	style.set_border_width_all(3 if is_selected else 1)
-	style.set_corner_radius_all(5)
-	return style
-
-
 # --- input ---------------------------------------------------------------
 
 func _gui_input(event: InputEvent) -> void:
@@ -159,21 +154,34 @@ func _gui_input(event: InputEvent) -> void:
 			clicked.emit(side, index, button.button_index, button.shift_pressed)
 
 
+func _on_mouse_entered() -> void:
+	_hovered = true
+	hovered.emit(side, index)
+	refresh()
+
+
+func _on_mouse_exited() -> void:
+	_hovered = false
+	refresh()
+
+
 func _get_drag_data(_position: Vector2) -> Variant:
 	if model == null or model.is_empty(index) or ghost:
 		return null
 	var item_id: int = model.item_at(index)
 	var preview := Panel.new()
 	preview.custom_minimum_size = Vector2(SIZE, SIZE)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.1, 0.14, 0.9)
-	style.set_corner_radius_all(5)
-	preview.add_theme_stylebox_override("panel", style)
+	preview.add_theme_stylebox_override("panel", UiStyle.slot_style(true))
 	var icon := TextureRect.new()
 	icon.texture = library.icon(ItemDB.icon_key(item_id)) if library != null else null
 	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon.offset_left = ICON_MARGIN
+	icon.offset_top = ICON_MARGIN
+	icon.offset_right = -ICON_MARGIN
+	icon.offset_bottom = -ICON_MARGIN
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(icon)
 	set_drag_preview(preview)

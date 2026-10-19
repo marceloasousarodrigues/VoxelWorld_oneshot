@@ -1,5 +1,152 @@
 # M17 Godot — Progress and Resume Point
 
+## M20 — Inventory, hotbar, crafting and interaction overhaul (2026-10-19)
+
+Mission: make the inventory, hotbar, crafting table, furnace and item collection
+one coherent Minecraft-inspired system.  The work is confined to the Godot
+project under `prototypes/m17/godot/`; the production Ursina implementation was
+not touched.
+
+### Root causes found (not assumed)
+
+1. **Mined iron really was refused.**  The starter kit filled all nine inventory
+   slots, and the old model had no storage rows.  Any drop that did not already
+   have a matching stack (iron lumps, coal, apples, …) was returned by
+   `Inventory.add()` and the HUD printed “inventory full”.  The drop rule itself
+   was correct (`IRON_ORE → IRON_LUMP`, gated by a stone pickaxe).
+2. **Table/furnace recipes could be invisible.**  The catalogue detected a
+   station with a four-block radius while E interaction uses the six-block reach;
+   a table you could open could still report “needs Crafting Table”.  Separately,
+   the grid UI put a whole carried stack into one cell, so four planks clicked
+   into one cell could never satisfy a four-cell recipe.
+3. **The interfaces had two competing crafting paths.**  The C catalogue could
+   craft table/furnace recipes directly from the player inventory while the
+   station panels used a 3×3 grid / timed furnace.  M20 keeps the catalogue as a
+   recipe catalogue plus hand crafting, and makes table/furnace recipes
+   station-only (the row points at E and its buttons are disabled).
+
+### Implemented
+
+**Authoritative inventory (`game/inventory.gd`)**
+
+- 27 storage slots + nine hotbar slots (`SIZE = 36`); only indices 0–8 can be
+  selected, so a storage slot can never become the item in the player's hand.
+- All stacking, caps, durability, serialisation, slot moves and quick transfer
+  live in the model.  `add_stack()` preserves a tool's durability; `quick_move()`
+  moves a stack between the hotbar and storage and leaves a partial remainder in
+  the source.
+- The starter kit fills the hotbar only, leaving all 27 storage slots free.  This
+  is the direct fix for the iron/coal pickup report.
+- Save format **VERSION 7**.  Saves from versions 1–6 (including the old
+  nine-row inventory) still load; the old row becomes the hotbar and storage
+  starts empty.  A payload larger than 36 rows is rejected, never truncated.
+
+**Hotbar and held item (`game.gd`, `game_hud.gd`)**
+
+- `1`–`9` select hotbar slots; the mouse wheel cycles the selection (`0` is
+  deliberately inert because the established hotbar size is nine).
+- The selected slot is the only held item used by mining, building, eating and
+  tool wear.  An empty selected slot means empty hands.
+- Opening/closing inventory or a station leaves the selection untouched (tested);
+  gameplay input is disabled only while an overlay owns the mouse, and closing
+  restores mouse capture.
+- The HUD uses the shared slot style and still shows the held item name,
+  selection highlight and durability.
+
+**Temporary cursor instead of a carry slot**
+
+- The permanent `CARRYING` slot/row is gone from both panels.  Rearranging uses a
+  temporary cursor stack drawn under the pointer (`game/item_cursor.gd`,
+  `game/inventory_panel.gd`, `game/station_panel.gd`).
+- Left click picks up/places/merges/swaps; right click splits half or places one;
+  shift-click quick-moves; drag & drop reorders.  Every mutation goes through the
+  inventory models, never the controls.
+- Closing with a cursor stack returns it to its origin, then to any player slot,
+  then to the station.  If every container is genuinely full the panel stays
+  open with an explicit “make space” message, so closing cannot delete an item.
+
+**Player inventory (`I`)**
+
+- Minecraft-like 9×3 storage grid above the nine-slot hotbar, selected-slot
+  highlight, count badges, durability bars, tooltips with name/count/properties,
+  item facts pane, and a clean M18 visual language shared with the stations
+  (`game/ui_style.gd`).  No fake equipment slots were added.
+- Item facts still report the block hardness/drop/tool requirement, stack cap,
+  held count, tool/food values, and the recipes that make/use the item.
+
+**Stations (`E`, `game/station_panel.gd`)**
+
+- Aiming at a table/furnace shows the existing outline and an `E use …` prompt;
+  E opens the exact targeted object, Esc (or E) closes it, interaction is limited
+  by the voxel ray's reach, unloaded/destroyed objects are reported safely, and
+  world actions are blocked while the interface is open.
+- The station panel now shows the full 27+9 player inventory (not one hotbar row)
+  and uses the same cursor/slot rules as the player inventory.
+- Crafting table: one ingredient per grid cell per click/drag/shift-click;
+  shaped recipes match anywhere in the 3×3 grid and support horizontal mirroring;
+  shapeless recipes match by multiset; the result preview/status refreshes on
+  every grid change; `craft_grid()` is atomic and refuses a full result slot.
+- Furnace: input/fuel/output, timed cook and fuel bars, live status, output-full
+  pause and persisted progress were already M19 mechanics; M20 verifies them
+  through the rebuilt panel and fixes the shared station-detection radius.  The
+  catalogue no longer provides a second instantaneous furnace.
+- The catalogue (`C`) remains available as a recipe reference and for hand
+  recipes; station recipes are listed with their missing ingredients and a
+  “use Crafting Table/Furnace (E)” explanation but cannot be crafted there.
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows)
+
+- Unit: `--headless --path prototypes/m17/godot --script
+  res://scripts/tests/run_tests.gd` → **1477 assertions**, exit 0, 0 bytes
+  stderr.  New/updated coverage: 36-slot inventory and legacy nine-row payloads,
+  starter-kit storage headroom (iron/coal/apple regression), oversized payload
+  rejection, storage-row persistence, station-detection reach, raw-ore refusal,
+  shaped mirror matching, full-inventory crafting atomicity.
+- Integration: `--headless --path prototypes/m17/godot --script
+  res://scripts/tests/run_integration.gd -- --straight-to-game` → **327
+  assertions**, exit 0, 0 bytes stderr.  New real-scene coverage: wheel/number
+  hotbar selection, inventory panel 36 slots, split/merge/swap/quick-move and
+  count conservation, cursor recovery on close, selected-slot preservation,
+  diagonal + top-down station targeting, table grid one-item clicks, shaped
+  3×3 stone-axe craft, catalogue station rows disabled, and real iron + coal
+  mining through the player controller into the 36-slot inventory.
+- Headless smoke `--straight-to-game --quit-after=25`: exit 0, 0 bytes stderr,
+  `world_hash=7995773462820745781`, `faces=170492`,
+  `faces_hash=6834793821708419232`, `inventory_used_slots=9` (unchanged world
+  content; the starter kit still fills the hotbar only).
+- Windowed captures at 1280×720 inspected: `m20-inventory.png` (9×3 storage +
+  hotbar + item facts), `m20-table.png` (3×3 grid, ghost result, full player
+  inventory), `m20-furnace.png` (sand/coal → glass, COOK/FUEL bars, live
+  “cooking”), `m20-recipes.png` (hand recipes ready; table/furnace rows point at
+  the world object and are disabled).
+
+### Limitations / not verified
+
+- No human keyboard/mouse play-through; all runtime evidence is scripted headless
+  integration plus inspected windowed PNGs.
+- There is still no dropped-item entity.  A mined drop that does not fit in a
+  completely full 36-slot inventory is reported and lost (the same explicit rule
+  as before); only the ordinary case — the starter kit no longer occupies every
+  slot — is fixed.
+- Cursor recovery can refuse to close when all 36 player slots and all station
+  slots are full; the panel stays open instead of deleting the stack.
+- The catalogue is a recipe reference plus hand crafting; there is no 2×2 hand
+  grid.  Table/furnace recipes are intentionally made only at the world object.
+- The hotbar remains nine slots, so number key `0` has no tenth slot to select.
+- No first-person hand/view-model mesh is rendered; “held item” is the logical
+  selected hotbar item used by all gameplay actions and the HUD.
+- Station interaction was verified from straight above, a diagonal angle and
+  beyond range; no human mouse-look play-through.
+
+### Resume point
+
+The M20 loop (mining → inventory → crafting table → furnace → placement) is
+implemented and tested.  Next independent work is the roadmap's remaining Phase
+C/D items (weather, city management, player construction beyond single blocks)
+or a human play-through of the new interfaces.
+
+---
+
 ## M19 — Interactive crafting stations and persistent inventories (2026-10-19)
 
 Mission: turn the placed crafting table and furnace into real, targetable world
@@ -734,12 +881,12 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 ## 9. Resume
 
 Read this file and `godot-roadmap.md`, then run the baseline commands at the end of this
-section. The current baseline is **1451 unit + 265 integration assertions** (post-M19),
+section. The current baseline is **1477 unit + 327 integration assertions** (post-M20),
 both exit 0 with 0 bytes of stderr. The M18 content pass (denser trees, boulders) changed
 the generated world, so the spawn-region smoke is now `world_hash=7995773462820745781`,
 `faces=170492`, `faces_hash=6834793821708419232`, `edits=0`, `meshed=392` at radius 4
-(re-confirmed after M19). All hashes quoted earlier in this file are historical
-(pre-M18 generation); only this one is current.
+(re-confirmed after M20; M20 changes no world generation). All hashes quoted earlier in this
+file are historical (pre-M18 generation); only this one is current.
 
 Phases A, B and C are complete and phase D is well under way. What is implemented and verified
 is listed in `godot-roadmap.md`; the honest remaining gaps are:
@@ -748,10 +895,12 @@ is listed in `godot-roadmap.md`; the honest remaining gaps are:
 - **Phase D**: player construction beyond single blocks (blueprints/paste), and the
   city-management foundation (settlement growth, resource economy with the player, guards and
   worked plots).  Raids, residents, tasks and settlement stores exist.
-- **Crafting follow-ups** the roadmap still lists as done-with-limits: smelting is menu-driven
-  (no timed furnace), the interface matches by ingredient multiset (the shaped *definitions* and
-  `match_grid` are real and tested, but there is no drag-and-drop 3×3 grid), and there is no
-  anvil/repair.
+- **Crafting follow-ups**: there is no 2×2 hand grid (hand recipes are crafted from the C
+  catalogue) and no anvil/repair.  Table/furnace recipes are now station-only and use the real
+  3×3 grid / timed furnace; the catalogue is a reference and hand-crafting entry point.
+- **Mining overflow**: there is still no dropped-item entity, so a drop that does not fit in a
+  completely full inventory is reported and lost.  The starter kit now leaves the 27 storage
+  slots free, which fixes the ordinary iron/coal case.
 - **Known limitations per increment** are listed at the end of each section of this file; read
   those before deciding what to fix next — several are deliberate scoping decisions rather than
   defects.

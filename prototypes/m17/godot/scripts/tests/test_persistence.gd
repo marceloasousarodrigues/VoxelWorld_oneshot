@@ -100,6 +100,9 @@ func run(h: TestHarness) -> void:
 	var inventory := Inventory.new()
 	inventory.add(BlockDB.STONE, 5)
 	inventory.add(BlockDB.PLANKS, 2)
+	# Put a stack in a storage row, not just the hotbar: M20's 27 main slots must
+	# survive the same save/load path as the hotbar.
+	inventory.put_stack(Inventory.MAIN_FIRST + 4, {"item": ItemDB.IRON_LUMP, "count": 7})
 
 	var clock := DayNight.new(0.42, 900.0)
 
@@ -117,7 +120,7 @@ func run(h: TestHarness) -> void:
 	var data: Dictionary = result["data"]
 	h.eq(int(data["seed"]), 17017, "the saved seed round-trips")
 	h.eq(int(data["version"]), SaveManager.VERSION, "the save is written at the current version")
-	h.eq(int(SaveManager.VERSION), 6, "the current save version is 6")
+	h.eq(int(SaveManager.VERSION), 7, "the current save version is 7")
 
 	# --- apply to a fresh session ------------------------------------------
 	var restored_world := VoxelWorld.new(17017)
@@ -150,6 +153,9 @@ func run(h: TestHarness) -> void:
 
 	h.eq(restored_inventory.count_of(BlockDB.STONE), 5, "the inventory stone count survived")
 	h.eq(restored_inventory.count_of(BlockDB.PLANKS), 2, "the inventory planks count survived")
+	h.eq(restored_inventory.count_of(ItemDB.IRON_LUMP), 7, "a storage-row item survived the round-trip")
+	h.eq(restored_inventory.slots[Inventory.MAIN_FIRST + 4], ItemDB.IRON_LUMP,
+		"the storage-row slot index survived")
 	h.approx(restored_clock.time_of_day, 0.42, 1e-6, "the clock time survived")
 	h.approx(restored_clock.day_length_seconds, 900.0, 1e-6, "the clock day length survived")
 

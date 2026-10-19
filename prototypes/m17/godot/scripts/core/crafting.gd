@@ -479,12 +479,29 @@ static func validate(recipe_entry: Dictionary) -> String:
 ## True when the given grid satisfies the recipe's shape.  `grid` is a list of
 ## rows of item ids (`BlockDB.AIR` = empty), at most 3x3; like Minecraft, the
 ## pattern may sit anywhere in the grid and empty rows and columns are trimmed
-## before comparing.  A shapeless recipe matches on the ingredient multiset.
+## before comparing, and a shaped pattern may be mirrored horizontally.  A
+## shapeless recipe matches on the ingredient multiset.
 static func match_grid(recipe_entry: Dictionary, grid: Array) -> bool:
 	var ids := _grid_ids(grid)
 	if not recipe_entry.has("pattern"):
 		return _multiset(ids) == ingredients(recipe_entry)
-	return _trim(_pattern_ids(recipe_entry)) == _trim(_ids_to_grid(ids, 3))
+	var pattern := _trim(_pattern_ids(recipe_entry))
+	var placed := _trim(_ids_to_grid(ids, 3))
+	if pattern == placed:
+		return true
+	# Minecraft-shaped recipes are mirrorable left-to-right (the axe pattern, for
+	# example, works in both directions).
+	return _mirror_rows(pattern) == placed
+
+
+static func _mirror_rows(rows: Array) -> Array:
+	var mirrored: Array = []
+	for row: Array in rows:
+		var reverse: Array = []
+		for index in range(row.size() - 1, -1, -1):
+			reverse.append(int(row[index]))
+		mirrored.append(reverse)
+	return mirrored
 
 
 static func _pattern_ids(recipe_entry: Dictionary) -> Array:

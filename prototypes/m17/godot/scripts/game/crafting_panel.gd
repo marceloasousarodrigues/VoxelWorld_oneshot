@@ -1,13 +1,14 @@
 class_name CraftingPanel
 extends Control
 
-## In-game crafting interface.
+## In-game crafting catalogue.
 ##
-## A centred overlay that lists the whole recipe catalogue grouped by category and
-## filtered by the stations the player can actually use.  Every row shows the
-## output, its ingredients with have/need counts, whether the station is
-## available, and why a recipe cannot be crafted right now; recipes that are ready
-## are bright and carry active Craft / x5 buttons.
+## A centred overlay that lists the whole recipe catalogue grouped by category.
+## Hand recipes can be crafted here; recipes that require a crafting table or
+## furnace are deliberately listed but disabled and point at the world object's
+## own interface (E).  That keeps one crafting model per station: the catalogue
+## never competes with the 3x3 grid or the timed furnace and can never consume
+## station ingredients twice.
 ##
 ## It is presentation and intent only -- it reads the `Inventory` model and the
 ## `Crafting` rules and never mutates the voxel world.  The game layer observes
@@ -137,7 +138,7 @@ func _build(texture_library: TextureLibrary) -> void:
 		_list.add_child(_build_row(recipe, texture_library))
 
 	_hint = Label.new()
-	_hint.text = "Click Craft for one · x%d for five · C or Esc closes" % BATCH_SIZE
+	_hint.text = "Hand recipes craft here · table/furnace recipes are made at the object with E · C or Esc closes"
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint.add_theme_font_size_override("font_size", 12)
 	_hint.add_theme_color_override("font_color", Color(0.68, 0.78, 0.88, 0.85))
@@ -253,7 +254,7 @@ func _build_row(recipe: Dictionary, texture_library: TextureLibrary) -> PanelCon
 func _refresh() -> void:
 	if inventory == null:
 		return
-	_station_label.text = "Station: %s" % _station_name(_station)
+	_station_label.text = "Nearby station: %s" % _station_name(_station)
 	var ready := 0
 	var shown := 0
 	for entry: Dictionary in _rows:
@@ -265,23 +266,34 @@ func _refresh() -> void:
 		shown += 1
 		if _refresh_row(entry):
 			ready += 1
-	_hint.text = "Click Craft for one · x%d for five · %d of %d recipes ready · C or Esc closes" % [
-		BATCH_SIZE, ready, shown]
+	_hint.text = "Hand recipes craft here · table/furnace recipes are made at the object with E · %d of %d ready · C or Esc closes" % [
+		ready, shown]
 
 
-## Updates one row from the current inventory and station.  Returns true when the
-## recipe is ready to craft.
+## Updates one row from the current inventory.  Hand recipes are craftable from
+## this list; station recipes are deliberately listed but disabled, because their
+## one interaction model is the world object's grid/furnace panel (E).  The two
+## paths therefore never compete or consume ingredients twice.  Returns true when
+## the row is a ready hand recipe.
 func _refresh_row(entry: Dictionary) -> bool:
 	var recipe: Dictionary = entry["recipe"]
+	var required_station := Crafting.station_of(recipe)
+	var is_hand := required_station == Crafting.STATION_HAND
 	var station_ok := Crafting.station_satisfied(recipe, _station)
 	var missing: Dictionary = Crafting.missing(inventory, recipe, _station)
-	var can_craft := Crafting.can_craft(inventory, recipe, _station)
-	var batchable := Crafting.can_craft_times(inventory, recipe, BATCH_SIZE, _station)
+	var can_craft := is_hand and Crafting.can_craft(inventory, recipe, Crafting.STATION_HAND)
+	var batchable := is_hand and Crafting.can_craft_times(inventory, recipe, BATCH_SIZE, Crafting.STATION_HAND)
 
 	var status_text := ""
 	var status_colour := STATUS_READY
-	if not station_ok:
-		status_text = "needs %s" % _station_name(Crafting.station_of(recipe))
+	if not is_hand:
+		if not missing.is_empty():
+			status_text = "missing %s · use %s (E)" % [_shortfall(missing),
+				_station_name(required_station)]
+		elif station_ok:
+			status_text = "use %s (E)" % _station_name(required_station)
+		else:
+			status_text = "make at a %s (E)" % _station_name(required_station)
 		status_colour = STATUS_BLOCKED
 	elif not missing.is_empty():
 		status_text = "missing %s" % _shortfall(missing)
@@ -290,7 +302,7 @@ func _refresh_row(entry: Dictionary) -> bool:
 		status_text = "inventory full"
 		status_colour = STATUS_BLOCKED
 	else:
-		status_text = "ready" if can_craft else ""
+		status_text = "ready"
 	(entry["status"] as Label).text = status_text
 	(entry["status"] as Label).add_theme_color_override("font_color", status_colour)
 	(entry["detail"] as Label).text = _detail_text(recipe)
@@ -298,7 +310,9 @@ func _refresh_row(entry: Dictionary) -> bool:
 	var batch_button := entry["batch"] as Button
 	craft_button.disabled = not can_craft
 	batch_button.disabled = not batchable
-	var dim := Color(1, 1, 1, 1.0 if can_craft else 0.5)
+	craft_button.tooltip_text = "" if is_hand else "Use the %s's own interface (E)" % _station_name(required_station)
+	batch_button.tooltip_text = craft_button.tooltip_text
+	var dim := Color(1, 1, 1, 1.0 if can_craft else (0.86 if not is_hand else 0.5))
 	(entry["root"] as Control).modulate = dim
 	(entry["icon"] as TextureRect).modulate = ItemDB.icon_tint(int(recipe["output"])) * dim
 	return can_craft
@@ -350,7 +364,12 @@ func _station_name(station: String) -> String:
 func _craft(recipe: Dictionary, count: int) -> void:
 	if inventory == null:
 		return
-	var result: Dictionary = Crafting.craft_many(inventory, recipe, count, _station)
+	if Crafting.station_of(recipe) != Crafting.STATION_HAND:
+		crafted.emit({"ok": false, "reason": "Use the %s's own interface with E" % _station_name(
+			Crafting.station_of(recipe)), "output": int(recipe.get("output", BlockDB.AIR)),
+			"output_count": int(recipe.get("output_count", 0)), "crafted": 0})
+		return
+	var result: Dictionary = Crafting.craft_many(inventory, recipe, count, Crafting.STATION_HAND)
 	crafted.emit(result)
 	_refresh()
 

@@ -387,6 +387,7 @@ func _build_ui() -> void:
 	inventory_panel.name = "InventoryPanel"
 	crafting_layer.add_child(inventory_panel)
 	inventory_panel.setup(inventory, library)
+	inventory_panel.message.connect(func(text: String) -> void: hud.flash(text, 2.4))
 
 	# The station interface (M19) shares the overlay layer: only one panel is
 	# open at a time, and the station panel is opened at the world object the
@@ -1381,6 +1382,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _overlay_open():
 			# The open overlay owns the mouse; ignore gameplay input.
 			pass
+		elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
+				and (event as InputEventMouseButton).button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			# Mouse wheel cycles the selected hotbar slot.  It is handled before
+			# the generic "click recaptures the mouse" branch below.
+			var button := (event as InputEventMouseButton).button_index
+			var step := -1 if button == MOUSE_BUTTON_WHEEL_UP else 1
+			inventory.select(posmod(inventory.selected + step, Inventory.HOTBAR_SIZE))
 		elif event.is_action_pressed("toggle_fly"):
 			player.toggle_fly()
 		elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
@@ -1408,10 +1416,14 @@ func _open_crafting() -> void:
 		return
 	if settings_panel != null and settings_panel.is_open():
 		settings_panel.close()
+	if inventory_panel != null and inventory_panel.is_open():
+		if not inventory_panel.close():
+			return
 	if station_panel != null and station_panel.is_open():
-		station_panel.close()
-	# Which stations the player can use right now: any crafting table (or
-	# furnace) block that is loaded within a few blocks of the player.
+		if not station_panel.close():
+			return
+	# Which stations the player can use right now: the station under the
+	# crosshair, otherwise a loaded table/furnace within interaction reach.
 	crafting.set_station(_current_station())
 	crafting.open()
 	# While the panel is open the mouse drives the interface instead of the
@@ -1420,8 +1432,10 @@ func _open_crafting() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
-## The best crafting station in the player's surroundings.  Deliberately a small
-## radius: the station is a place in the world, not a menu toggle.
+## The best crafting station in the player's surroundings.  Deliberately uses the
+## interaction reach (not a tiny menu radius): a station you can open with E must
+## also unlock its recipes in the catalogue.  A furnace outranks a table because
+## it can do everything a table can and smelt as well.
 func _current_station() -> String:
 	if world == null or player == null:
 		return Crafting.STATION_HAND
@@ -1429,7 +1443,7 @@ func _current_station() -> String:
 		floori(player.global_position.x),
 		floori(player.global_position.y),
 		floori(player.global_position.z))
-	return Crafting.best_station(world, feet, 4)
+	return Crafting.best_station(world, feet, int(ceil(player.reach)))
 
 
 func _close_crafting() -> void:
@@ -1507,7 +1521,8 @@ func _open_station(position: Vector3i) -> void:
 	if crafting != null and crafting.is_open():
 		crafting.close()
 	if inventory_panel != null and inventory_panel.is_open():
-		inventory_panel.close()
+		if not inventory_panel.close():
+			return
 	if settings_panel != null and settings_panel.is_open():
 		settings_panel.close()
 	_open_station_position = position
@@ -1521,7 +1536,12 @@ func _open_station(position: Vector3i) -> void:
 func _close_station() -> void:
 	if station_panel == null:
 		return
-	station_panel.close()
+	if not station_panel.close():
+		# The cursor stack could not be recovered; keep the interface open and
+		# the mouse visible so the player can make room instead of losing items.
+		player.can_interact = false
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return
 	if state == State.PLAYING:
 		player.can_interact = true
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -1648,11 +1668,13 @@ func _open_inventory() -> void:
 	if crafting != null and crafting.is_open():
 		crafting.close()
 	if inventory_panel != null and inventory_panel.is_open():
-		inventory_panel.close()
+		if not inventory_panel.close():
+			return
 	if settings_panel != null and settings_panel.is_open():
 		settings_panel.close()
 	if station_panel != null and station_panel.is_open():
-		station_panel.close()
+		if not station_panel.close():
+			return
 	inventory_panel.open()
 	player.can_interact = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -1661,7 +1683,10 @@ func _open_inventory() -> void:
 func _close_inventory() -> void:
 	if inventory_panel == null:
 		return
-	inventory_panel.close()
+	if not inventory_panel.close():
+		player.can_interact = false
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return
 	if state == State.PLAYING:
 		player.can_interact = true
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -1673,9 +1698,11 @@ func _open_settings() -> void:
 	if crafting != null and crafting.is_open():
 		crafting.close()
 	if inventory_panel != null and inventory_panel.is_open():
-		inventory_panel.close()
+		if not inventory_panel.close():
+			return
 	if station_panel != null and station_panel.is_open():
-		station_panel.close()
+		if not station_panel.close():
+			return
 	settings_panel.open()
 	player.can_interact = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -1749,6 +1776,11 @@ func _handle_hotbar_input(event: InputEvent) -> void:
 		if event.is_action_pressed("slot_%d" % (index + 1)):
 			inventory.select(index)
 			return
+	# Slot 10 is only meaningful if the hotbar ever grows to ten slots; the
+	# project uses nine, so "0" is deliberately inert instead of selecting an
+	# invisible slot.
+	if Inventory.HOTBAR_SIZE == 10 and event.is_action_pressed("slot_0"):
+		inventory.select(9)
 
 
 # =========================================================================

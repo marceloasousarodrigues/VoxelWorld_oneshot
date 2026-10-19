@@ -46,6 +46,7 @@ func _place(world: VoxelWorld, position: Vector3i, block_id: int) -> void:
 func run(h: TestHarness) -> void:
 	_test_station_inventory(h)
 	_test_smelting_rules(h)
+	_test_station_detection(h)
 	_test_crafting_table(h)
 	_test_furnace(h)
 	_test_registry(h)
@@ -68,6 +69,8 @@ func _test_station_inventory(h: TestHarness) -> void:
 	h.check(not inventory.accepts(9, BlockDB.PLANKS), "the output slot refuses player items")
 	var furnace := StationInventory.new(_furnace_roles())
 	h.check(furnace.accepts(0, ItemDB.IRON_LUMP), "the input slot accepts a smeltable item")
+	h.check(not furnace.accepts(0, BlockDB.IRON_ORE),
+		"the input slot refuses raw iron ore (it must be mined into a lump first)")
 	h.check(not furnace.accepts(0, BlockDB.PLANKS), "the input slot refuses a non-smeltable item")
 	h.check(furnace.accepts(1, ItemDB.COAL), "the fuel slot accepts a fuel item")
 	h.check(not furnace.accepts(1, BlockDB.STONE), "the fuel slot refuses a non-fuel item")
@@ -189,6 +192,28 @@ func _test_smelting_rules(h: TestHarness) -> void:
 	h.approx(Smelting.cook_seconds(Smelting.recipe_for(BlockDB.SAND)), 6.0, 1e-6, "an ordinary recipe uses the default cook time")
 
 
+# --- station detection ----------------------------------------------------
+
+## A station you can open with E must also unlock its recipes in the catalogue.
+## The reported M20 bug was a four-block menu radius against a six-block reach.
+func _test_station_detection(h: TestHarness) -> void:
+	h.section("station detection")
+	var world := _table_world()
+	var table_cell := Vector3i(15, 100, 4)
+	_place(world, table_cell, BlockDB.CRAFTING_TABLE)
+	var near := Vector3i(10, 100, 4)
+	h.eq(Crafting.best_station(world, near, 3), Crafting.STATION_HAND,
+		"a table outside the scan radius is not detected")
+	h.eq(Crafting.best_station(world, near, 4), Crafting.STATION_HAND,
+		"a table five blocks away is outside the old four-block menu radius")
+	h.eq(Crafting.best_station(world, near, 6), Crafting.STATION_TABLE,
+		"a table within interaction reach unlocks table recipes")
+	var furnace_cell := Vector3i(12, 100, 4)
+	_place(world, furnace_cell, BlockDB.FURNACE)
+	h.eq(Crafting.best_station(world, near, 6), Crafting.STATION_FURNACE,
+		"a furnace outranks a table because it can also smelt")
+
+
 # --- crafting table -------------------------------------------------------
 
 func _test_crafting_table(h: TestHarness) -> void:
@@ -277,7 +302,7 @@ func _test_crafting_table(h: TestHarness) -> void:
 	h.eq(player.count_of(BlockDB.PLANKS) + player.count_of(ItemDB.STICK), 4, "the player received every leftover")
 	h.eq(leftovers.inventory.total_items(), 0, "the grid is empty after the return")
 	var full := Inventory.new()
-	h.eq(full.add(BlockDB.STONE, ItemDB.max_stack(BlockDB.STONE) * Inventory.HOTBAR_SIZE), 0,
+	h.eq(full.add(BlockDB.STONE, ItemDB.max_stack(BlockDB.STONE) * Inventory.SIZE), 0,
 		"the filler inventory is completely full")
 	var keep := StationModel.new(StationModel.TABLE)
 	keep.inventory.insert(0, {"item": BlockDB.PLANKS, "count": 3})

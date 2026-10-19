@@ -1,46 +1,49 @@
 class_name StationPanel
 extends Control
 
-## The world-object station interface (M19).
+## The world-object station interface (M20).
 ##
 ## One overlay serves every station kind.  It draws the station's own slots (a
 ## 3x3 grid and result for a crafting table; input, fuel and output for a
-## furnace) next to the player's hotbar, and lets stacks move between the two
-## inventories with click-to-carry, right-click split, shift-click quick-move and
-## Godot drag & drop.
+## furnace) above the player's full 27+9 inventory, and lets stacks move between
+## the two inventories with click-to-carry, right-click split, shift-click
+## quick-move and Godot drag & drop.
 ##
 ## Presentation and intent only: every mutation goes through `Station` /
 ## `StationInventory` / `Inventory`, so the interface can never invent items.  The
 ## game layer owns the station's world identity and reports outcomes.
 ##
-## The crafting grid and the furnace contents are *persistent station storage*:
-## closing the interface leaves them in the station.  A carried stack is returned
-## to the player (and then to the station) on close, so no item is ever lost.
+## The crafting grid and the furnace contents are persistent station storage:
+## closing the interface leaves them in the station.  A temporary cursor stack is
+## recovered into the player, then the station, on close, so no item is lost.
 
 signal message(text: String)
 
-const PANEL_WIDTH := 760
+const PANEL_WIDTH := 880
 const ARROW_TEXT := "\u2192"
+const DETAIL_WIDTH := 236
 
 var inventory: Inventory
 var station: Station
 var library: TextureLibrary
 
 var _carried: Dictionary = {}
+var _carry_origin_side := ""
+var _carry_origin_index := -1
 var _station_slots: Array[StationSlot] = []
 var _player_slots: Array[StationSlot] = []
 var _station_area: VBoxContainer
-var _player_row: HBoxContainer
-var _carry_slot: StationSlot
-var _carry_label: Label
+var _player_main: GridContainer
+var _player_hotbar: HBoxContainer
+var _cursor: ItemCursor
 var _title: Label
 var _station_info: Label
 var _status: Label
 var _hint: Label
 var _cook_fill: ColorRect
 var _fuel_fill: ColorRect
-var _cook_bar_width := 160.0
-var _fuel_bar_width := 160.0
+var _cook_bar_width := 150.0
+var _fuel_bar_width := 150.0
 
 
 func setup(player_inventory: Inventory, texture_library: TextureLibrary = null) -> void:
@@ -60,7 +63,7 @@ func _build() -> void:
 
 	var dim := ColorRect.new()
 	dim.name = "Dim"
-	dim.color = Color(0.02, 0.03, 0.05, 0.55)
+	dim.color = Color(0.02, 0.03, 0.05, 0.60)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
@@ -72,106 +75,112 @@ func _build() -> void:
 
 	var box := PanelContainer.new()
 	box.custom_minimum_size = Vector2(PANEL_WIDTH, 0)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.07, 0.1, 0.97)
-	style.border_color = Color(1, 1, 1, 0.28)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(8)
-	box.add_theme_stylebox_override("panel", style)
+	box.add_theme_stylebox_override("panel", UiStyle.panel_style())
 	center.add_child(box)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 22)
-	margin.add_theme_constant_override("margin_right", 22)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_bottom", 14)
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
 	box.add_child(margin)
 
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
-	margin.add_child(column)
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation", 18)
+	margin.add_child(columns)
+
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 8)
+	columns.add_child(left)
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
-	_title = _label(22, Color(0.95, 0.98, 1.0))
-	_title.text = "STATION"
+	_title = _label("STATION", 21, UiStyle.TEXT_PRIMARY)
 	header.add_child(_title)
-	_station_info = _label(13, Color(0.72, 0.85, 0.95))
+	_station_info = _label("", 13, UiStyle.TEXT_SECONDARY)
 	_station_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_station_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(_station_info)
-	column.add_child(header)
-
-	var content := HBoxContainer.new()
-	content.add_theme_constant_override("separation", 22)
-	column.add_child(content)
+	left.add_child(header)
 
 	_station_area = VBoxContainer.new()
 	_station_area.name = "StationSlots"
 	_station_area.add_theme_constant_override("separation", 8)
-	content.add_child(_station_area)
+	left.add_child(_station_area)
+
+	left.add_child(HSeparator.new())
+	var player_title := _label("PLAYER INVENTORY", 11, UiStyle.TEXT_MUTED)
+	left.add_child(player_title)
+
+	_player_main = GridContainer.new()
+	_player_main.name = "PlayerMain"
+	_player_main.columns = Inventory.HOTBAR_SIZE
+	_player_main.add_theme_constant_override("h_separation", 5)
+	_player_main.add_theme_constant_override("v_separation", 5)
+	left.add_child(_player_main)
+	for index in range(Inventory.MAIN_FIRST, Inventory.SIZE):
+		_player_main.add_child(_make_player_slot(index))
+
+	var hotbar_spacer := Control.new()
+	hotbar_spacer.custom_minimum_size = Vector2(0, 7)
+	left.add_child(hotbar_spacer)
+	_player_hotbar = HBoxContainer.new()
+	_player_hotbar.name = "PlayerHotbar"
+	_player_hotbar.add_theme_constant_override("separation", 5)
+	left.add_child(_player_hotbar)
+	for index in Inventory.HOTBAR_SIZE:
+		_player_hotbar.add_child(_make_player_slot(index))
+
+	_hint = _label("", 12, UiStyle.TEXT_MUTED)
+	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint.custom_minimum_size = Vector2(570, 0)
+	left.add_child(_hint)
 
 	var facts := PanelContainer.new()
-	facts.custom_minimum_size = Vector2(240, 0)
-	var facts_style := StyleBoxFlat.new()
-	facts_style.bg_color = Color(0.07, 0.09, 0.13, 0.9)
-	facts_style.set_corner_radius_all(5)
-	facts_style.set_content_margin_all(12)
-	facts.add_theme_stylebox_override("panel", facts_style)
-	content.add_child(facts)
+	facts.custom_minimum_size = Vector2(DETAIL_WIDTH, 0)
+	facts.add_theme_stylebox_override("panel", UiStyle.detail_style())
+	columns.add_child(facts)
 	var facts_column := VBoxContainer.new()
 	facts_column.add_theme_constant_override("separation", 8)
 	facts.add_child(facts_column)
-	_status = _label(14, Color(0.88, 0.93, 0.99))
+	var facts_title := _label("STATION NOTES", 11, UiStyle.TEXT_MUTED)
+	facts_column.add_child(facts_title)
+	_status = _label("", 13, Color(0.88, 0.93, 0.99))
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status.custom_minimum_size = Vector2(214, 0)
+	_status.custom_minimum_size = Vector2(DETAIL_WIDTH - 24, 0)
 	facts_column.add_child(_status)
+	var facts_spacer := Control.new()
+	facts_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	facts_column.add_child(facts_spacer)
+	var recipe_hint := _label("Recipes use the existing catalogue.\n"
+		+ "Missing ingredients and a missing station are reported separately.", 11, UiStyle.TEXT_MUTED)
+	recipe_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	facts_column.add_child(recipe_hint)
 
-	var separator := HSeparator.new()
-	facts_column.add_child(separator)
-	column.add_child(HSeparator.new())
-
-	var player_title := _label(13, Color(0.7, 0.8, 0.9, 0.9))
-	player_title.text = "PLAYER INVENTORY"
-	column.add_child(player_title)
-
-	_player_row = HBoxContainer.new()
-	_player_row.name = "PlayerSlots"
-	_player_row.add_theme_constant_override("separation", 6)
-	column.add_child(_player_row)
-	for index in Inventory.HOTBAR_SIZE:
-		var slot := StationSlot.new()
-		slot.configure("player", index, inventory, library)
-		slot.clicked.connect(_on_slot_clicked)
-		slot.stack_moved.connect(_on_stack_moved)
-		_player_row.add_child(slot)
-		_player_slots.append(slot)
-
-	var carry_row := HBoxContainer.new()
-	carry_row.add_theme_constant_override("separation", 10)
-	column.add_child(carry_row)
-	var carry_title := _label(13, Color(0.7, 0.8, 0.9, 0.9))
-	carry_title.text = "CARRYING"
-	carry_row.add_child(carry_title)
-	_carry_slot = StationSlot.new()
-	_carry_slot.configure("carry", -1, inventory, library)
-	_carry_slot.custom_minimum_size = Vector2(StationSlot.SIZE, StationSlot.SIZE)
-	carry_row.add_child(_carry_slot)
-	_carry_label = _label(14, Color(0.92, 0.96, 1.0))
-	carry_row.add_child(_carry_label)
-
-	_hint = _label(12, Color(0.68, 0.78, 0.88, 0.85))
-	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	column.add_child(_hint)
+	_cursor = ItemCursor.new()
+	_cursor.name = "CursorStack"
+	add_child(_cursor)
+	_cursor.setup(library)
 
 	_refresh()
 
 
-func _label(size: int, colour: Color) -> Label:
+func _label(text: String, font_size: int, colour: Color) -> Label:
 	var label := Label.new()
-	label.add_theme_font_size_override("font_size", size)
+	label.text = text
+	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", colour)
 	return label
+
+
+func _make_player_slot(index: int) -> StationSlot:
+	var slot := StationSlot.new()
+	slot.name = "PlayerSlot%d" % index
+	slot.configure("player", index, inventory, library)
+	slot.clicked.connect(_on_slot_clicked)
+	slot.stack_moved.connect(_on_stack_moved)
+	_player_slots.append(slot)
+	return slot
 
 
 # --- opening / layout ----------------------------------------------------
@@ -179,10 +188,14 @@ func _label(size: int, colour: Color) -> Label:
 func open_station(target: Station) -> void:
 	if target == null:
 		return
+	if visible and not close():
+		return
 	if station != null and station.inventory.changed.is_connected(_refresh):
 		station.inventory.changed.disconnect(_refresh)
 	station = target
 	_carried = {}
+	_carry_origin_side = ""
+	_carry_origin_index = -1
 	if not station.inventory.changed.is_connected(_refresh):
 		station.inventory.changed.connect(_refresh)
 	_rebuild_station_area()
@@ -199,25 +212,49 @@ func refresh() -> void:
 	_refresh()
 
 
-func close() -> void:
+## Closes the interface.  A cursor stack is returned to its origin, then to the
+## player, then to the station; if every container is full the panel stays open
+## and explains why, so nothing is silently deleted.  Returns true when closed.
+func close() -> bool:
 	if not _carried.is_empty() and inventory != null:
-		# A carried stack is returned to the player first; whatever does not fit
-		# goes back into the station, so closing can never destroy an item.
-		var leftover := _put("player", 0, _carried)
-		var index := 1
-		while not leftover.is_empty() and index < Inventory.HOTBAR_SIZE:
-			leftover = _put("player", index, leftover)
-			index += 1
-		if not leftover.is_empty() and station != null:
-			var remaining: int = station.inventory.deposit(leftover)
-			leftover = {} if remaining <= 0 else {"item": int(leftover["item"]), "count": remaining}
+		var leftover := _recover_cursor()
+		if not leftover.is_empty():
+			_carried = leftover
+			_cursor.set_stack(_carried)
+			message.emit("No room for %d %s — make space before closing" % [
+				int(_carried["count"]), ItemDB.name_of(int(_carried["item"]))])
+			return false
 		_carried = {}
+		_carry_origin_side = ""
+		_carry_origin_index = -1
+	_cursor.set_stack({})
 	# Drop the reference: a closed panel must not keep an orphaned station alive
 	# or keep refreshing after its world object is gone.
 	if station != null and station.inventory.changed.is_connected(_refresh):
 		station.inventory.changed.disconnect(_refresh)
 	station = null
 	visible = false
+	return true
+
+
+func _recover_cursor() -> Dictionary:
+	var leftover := _carried.duplicate()
+	if _carry_origin_index >= 0:
+		var model = _model(_carry_origin_side)
+		if model != null and (_carry_origin_index < model.size() and
+				(model.is_empty(_carry_origin_index)
+				or model.item_at(_carry_origin_index) == int(leftover["item"]))):
+			leftover = _restore(_carry_origin_side, _carry_origin_index, leftover)
+	if not leftover.is_empty():
+		leftover = inventory.add_stack(leftover)
+	if not leftover.is_empty() and station != null:
+		var remaining: int = station.inventory.deposit(leftover)
+		if remaining <= 0:
+			leftover = {}
+		else:
+			leftover = {"item": int(leftover["item"]), "count": remaining,
+				"durability": int(leftover.get("durability", 0))}
+	return leftover
 
 
 func _rebuild_station_area() -> void:
@@ -237,15 +274,15 @@ func _rebuild_station_area() -> void:
 
 func _build_table_area() -> void:
 	_title.text = "CRAFTING TABLE"
-	_station_info.text = "3×3 grid  ·  one item per cell"
+	_station_info.text = "3×3 grid  ·  one ingredient per cell"
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 18)
+	row.add_theme_constant_override("separation", 16)
 	_station_area.add_child(row)
 
 	var grid_column := VBoxContainer.new()
-	grid_column.add_theme_constant_override("separation", 6)
+	grid_column.add_theme_constant_override("separation", 4)
 	row.add_child(grid_column)
-	grid_column.add_child(_label(12, Color(0.7, 0.8, 0.9, 0.9)))
+	grid_column.add_child(_label("CRAFTING GRID", 11, UiStyle.TEXT_MUTED))
 	var grid := GridContainer.new()
 	grid.name = "CraftingGrid"
 	grid.columns = 3
@@ -253,34 +290,34 @@ func _build_table_area() -> void:
 	grid.add_theme_constant_override("v_separation", 5)
 	grid_column.add_child(grid)
 	for index in Station.TABLE_GRID_SLOTS:
-		var slot := _make_station_slot(index, "")
-		grid.add_child(slot)
+		grid.add_child(_make_station_slot(index, ""))
 
 	var result_column := VBoxContainer.new()
-	result_column.add_theme_constant_override("separation", 6)
+	result_column.add_theme_constant_override("separation", 4)
 	result_column.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(result_column)
-	var arrow := _label(16, Color(0.7, 0.85, 0.95, 0.95))
-	arrow.text = ARROW_TEXT
+	var arrow := _label(ARROW_TEXT, 18, UiStyle.TEXT_SECONDARY)
+	arrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	result_column.add_child(arrow)
 	var output := _make_station_slot(Station.TABLE_OUTPUT_SLOT, "result")
 	result_column.add_child(output)
 
 	var actions := VBoxContainer.new()
 	actions.add_theme_constant_override("separation", 8)
+	actions.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(actions)
 	var return_button := Button.new()
 	return_button.name = "ReturnGrid"
 	return_button.text = "Return grid"
 	return_button.focus_mode = Control.FOCUS_NONE
-	return_button.custom_minimum_size = Vector2(120, 32)
+	return_button.custom_minimum_size = Vector2(124, 32)
 	return_button.pressed.connect(_on_return_grid)
 	actions.add_child(return_button)
 	var take_button := Button.new()
 	take_button.name = "TakeResult"
 	take_button.text = "Take result"
 	take_button.focus_mode = Control.FOCUS_NONE
-	take_button.custom_minimum_size = Vector2(120, 32)
+	take_button.custom_minimum_size = Vector2(124, 32)
 	take_button.pressed.connect(take_output)
 	actions.add_child(take_button)
 
@@ -293,36 +330,33 @@ func _build_furnace_area() -> void:
 	_station_area.add_child(row)
 
 	var input_column := VBoxContainer.new()
-	input_column.add_theme_constant_override("separation", 6)
+	input_column.add_theme_constant_override("separation", 4)
 	row.add_child(input_column)
-	var smelting_label := _label(12, Color(0.7, 0.8, 0.9, 0.9))
+	var smelting_label := _label("SMELTING", 11, UiStyle.TEXT_MUTED)
 	smelting_label.text = "SMELTING"
 	input_column.add_child(smelting_label)
 	input_column.add_child(_make_station_slot(Station.FURNACE_INPUT_SLOT, "input"))
 	input_column.add_child(_make_station_slot(Station.FURNACE_FUEL_SLOT, "fuel"))
 
 	var progress_column := VBoxContainer.new()
-	progress_column.add_theme_constant_override("separation", 10)
+	progress_column.add_theme_constant_override("separation", 8)
 	progress_column.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(progress_column)
-	var arrow := _label(16, Color(0.7, 0.85, 0.95, 0.95))
-	arrow.text = ARROW_TEXT
+	var arrow := _label(ARROW_TEXT, 18, UiStyle.TEXT_SECONDARY)
+	arrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	progress_column.add_child(arrow)
-	var cook_label := _label(12, Color(0.75, 0.85, 0.95, 0.9))
-	cook_label.text = "COOK"
+	var cook_label := _label("COOK", 11, UiStyle.TEXT_MUTED)
 	progress_column.add_child(cook_label)
 	_cook_fill = _bar(progress_column, Color(0.96, 0.78, 0.35, 0.95))
-	var fuel_label := _label(12, Color(0.75, 0.85, 0.95, 0.9))
-	fuel_label.text = "FUEL"
+	var fuel_label := _label("FUEL", 11, UiStyle.TEXT_MUTED)
 	progress_column.add_child(fuel_label)
 	_fuel_fill = _bar(progress_column, Color(0.95, 0.52, 0.24, 0.95))
 
 	var output_column := VBoxContainer.new()
-	output_column.add_theme_constant_override("separation", 6)
+	output_column.add_theme_constant_override("separation", 4)
 	output_column.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(output_column)
-	var output_label := _label(12, Color(0.7, 0.8, 0.9, 0.9))
-	output_label.text = "OUTPUT"
+	var output_label := _label("OUTPUT", 11, UiStyle.TEXT_MUTED)
 	output_column.add_child(output_label)
 	output_column.add_child(_make_station_slot(Station.FURNACE_OUTPUT_SLOT, "output"))
 	var take_button := Button.new()
@@ -366,25 +400,27 @@ func _make_station_slot(index: int, caption: String) -> StationSlot:
 # --- state ---------------------------------------------------------------
 
 func _refresh() -> void:
-	if visible == false and station == null:
+	if _status == null:
 		return
 	for slot: StationSlot in _player_slots:
+		if slot.index < Inventory.HOTBAR_SIZE:
+			slot.selected = slot.index == inventory.selected
+		else:
+			slot.selected = false
+		slot.invalid = false
 		slot.refresh()
-	_carry_slot.override_stack = _carried
-	_carry_slot.ghost = false
-	_carry_slot.refresh()
-	if _carried.is_empty():
-		_carry_label.text = "nothing — click a stack to pick it up"
-	else:
-		_carry_label.text = "%d %s" % [int(_carried["count"]), ItemDB.name_of(int(_carried["item"]))]
+	_cursor.set_stack(_carried)
 	if station == null:
+		if _hint != null:
+			_hint.text = "E or Esc closes"
 		return
 	_refresh_station_slots()
 	if station.is_furnace():
 		_refresh_furnace()
 	else:
 		_refresh_table()
-	_hint.text = "Left-click take/place · right-click split/place one · shift-click quick-move · drag a slot onto another · E or Esc closes"
+	_hint.text = "Left click: take/place · Right click: split/one · " \
+		+ "Shift-click: quick-move · E/Esc closes"
 
 
 func _refresh_station_slots() -> void:
@@ -394,40 +430,57 @@ func _refresh_station_slots() -> void:
 		if not result.is_empty():
 			preview = {"item": int(result["output"]), "count": int(result["count"])}
 	for slot: StationSlot in _station_slots:
-		var is_output := (not station.is_furnace() and slot.index == Station.TABLE_OUTPUT_SLOT) \
-			or (station.is_furnace() and slot.index == Station.FURNACE_OUTPUT_SLOT)
+		var is_output := _is_output(slot.index)
 		if is_output and not preview.is_empty():
 			slot.override_stack = preview
 			slot.ghost = true
 		else:
 			slot.override_stack = {}
 			slot.ghost = false
+		slot.invalid = _slot_rejects_carry(slot.index)
 		slot.refresh()
+
+
+func _slot_rejects_carry(index: int) -> bool:
+	if _carried.is_empty() or station == null:
+		return false
+	var item_id := int(_carried["item"])
+	if _is_output(index):
+		return true
+	if _is_grid_slot(index):
+		return false
+	return not station.inventory.accepts(index, item_id)
+
+
+func _is_grid_slot(index: int) -> bool:
+	return not station.is_furnace() and index >= 0 and index < Station.TABLE_GRID_SLOTS
 
 
 func _refresh_table() -> void:
 	var result := station.result_preview()
+	var grid_items := station.inventory.total_items() - station.inventory.count_at(Station.TABLE_OUTPUT_SLOT)
 	if result.is_empty():
-		if station.inventory.total_items() == 0:
-			_status.text = "Place ingredients in the 3×3 grid.\n\nThe result appears in the slot on the right; taking it consumes one item from every occupied cell."
+		if grid_items == 0:
+			_status.text = "Place ingredients in the 3×3 grid.\n\nClick a stack into a cell once per ingredient; the result appears on the right."
 		else:
-			_status.text = "No matching recipe.\n\nCheck the shape: recipes are patterns in the grid, and an ingredient cannot share a cell with another."
+			_status.text = "No matching recipe.\n\nThe grid is a shape: one item per cell. Check the pattern, and remember that a stack in one cell counts as one ingredient there."
 	else:
 		var recipe: Dictionary = result["recipe"]
-		_status.text = "%s\n\n%s" % [
-			"Ready: %d %s" % [int(result["count"]), ItemDB.name_of(int(result["output"]))],
+		_status.text = "Ready: %d %s\n\n%s" % [
+			int(result["count"]), ItemDB.name_of(int(result["output"])),
 			Crafting.label(recipe),
 		]
+		if not station.inventory.is_empty(Station.TABLE_OUTPUT_SLOT):
+			_status.text += "\n\nTake the finished result before crafting again."
 	_station_info.text = "3×3 grid  ·  %d item%s in the grid" % [
-		station.inventory.total_items(),
-		"" if station.inventory.total_items() == 1 else "s"]
+		grid_items, "" if grid_items == 1 else "s"]
 
 
 func _refresh_furnace() -> void:
 	var input := station.inventory.item_at(Station.FURNACE_INPUT_SLOT)
 	var recipe := Smelting.recipe_for(input)
 	if not recipe.is_empty():
-		_status.text = "Smelting %s → %d %s\n\nCook time %.1fs per item.  Fuel burns only while there is work and room for the output." % [
+		_status.text = "Smelting %s → %d %s\n\nCook time %.1fs per item. Fuel burns only while there is work and room for the output." % [
 			ItemDB.name_of(input), int(recipe["output_count"]),
 			ItemDB.name_of(int(recipe["output"])), Smelting.cook_seconds(recipe)]
 	elif input != BlockDB.AIR:
@@ -463,7 +516,12 @@ func _on_slot_clicked(side: String, index: int, button: int, shift: bool) -> voi
 		_refresh()
 		return
 	if not _carried.is_empty():
-		put_down(side, index)
+		# A crafting-grid cell takes one item per click; a player or furnace slot
+		# takes the whole stack, like Minecraft.
+		if side == "station" and _is_grid_slot(index):
+			put_one(side, index)
+		else:
+			put_down(side, index)
 		_refresh()
 		return
 	if side == "station" and _is_output(index):
@@ -474,14 +532,14 @@ func _on_slot_clicked(side: String, index: int, button: int, shift: bool) -> voi
 
 
 func _on_stack_moved(from_side: String, from_index: int, to_side: String, to_index: int) -> void:
-	move_between(from_side, from_index, to_side, to_index)
+	if _carried.is_empty():
+		move_between(from_side, from_index, to_side, to_index)
 	_refresh()
 
 
 ## Drag & drop: move one stack between two slots.  A target holding a different
-## item is refused (rather than swapped across containers), and the station's
-## result slot never accepts a player drop, so the operation is always a plain
-## count-preserving move.
+## item is refused, and the station's result slot never accepts a player drop, so
+## the operation is always a plain count-preserving move.
 func move_between(from_side: String, from_index: int, to_side: String, to_index: int) -> bool:
 	if from_side == to_side and from_index == to_index:
 		return false
@@ -496,6 +554,18 @@ func move_between(from_side: String, from_index: int, to_side: String, to_index:
 	var item_id: int = source.item_at(from_index)
 	if not target.is_empty(to_index) and target.item_at(to_index) != item_id:
 		return false
+	# A stack dragged from the player inventory into a crafting-grid cell places
+	# one ingredient, matching the click and shift-click rules.  Otherwise a
+	# four-plank stack would land in one cell and satisfy no recipe.
+	if from_side == "player" and to_side == "station" and _is_grid_slot(to_index):
+		var one := _take(from_side, from_index, 1)
+		if one.is_empty():
+			return false
+		var one_left := _restore(to_side, to_index, one)
+		if not one_left.is_empty():
+			_restore(from_side, from_index, one_left)
+			return false
+		return true
 	var stack := _take(from_side, from_index, -1)
 	if stack.is_empty():
 		return false
@@ -569,6 +639,8 @@ func pick_up(side: String, index: int) -> bool:
 	if stack.is_empty():
 		return false
 	_carried = stack
+	_carry_origin_side = side
+	_carry_origin_index = index
 	return true
 
 
@@ -585,13 +657,23 @@ func pick_up_half(side: String, index: int) -> bool:
 	if stack.is_empty():
 		return false
 	_carried = stack
+	_carry_origin_side = side
+	_carry_origin_index = index
 	return true
 
 
 func put_down(side: String, index: int) -> bool:
 	if _carried.is_empty():
 		return false
+	var before_item := int(_carried["item"])
 	_carried = _put(side, index, _carried)
+	if _carried.is_empty():
+		_carry_origin_side = ""
+		_carry_origin_index = -1
+	elif int(_carried["item"]) != before_item:
+		# A swap displaced the target stack; it is now the cursor stack.
+		_carry_origin_side = side
+		_carry_origin_index = index
 	return true
 
 
@@ -607,10 +689,14 @@ func put_one(side: String, index: int) -> bool:
 	_carried["count"] = int(_carried["count"]) - 1
 	if int(_carried["count"]) <= 0:
 		_carried = {}
+		_carry_origin_side = ""
+		_carry_origin_index = -1
 	return true
 
 
 ## Shift-click: move a whole stack to the other inventory wherever it fits.
+## For a crafting table, a player stack is spread one item per grid cell rather
+## than dumped into one cell (which would make a 4-ingredient recipe unusable).
 func quick_move(side: String, index: int) -> bool:
 	var stack := _take(side, index, -1)
 	if stack.is_empty():
@@ -618,14 +704,17 @@ func quick_move(side: String, index: int) -> bool:
 	var item_id := int(stack["item"])
 	var count := int(stack["count"])
 	var wear := int(stack.get("durability", 0))
-	var leftover_count := 0
+	var leftover_count := count
 	if side == "player":
 		if station == null:
 			leftover_count = count
-		else:
+		elif station.is_furnace():
 			leftover_count = station.inventory.deposit(stack)
+		else:
+			leftover_count = _deposit_to_grid(stack)
 	else:
-		leftover_count = inventory.add(item_id, count, wear) if inventory != null else count
+		var leftover := inventory.add_stack(stack) if inventory != null else stack
+		leftover_count = int(leftover.get("count", count))
 	if leftover_count > 0:
 		# Put the remainder back where it came from.
 		var remainder := {"item": item_id, "count": leftover_count, "durability": wear}
@@ -633,10 +722,38 @@ func quick_move(side: String, index: int) -> bool:
 	return leftover_count < count
 
 
+## Spreads a stack across the 3x3 grid, one item per cell per pass.  Returns the
+## number of items that did not fit, so the caller can restore them.
+func _deposit_to_grid(stack: Dictionary) -> int:
+	var carried := stack.duplicate()
+	var remaining := int(carried.get("count", 0))
+	var item_id := int(carried.get("item", BlockDB.AIR))
+	var wear := int(carried.get("durability", 0))
+	var moved := true
+	while remaining > 0 and moved:
+		moved = false
+		for grid_index in Station.TABLE_GRID_SLOTS:
+			if remaining <= 0:
+				break
+			if not station.inventory.is_empty(grid_index) \
+					and station.inventory.item_at(grid_index) != item_id:
+				continue
+			var one := {"item": item_id, "count": 1, "durability": wear}
+			var leftover := station.inventory.insert(grid_index, one)
+			if leftover.is_empty():
+				remaining -= 1
+				moved = true
+	return remaining
+
+
 ## Left-click on the result slot (or the Take button): craft one recipe on a
 ## table, then take the output.  A furnace result is simply taken.
 func take_output() -> bool:
 	if station == null:
+		return false
+	if not _carried.is_empty():
+		message.emit("Place the cursor stack first")
+		_refresh()
 		return false
 	if not station.is_furnace() and station.inventory.is_empty(Station.TABLE_OUTPUT_SLOT):
 		var crafted: Dictionary = station.craft_grid()
@@ -648,10 +765,9 @@ func take_output() -> bool:
 	var index := Station.FURNACE_OUTPUT_SLOT if station.is_furnace() else Station.TABLE_OUTPUT_SLOT
 	if station.inventory.is_empty(index):
 		return false
-	if not _carried.is_empty():
-		message.emit("Place the carried stack first")
-		return false
 	_carried = _take("station", index, -1)
+	_carry_origin_side = "station"
+	_carry_origin_index = index
 	_refresh()
 	return true
 
@@ -673,6 +789,12 @@ func carried() -> Dictionary:
 	return _carried.duplicate()
 
 
+## Diagnostic/test entry: runs the same handler a real slot click uses.
+func click_slot(side: String, index: int, button: int = MOUSE_BUTTON_LEFT,
+		shift: bool = false) -> void:
+	_on_slot_clicked(side, index, button, shift)
+
+
 func slot_count() -> int:
 	return _station_slots.size() + _player_slots.size()
 
@@ -683,7 +805,7 @@ func station_slot_count() -> int:
 
 ## Text of the facts/status pane, for diagnostics.
 func status_text() -> String:
-	return _status.text
+	return _status.text if _status != null else ""
 
 
 ## Activates the real "Take result" button, so a test drives the same path a

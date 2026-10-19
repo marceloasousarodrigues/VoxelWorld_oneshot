@@ -11,6 +11,43 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ---
 
+## M20 — Inventory, hotbar, crafting and interaction overhaul
+
+- [x] Authoritative 27 storage + 9 hotbar inventory model (`SIZE = 36`), with only
+      the hotbar selectable as the held item.  Starter kit fills the hotbar only,
+      leaving all storage free (root cause of “mined iron does not appear”)
+- [x] Temporary cursor stack replaces the permanent carrying slot in the player
+      inventory and station interfaces; left/right click, shift-click and drag &
+      drop use the same model operations and conserve counts and durability
+- [x] Cursor recovery on close: origin slot → any player slot → station; a full
+      container keeps the panel open with an explicit message instead of deleting
+- [x] Minecraft-like `I` inventory: 9×3 storage above the hotbar, selected-slot
+      highlight, counts, durability, tooltips, item facts and shared M18 styling
+- [x] Hotbar selection by 1–9 and mouse wheel; only the selected hotbar item is
+      used by mining, building, eating and tool wear.  Opening/closing overlays
+      never changes the selection
+- [x] Station targeting from the existing voxel ray with range, prompt/outline,
+      E to open, Esc/E to close, blocked world input and safe invalid/unloaded
+      targets.  Verified from top-down and diagonal angles at range
+- [x] Crafting table: one ingredient per grid cell per click/drag/shift-click,
+      real 3×3 shaped (with horizontal mirroring) and shapeless matching, live
+      result preview/status, atomic craft and full-result refusal
+- [x] Furnace: input/fuel/output timed processing verified through the rebuilt
+      panel, with fuel, output-full pause, progress and persistence coverage
+- [x] One coherent crafting model: the C catalogue is a recipe reference plus
+      hand crafting; table/furnace recipes are listed with missing ingredients
+      and “use … (E)” but cannot be crafted from the catalogue
+- [x] Save VERSION 7: 36-slot inventory, legacy nine-row saves load into the
+      hotbar, storage rows round-trip, oversized payloads rejected
+- [x] Tests: unit **1477** / integration **327** assertions, exit 0, 0 bytes
+      stderr; smoke world hash unchanged; `m20-inventory.png`,
+      `m20-table.png`, `m20-furnace.png` and `m20-recipes.png` inspected
+- [~] Human keyboard/mouse play-through of the new interfaces remains outstanding
+- [ ] Dropped-item entity for a genuinely full inventory (mining overflow is
+      still reported and lost) and a 2×2 hand-crafting grid
+
+---
+
 ## M19 — Interactive crafting stations and persistent inventories
 
 - [x] Targetable world objects: the existing E-key action uses the camera voxel
@@ -105,19 +142,21 @@ Design contract: `prototypes/m17/results/m18-visual-design.md`.
 
 ## Phase B — Building and survival
 
-- [x] Inventory data model (9 slots, block id + count, serialisable)
-- [x] Visible hotbar with real block icons, selection, counts and tooltip
-- [x] Full inventory interface (2026-10-19) — `game/inventory_panel.gd` +
-      `game/inventory_slot.gd`, opened with I (or `--open-inventory`): nine readable slots with
-      counts and durability bars, click-to-carry and real Godot drag & drop (both call
-      `Inventory.move_slot`/`take_stack`/`put_stack`, so a move cannot duplicate or lose items),
-      a carrying slot, and an item facts pane (kind, block hardness/drop/required tool, stack
-      cap, held count, tool tier/speed/attack/durability, food value, the recipe that makes it
-      and every recipe that uses it). Mutual exclusion with the crafting and settings panels;
-      Escape closes it before pausing. `inventory-panel.png` inspected. There is still one
-      nine-slot row (no second page) and the drag path is verified through the same model call
-      the drop handler makes, not by synthetic OS mouse drags
-- [x] Collecting drops into the inventory (mining adds the drop; inventory-full feedback)
+- [x] Inventory data model (27 storage slots + nine hotbar slots, item id + count +
+      durability, serialisable); the hotbar is the only selectable region
+- [x] Visible hotbar with real block icons, selection (1–9 and mouse wheel), counts and tooltip
+- [x] Full inventory interface (M20, 2026-10-19) — `game/inventory_panel.gd` +
+      `game/inventory_slot.gd` + `game/item_cursor.gd` + `game/ui_style.gd`, opened with I
+      (or `--open-inventory`): a Minecraft-like 9×3 storage grid above the nine-slot hotbar,
+      selected-slot highlight, counts, durability, tooltips, item facts, left/right-click
+      pick/split/merge/swap, shift-click hotbar ↔ storage quick-move and drag & drop.  The
+      permanent carrying slot is gone; a temporary cursor stack is drawn under the pointer
+      and recovered on close.  Mutual exclusion with the crafting/settings/station panels;
+      Escape closes it before pausing.  `m20-inventory.png` inspected
+- [x] Collecting drops into the inventory (mining adds the drop; inventory-full feedback).
+      The 36-slot model leaves 27 free slots after the starter kit, which fixes the reported
+      iron/coal drops being refused by the old full nine-slot row; real-controller iron/coal
+      mining is covered by integration tests
 - [x] Placing items consumes them
 - [x] Crafting recipes — `core/crafting.gd`: a **32-recipe, data-driven catalogue** in five
       categories (Basics, Building, Tools, Smelting, Food) with shaped *and* shapeless
@@ -127,19 +166,20 @@ Design contract: `prototypes/m17/results/m18-visual-design.md`.
       meta-test proves every recipe output is reachable from mining drops and other recipes
       (2026-10-19)
 - [x] Crafting interface — `game/crafting_panel.gd`, opened with C: category filters, a
-      scrollable list, output icons, have/need ingredient counts, per-row status
-      (ready / missing x more Y / needs Crafting Table / inventory full) and Craft + x5
-      buttons disabled exactly when the craft cannot happen. `crafting-panel.png` and
-      `crafting-panel-tools.png` inspected (2026-10-19)
+      scrollable list, output icons, have/need ingredient counts and per-row status.  **M20**
+      makes this a recipe reference plus hand-crafting entry point: hand recipes carry
+      Craft/x5 buttons; table/furnace recipes show missing ingredients and “use … (E)” but
+      cannot be crafted here, so the station grid/timed furnace is the only station crafting
+      model.  `m20-recipes.png` inspected
 - [x] Crafting stations: the recipe's `station` must exist **in the world**
-      (`Crafting.best_station` scans loaded voxels for a crafting table or furnace); a furnace
-      also serves table recipes, and smelting needs the furnace plus one coal of fuel per
-      craft. New `FURNACE` block id 34 (2026-10-19). **M19** adds the world-object layer:
-      tables/furnaces are targeted with E and open dedicated persistent interfaces
-      (3×3 grid crafting; timed furnace with input/fuel/output and progress), keep
-      their contents across close/save/chunk reload, and return contents when
-      destroyed. The original C-key recipe list remains available as a convenience
-      over the same `Crafting` model
+      (`Crafting.best_station` scans loaded voxels within interaction reach); a furnace also
+      serves table recipes, and smelting needs the furnace plus fuel. New `FURNACE` block id 34
+      (2026-10-19). **M19** adds the world-object layer; **M20** rebuilds the panels over the
+      full player inventory, makes grid cells take one ingredient per click/drag/shift-click,
+      supports shaped mirroring, and fixes the old four-block station-detection radius that
+      could hide table/furnace recipes. Tables/furnaces are targeted with E and keep their
+      contents across close/save/chunk reload; the C-key catalogue is now a reference/hand
+      crafting interface over the same `Crafting` model
 - [x] Items, tools, tool tiers and durability (2026-10-19) — new `core/item_db.gd` extends the
       id space with 26 non-block items (materials, food, 16 tools in four tiers) while keeping
       block ids unchanged; `Inventory` gained per-slot durability, `wear()` that clears broken

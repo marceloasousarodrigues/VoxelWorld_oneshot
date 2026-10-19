@@ -1,11 +1,16 @@
 class_name Inventory
 extends RefCounted
 
-## Player inventory: a fixed row of item stacks plus the selected slot.
+## Player inventory: 27 main slots plus the nine-slot hotbar.
 ##
 ## The model is deliberately small and serialisable: every slot stores an item id,
 ## a count and (for tools) a remaining durability, `AIR` means empty, and nothing
 ## here knows about nodes or UI.
+##
+## Slot order is Minecraft-like: indices 0..8 are the hotbar (the row shown in the
+## world) and indices 9..35 are the three main rows shown by the inventory
+## interface.  `selected` always addresses a hotbar slot, so the item held in the
+## world can never be a slot that is only visible inside a menu.
 ##
 ## `slots` holds `ItemDB` item ids.  Block ids are item ids, so a slot holding a
 ## block is still a block id; ids at or above `ItemDB.BLOCK_COUNT` are materials,
@@ -15,9 +20,17 @@ extends RefCounted
 signal changed()
 
 const HOTBAR_SIZE := 9
+const MAIN_ROWS := 3
+const MAIN_SIZE := HOTBAR_SIZE * MAIN_ROWS
+const SIZE := HOTBAR_SIZE + MAIN_SIZE
+const MAIN_FIRST := HOTBAR_SIZE
 
 
-## Item ids in the hotbar; `BlockDB.AIR` marks an empty slot.
+func size() -> int:
+	return SIZE
+
+
+## Item ids in the inventory; `BlockDB.AIR` marks an empty slot.
 var slots: Array[int] = []
 ## Matching stack sizes.
 var counts: Array[int] = []
@@ -28,9 +41,9 @@ var selected := 0
 
 
 func _init() -> void:
-	slots.resize(HOTBAR_SIZE)
-	counts.resize(HOTBAR_SIZE)
-	durability.resize(HOTBAR_SIZE)
+	slots.resize(SIZE)
+	counts.resize(SIZE)
+	durability.resize(SIZE)
 	slots.fill(BlockDB.AIR)
 	counts.fill(0)
 	durability.fill(0)
@@ -38,9 +51,9 @@ func _init() -> void:
 
 ## Gives the player a starter kit so a new world is immediately buildable.
 ##
-## The stacks are deliberately below the 64 cap: with a per-slot cap a full kit
-## would leave no room for the first mining drops, so a new player could not pick
-## anything up.
+## The kit fills the hotbar only; the 27 main slots stay empty, so the first
+## mining drop always has somewhere to go.  (Before M20 the nine-slot inventory
+## was full at spawn, which is why an iron/coal drop could be refused.)
 func give_starter_kit() -> void:
 	var kit: Array = [
 		[BlockDB.GRASS, 16],
@@ -71,7 +84,7 @@ func add(item_id: int, amount: int = 1, tool_durability: int = -1) -> int:
 	var capacity := maxi(1, ItemDB.max_stack(item_id))
 	var remaining := amount
 	# 1) Top up existing stacks that still have room.
-	for index in HOTBAR_SIZE:
+	for index in SIZE:
 		if remaining <= 0:
 			break
 		if slots[index] != item_id:
@@ -83,7 +96,7 @@ func add(item_id: int, amount: int = 1, tool_durability: int = -1) -> int:
 		counts[index] += moved
 		remaining -= moved
 	# 2) Open new slots for whatever is left.
-	for index in HOTBAR_SIZE:
+	for index in SIZE:
 		if remaining <= 0:
 			break
 		if slots[index] != BlockDB.AIR:
@@ -98,9 +111,48 @@ func add(item_id: int, amount: int = 1, tool_durability: int = -1) -> int:
 	return remaining
 
 
+## Adds a complete stack (item, count and durability) wherever it fits.  Returns
+## the part that did not fit as a stack dictionary, so callers such as the
+## interface's cursor recovery can never lose a per-tool durability value.
+func add_stack(stack: Dictionary) -> Dictionary:
+	if stack.is_empty():
+		return {}
+	var item_id := int(stack.get("item", BlockDB.AIR))
+	var amount := int(stack.get("count", 0))
+	if item_id == BlockDB.AIR or amount <= 0 or not ItemDB.is_valid(item_id):
+		return stack.duplicate()
+	var wear := clampi(int(stack.get("durability", _initial_durability(item_id))),
+		0, maxi(0, ItemDB.max_durability(item_id)))
+	var capacity := maxi(1, ItemDB.max_stack(item_id))
+	var remaining := amount
+	for index in SIZE:
+		if remaining <= 0:
+			break
+		if slots[index] != item_id or counts[index] >= capacity:
+			continue
+		var moved := mini(capacity - counts[index], remaining)
+		counts[index] += moved
+		remaining -= moved
+	for index in SIZE:
+		if remaining <= 0:
+			break
+		if not is_empty(index):
+			continue
+		var moved := mini(capacity, remaining)
+		slots[index] = item_id
+		counts[index] = moved
+		durability[index] = wear
+		remaining -= moved
+	if remaining != amount:
+		changed.emit()
+	if remaining <= 0:
+		return {}
+	return {"item": item_id, "count": remaining, "durability": wear}
+
+
 ## Removes one item from the given slot and returns the item id, or `AIR`.
 func take_from_slot(index: int) -> int:
-	if index < 0 or index >= HOTBAR_SIZE:
+	if index < 0 or index >= SIZE:
 		return BlockDB.AIR
 	if slots[index] == BlockDB.AIR or counts[index] <= 0:
 		return BlockDB.AIR
@@ -115,7 +167,7 @@ func take_from_slot(index: int) -> int:
 ## Removes up to `amount` of an item, returning how many were actually removed.
 func remove(item_id: int, amount: int = 1) -> int:
 	var removed := 0
-	for index in HOTBAR_SIZE:
+	for index in SIZE:
 		if removed >= amount:
 			break
 		while removed < amount and slots[index] == item_id and counts[index] > 0:
@@ -131,7 +183,7 @@ func remove(item_id: int, amount: int = 1) -> int:
 ## Takes one item out of a specific slot (used by crafting, which needs the input
 ## to come from a known slot).  Returns how many were actually removed.
 func remove_from_slot(index: int, amount: int = 1) -> int:
-	if index < 0 or index >= HOTBAR_SIZE or amount <= 0:
+	if index < 0 or index >= SIZE or amount <= 0:
 		return 0
 	var removed := mini(counts[index], amount)
 	if removed <= 0:
@@ -145,7 +197,7 @@ func remove_from_slot(index: int, amount: int = 1) -> int:
 
 func count_of(item_id: int) -> int:
 	var total := 0
-	for index in HOTBAR_SIZE:
+	for index in SIZE:
 		if slots[index] == item_id:
 			total += counts[index]
 	return total
@@ -157,7 +209,7 @@ func count_of(item_id: int) -> int:
 func stack_room(item_id: int) -> int:
 	var capacity := maxi(1, ItemDB.max_stack(item_id))
 	var room := 0
-	for index in HOTBAR_SIZE:
+	for index in SIZE:
 		if slots[index] == item_id:
 			room += maxi(0, capacity - counts[index])
 	return room
@@ -165,14 +217,22 @@ func stack_room(item_id: int) -> int:
 
 func free_slot_count() -> int:
 	var free := 0
-	for index in HOTBAR_SIZE:
+	for index in SIZE:
 		if is_empty(index):
 			free += 1
 	return free
 
 
+func used_slots() -> int:
+	var used := 0
+	for index in SIZE:
+		if not is_empty(index):
+			used += 1
+	return used
+
+
 func is_empty(index: int) -> bool:
-	return index < 0 or index >= HOTBAR_SIZE or slots[index] == BlockDB.AIR or counts[index] <= 0
+	return index < 0 or index >= SIZE or slots[index] == BlockDB.AIR or counts[index] <= 0
 
 
 ## The item in a slot (`AIR` when it is empty or out of range).  Mirrors
@@ -185,14 +245,14 @@ func item_at(index: int) -> int:
 
 ## The count in a slot (0 when it is empty or out of range).
 func count_at(index: int) -> int:
-	if index < 0 or index >= HOTBAR_SIZE:
+	if index < 0 or index >= SIZE:
 		return 0
 	return counts[index]
 
 
 ## Empties one slot (its item, count and durability).
 func clear_slot(index: int) -> void:
-	if index < 0 or index >= HOTBAR_SIZE:
+	if index < 0 or index >= SIZE:
 		return
 	if is_empty(index):
 		return
@@ -214,13 +274,13 @@ func selected_block() -> int:
 
 ## Remaining durability of a tool in a slot (0 for non-tools).
 func durability_of(index: int) -> int:
-	if index < 0 or index >= HOTBAR_SIZE:
+	if index < 0 or index >= SIZE:
 		return 0
 	return durability[index]
 
 
 func set_durability(index: int, value: int) -> void:
-	if index < 0 or index >= HOTBAR_SIZE:
+	if index < 0 or index >= SIZE:
 		return
 	durability[index] = maxi(0, value)
 
@@ -228,7 +288,7 @@ func set_durability(index: int, value: int) -> void:
 ## Spends durability on the item in a slot.  Returns true when the tool broke and
 ## its slot was cleared.  Non-tools are unaffected and never break.
 func wear(index: int, amount: int = 1) -> bool:
-	if index < 0 or index >= HOTBAR_SIZE or amount <= 0:
+	if index < 0 or index >= SIZE or amount <= 0:
 		return false
 	if not ItemDB.is_tool_item(slots[index]):
 		return false
@@ -241,6 +301,8 @@ func wear(index: int, amount: int = 1) -> bool:
 	return true
 
 
+## Selects a hotbar slot.  Only 0..8 are selectable; a menu-only main slot can
+## never become the item held in the world.
 func select(index: int) -> bool:
 	if index < 0 or index >= HOTBAR_SIZE or index == selected:
 		return false
@@ -252,7 +314,7 @@ func select(index: int) -> bool:
 ## Swaps two slots completely (item, count and durability).  Used by the
 ## inventory interface's drag & drop.
 func swap_slots(a: int, b: int) -> bool:
-	if a == b or a < 0 or b < 0 or a >= HOTBAR_SIZE or b >= HOTBAR_SIZE:
+	if a == b or a < 0 or b < 0 or a >= SIZE or b >= SIZE:
 		return false
 	var item_a := slots[a]
 	var count_a := counts[a]
@@ -271,7 +333,7 @@ func swap_slots(a: int, b: int) -> bool:
 ## (respecting the stack cap) and the remainder stays behind, otherwise the two
 ## slots are swapped.  Returns true when the inventory changed.
 func move_slot(from: int, to: int) -> bool:
-	if from == to or from < 0 or to < 0 or from >= HOTBAR_SIZE or to >= HOTBAR_SIZE:
+	if from == to or from < 0 or to < 0 or from >= SIZE or to >= SIZE:
 		return false
 	if is_empty(from):
 		return false
@@ -287,6 +349,51 @@ func move_slot(from: int, to: int) -> bool:
 		changed.emit()
 		return true
 	return swap_slots(from, to)
+
+
+## Shift-click: moves a whole stack between the hotbar and the main rows.
+## Matching stacks are topped up first, then empty slots are used; a partial move
+## leaves the remainder in the source slot.  Returns true when anything moved.
+func quick_move(index: int) -> bool:
+	if is_empty(index):
+		return false
+	var first := 0
+	var last := SIZE
+	if index < HOTBAR_SIZE:
+		first = MAIN_FIRST
+	else:
+		last = HOTBAR_SIZE
+	var item_id := slots[index]
+	var capacity := maxi(1, ItemDB.max_stack(item_id))
+	var remaining := counts[index]
+	var wear := durability[index]
+	# Top up matching stacks.
+	for target in range(first, last):
+		if remaining <= 0:
+			break
+		if slots[target] != item_id or counts[target] >= capacity:
+			continue
+		var moved := mini(capacity - counts[target], remaining)
+		counts[target] += moved
+		remaining -= moved
+	# Then use empty slots.
+	for target in range(first, last):
+		if remaining <= 0:
+			break
+		if not is_empty(target):
+			continue
+		var moved := mini(capacity, remaining)
+		slots[target] = item_id
+		counts[target] = moved
+		durability[target] = wear
+		remaining -= moved
+	if remaining == counts[index]:
+		return false
+	counts[index] = remaining
+	if remaining <= 0:
+		_clear_slot(index)
+	changed.emit()
+	return true
 
 
 ## Takes a whole stack out of a slot.  Returns
@@ -309,7 +416,7 @@ func take_stack(index: int) -> Dictionary:
 ##   - a matching stack is topped up first;
 ##   - a slot holding something else is swapped, and that stack comes back.
 func put_stack(index: int, stack: Dictionary) -> Dictionary:
-	if index < 0 or index >= HOTBAR_SIZE or stack.is_empty():
+	if index < 0 or index >= SIZE or stack.is_empty():
 		return stack
 	var item_id := int(stack.get("item", BlockDB.AIR))
 	var amount := int(stack.get("count", 0))
@@ -333,46 +440,47 @@ func put_stack(index: int, stack: Dictionary) -> Dictionary:
 		counts[index] += placed
 		changed.emit()
 		return {} if placed >= amount else {"item": item_id, "count": amount - placed, "durability": wear}
+	# A swap must be able to hold the whole carried stack; otherwise there is no
+	# way to return both the displaced stack and the overflow, so refuse it.
+	if amount > capacity:
+		return stack
 	var displaced := {"item": slots[index], "count": counts[index], "durability": durability[index]}
 	slots[index] = item_id
-	counts[index] = mini(capacity, amount)
+	counts[index] = amount
 	durability[index] = wear
 	changed.emit()
 	return displaced
 
 
-func used_slots() -> int:
-	var used := 0
-	for index in HOTBAR_SIZE:
-		if not is_empty(index):
-			used += 1
-	return used
-
-
 func to_dictionary() -> Dictionary:
 	var entries: Array = []
 	var wear: Array = []
-	for index in HOTBAR_SIZE:
+	for index in SIZE:
 		entries.append([slots[index], counts[index]])
 		wear.append(durability[index])
-	return {"hotbar": entries, "selected": selected, "durability": wear}
+	return {"hotbar": entries, "selected": selected, "durability": wear, "size": SIZE}
 
 
 ## Replaces the whole inventory from serialised data.  Atomic: the payload is
 ## validated into scratch arrays first, so a malformed save leaves the live
 ## inventory byte-identical instead of half-applied.
+##
+## Saves written before M20 contain only nine rows; they load into the hotbar and
+## the 27 main slots start empty.
 func from_dictionary(data: Dictionary) -> bool:
 	var entries: Variant = data.get("hotbar")
 	if typeof(entries) != TYPE_ARRAY:
 		return false
 	var array: Array = entries
+	if array.size() > SIZE:
+		return false
 	var new_slots: Array[int] = []
 	var new_counts: Array[int] = []
-	new_slots.resize(HOTBAR_SIZE)
-	new_counts.resize(HOTBAR_SIZE)
+	new_slots.resize(SIZE)
+	new_counts.resize(SIZE)
 	new_slots.fill(BlockDB.AIR)
 	new_counts.fill(0)
-	for index in mini(HOTBAR_SIZE, array.size()):
+	for index in array.size():
 		var entry: Variant = array[index]
 		if typeof(entry) != TYPE_ARRAY or (entry as Array).size() < 2:
 			return false
@@ -380,15 +488,17 @@ func from_dictionary(data: Dictionary) -> bool:
 		var count := int((entry as Array)[1])
 		if not ItemDB.is_valid(item_id) or count < 0:
 			return false
+		if count > maxi(1, ItemDB.max_stack(item_id)):
+			return false
 		new_slots[index] = item_id
 		new_counts[index] = count
 	var new_wear: Array[int] = []
-	new_wear.resize(HOTBAR_SIZE)
+	new_wear.resize(SIZE)
 	new_wear.fill(0)
 	var wear: Variant = data.get("durability", [])
 	if typeof(wear) != TYPE_ARRAY:
 		return false
-	for index in HOTBAR_SIZE:
+	for index in SIZE:
 		var full := _initial_durability(new_slots[index])
 		if full <= 0:
 			continue
@@ -399,7 +509,7 @@ func from_dictionary(data: Dictionary) -> bool:
 		# rather than being silently destroyed or made invincible.  A save written
 		# before tools existed simply omits the field and starts the tool at full.
 		new_wear[index] = clampi(int((wear as Array)[index]), 1, full)
-	for index in HOTBAR_SIZE:
+	for index in SIZE:
 		slots[index] = new_slots[index]
 		counts[index] = new_counts[index]
 		durability[index] = new_wear[index]

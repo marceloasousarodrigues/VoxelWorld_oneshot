@@ -1,33 +1,38 @@
 class_name InventorySlot
 extends Panel
 
-## One slot of the inventory interface.
+## One slot of the player inventory interface.
 ##
 ## It draws its own item (icon, count, durability), reports a click as intent, and
 ## implements Godot's drag & drop source and target.  Every mutation is delegated
 ## to `Inventory`; the slot itself never changes a stack.
+##
+## The slot is deliberately generic enough for both the hotbar row and the main
+## grid: `index` addresses the model, and `compact` only changes the number badge.
 
-signal clicked(index: int)
+signal clicked(index: int, button: int, shift: bool)
 ## Emitted when a stack was dragged from one slot onto another.
 signal stack_moved(from: int, to: int)
+signal hovered(index: int)
 
-const SIZE := 64
-const ICON_MARGIN := 7
+const SIZE := UiStyle.SLOT_SIZE
+const ICON_MARGIN := UiStyle.SLOT_ICON_MARGIN
 
 var index := -1
 var inventory: Inventory
 var library: TextureLibrary
 var selected := false
-## When set, the slot draws this stack instead of reading the model.  The
-## inventory panel's "carrying" slot uses it: a carried stack has left the
-## inventory, so there is no slot to read it from.
+## When set, the slot draws this stack instead of reading the model.  Used only
+## by tests/diagnostics now; the real cursor stack is drawn by `ItemCursor`.
 var override_stack: Dictionary = {}
+## Hide the little slot-number badge (the main 3x3 grid does not need it).
+var show_number := true
 
 var _icon: TextureRect
 var _count: Label
 var _wear: ColorRect
 var _number: Label
-var _style_selected := false
+var _hovered := false
 
 
 func configure(slot_index: int, player_inventory: Inventory, texture_library: TextureLibrary) -> void:
@@ -69,9 +74,8 @@ func _build() -> void:
 	_number.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	_number.offset_left = 5
 	_number.offset_top = 2
-	_number.add_theme_font_size_override("font_size", 11)
+	_number.add_theme_font_size_override("font_size", 10)
 	_number.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
-	_number.text = str(index + 1)
 	_number.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_number)
 	_wear = ColorRect.new()
@@ -81,6 +85,8 @@ func _build() -> void:
 	_wear.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_wear.visible = false
 	add_child(_wear)
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
 	refresh()
 
 
@@ -88,18 +94,16 @@ func refresh() -> void:
 	if inventory == null:
 		return
 	var carrying := not override_stack.is_empty()
-	if index < 0 and not carrying:
-		visible = false
-		return
-	var item_id := inventory.slots[index] if not carrying else int(override_stack["item"])
-	var count := inventory.counts[index] if not carrying else int(override_stack["count"])
-	var wear_value := inventory.durability_of(index) if not carrying else int(override_stack.get("durability", 0))
-	var empty := inventory.is_empty(index) if not carrying else false
-	add_theme_stylebox_override("panel", _slot_style(selected, not empty))
+	var item_id := int(override_stack["item"]) if carrying else inventory.item_at(index)
+	var count := int(override_stack["count"]) if carrying else inventory.count_at(index)
+	var wear_value := int(override_stack.get("durability", 0)) if carrying else inventory.durability_of(index)
+	var empty := item_id == BlockDB.AIR or count <= 0
+	add_theme_stylebox_override("panel", UiStyle.slot_style(not empty, selected, false, _hovered))
 	_icon.texture = null if empty or library == null else library.icon(ItemDB.icon_key(item_id))
 	var tint := ItemDB.icon_tint(item_id)
-	_icon.modulate = Color(tint.r, tint.g, tint.b, 0.2 if empty else 1.0)
+	_icon.modulate = Color(tint.r, tint.g, tint.b, 0.18 if empty else 1.0)
 	_count.text = "" if count <= 1 else str(count)
+	tooltip_text = _tooltip(item_id, count, wear_value) if not empty else ""
 	var maximum := ItemDB.max_durability(item_id)
 	if maximum <= 0 or empty:
 		_wear.visible = false
@@ -109,18 +113,27 @@ func refresh() -> void:
 		_wear.size.x = maxf(0.0, (SIZE - ICON_MARGIN * 2) * ratio)
 		_wear.color = Color(0.42, 0.88, 0.45, 0.95) if ratio > 0.35 \
 			else (Color(0.95, 0.78, 0.25, 0.95) if ratio > 0.15 else Color(0.92, 0.30, 0.26, 0.95))
-	_number.add_theme_color_override("font_color",
-		Color(1, 1, 1, 0.85) if selected else Color(1, 1, 1, 0.45))
-	_number.visible = index >= 0
+	_number.visible = show_number
+	if show_number:
+		_number.text = str(index + 1)
+		_number.add_theme_color_override("font_color",
+			Color(1, 1, 1, 0.9) if selected else Color(1, 1, 1, 0.42))
 
 
-func _slot_style(is_selected: bool, occupied: bool) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.07, 0.1, 0.78 if occupied else 0.45)
-	style.border_color = Color(1, 0.92, 0.6, 0.95) if is_selected else Color(1, 1, 1, 0.22)
-	style.set_border_width_all(3 if is_selected else 1)
-	style.set_corner_radius_all(5)
-	return style
+func _tooltip(item_id: int, count: int, wear_value: int) -> String:
+	var lines: Array = ["%s ×%d" % [ItemDB.name_of(item_id), count]]
+	if ItemDB.is_tool_item(item_id):
+		lines.append("%s tool · %d / %d durability" % [
+			ItemDB.tier_name(ItemDB.tier(item_id)),
+			wear_value, ItemDB.max_durability(item_id)])
+	elif ItemDB.is_food(item_id):
+		lines.append("Food · +%d hunger" % int(ItemDB.food_value(item_id)))
+	elif ItemDB.is_block(item_id):
+		lines.append("Block · %s" % ("placeable" if ItemDB.is_block(item_id) else "material"))
+	else:
+		lines.append("Material")
+	lines.append("Stack cap %d" % ItemDB.max_stack(item_id))
+	return "\n".join(lines)
 
 
 # --- input ---------------------------------------------------------------
@@ -128,25 +141,41 @@ func _slot_style(is_selected: bool, occupied: bool) -> StyleBoxFlat:
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
-		if button.button_index == MOUSE_BUTTON_LEFT and button.pressed:
-			clicked.emit(index)
+		if button.pressed and (button.button_index == MOUSE_BUTTON_LEFT \
+				or button.button_index == MOUSE_BUTTON_RIGHT):
+			clicked.emit(index, button.button_index, button.shift_pressed)
+
+
+func _on_mouse_entered() -> void:
+	_hovered = true
+	hovered.emit(index)
+	if inventory != null:
+		refresh()
+
+
+func _on_mouse_exited() -> void:
+	_hovered = false
+	if inventory != null:
+		refresh()
 
 
 func _get_drag_data(_position: Vector2) -> Variant:
 	if inventory == null or inventory.is_empty(index):
 		return null
-	var item_id := inventory.slots[index]
+	var item_id := inventory.item_at(index)
 	var preview := Panel.new()
 	preview.custom_minimum_size = Vector2(SIZE, SIZE)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.1, 0.14, 0.9)
-	style.set_corner_radius_all(5)
-	preview.add_theme_stylebox_override("panel", style)
+	preview.add_theme_stylebox_override("panel", UiStyle.slot_style(true))
 	var icon := TextureRect.new()
 	icon.texture = library.icon(ItemDB.icon_key(item_id)) if library != null else null
 	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon.offset_left = ICON_MARGIN
+	icon.offset_top = ICON_MARGIN
+	icon.offset_right = -ICON_MARGIN
+	icon.offset_bottom = -ICON_MARGIN
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(icon)
 	set_drag_preview(preview)
