@@ -54,6 +54,10 @@ design contract: `prototypes/m17/results/m18-visual-design.md`.
   `m18-step9-normal-noon`, `m18-step9-normal-night`, `m18-step9-ocean-noon`,
   `m18-step9-ocean-sunset`, `m18-step6-coast-sunrise`, `m18-step6-shore-noon`,
   `m18-step6-water-noon`, plus the pre-change baselines `m18-baseline-vt4-*`.
+- Day/night transition series at the coast (`m18-cycle-0.0.png` sunrise,
+  `m18-cycle-0.55.png` twilight, `m18-cycle-0.9.png` pre-dawn): the warm horizon,
+  moon, stars, sea colour and shadow direction all follow the clock; the twilight
+  frame is dark but readable, consistent with the M17 tuning choice.
 - Frame-time harness (`run_perf.gd`, radius 5, RTX 3080 / i7-10700K), M18:
 
   | scenario | p50 | p95 | p99 | 1 % low |
@@ -81,7 +85,9 @@ design contract: `prototypes/m17/results/m18-visual-design.md`.
   regression, but it is recorded rather than hidden.
 - Leaf transparency still uses an alpha scissor; the denser leaf texture reduces
   shimmer/confetti but film-level inspection during a long camera sweep was not
-  performed.
+  performed. Two fixed-yaw stills (`godot-game-tour-0/1.png`, yaw 0 and 12) showed
+  no crawl; an unquoted `--shots` value with spaces was split by PowerShell and only
+  applied the first two viewpoints, so a rotating clip was not produced.
 
 Next useful work (not started): weather/particles, richer bark/grass side variants,
 an in-game quality menu for shadows/SSAO/fog, and a scripted rotating-camera clip
