@@ -1,6 +1,8 @@
 class_name ChunkMesher
 extends RefCounted
 
+const BlockShape = preload("res://scripts/core/block_shape.gd")
+
 ## Builds a chunk's render mesh and its derived collision mesh from logical
 ## voxel data.
 ##
@@ -32,6 +34,12 @@ const FACE_NORMAL_I := [
 	Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 1, 0),
 	Vector3i(0, -1, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1),
 ]
+## Half-face patch axes in the same order used by BlockShape.boundary_mask.
+const FACE_TANGENT_AXES := [
+	Vector2i(1, 2), Vector2i(1, 2), Vector2i(0, 2),
+	Vector2i(0, 2), Vector2i(0, 1), Vector2i(0, 1),
+]
+const FACE_NORMAL_AXIS := [0, 0, 1, 1, 2, 2]
 const FACE_CORNERS := [
 	[Vector3(0.5, -0.5, -0.5), Vector3(0.5, 0.5, -0.5), Vector3(0.5, 0.5, 0.5), Vector3(0.5, -0.5, 0.5)],
 	[Vector3(-0.5, -0.5, 0.5), Vector3(-0.5, 0.5, 0.5), Vector3(-0.5, 0.5, -0.5), Vector3(-0.5, -0.5, -0.5)],
@@ -102,6 +110,7 @@ var _occluder: PackedByteArray = PackedByteArray()
 var _buffers: Array = []
 var _collision := {"vertex": PackedVector3Array(), "index": PackedInt32Array()}
 var _padded: PackedByteArray = PackedByteArray()
+var _padded_orientation: PackedByteArray = PackedByteArray()
 var _padded_fluid: PackedByteArray = PackedByteArray()
 ## Reused ambient-occlusion scratch (four corner factors) so per-face AO does
 ## not allocate inside the hot emit loop.
@@ -120,6 +129,7 @@ func _init(texture_library: TextureLibrary, voxel_materials: VoxelMaterials = nu
 	for layer in BlockDB.LAYER_COUNT:
 		_buffers.append(_empty_surface())
 	_padded.resize(PADDED_CELLS)
+	_padded_orientation.resize(PADDED_CELLS)
 	_padded_fluid.resize(PADDED_CELLS)
 
 
@@ -166,21 +176,26 @@ func build(chunk: ChunkData, world: VoxelWorld) -> Dictionary:
 ## live world, so it is safe to run off the main thread while the player edits.
 func capture_input(chunk: ChunkData, world: VoxelWorld) -> Dictionary:
 	var neighbour_blocks: Array = []
+	var neighbour_orientations: Array = []
 	var neighbour_fluid: Array = []
 	for face in 6:
 		var neighbour: ChunkData = world.chunks.get(chunk.coord + FACE_NORMAL_I[face], null)
 		if neighbour == null:
 			neighbour_blocks.append(PackedByteArray())
+			neighbour_orientations.append(PackedByteArray())
 			neighbour_fluid.append(PackedByteArray())
 		else:
 			neighbour_blocks.append(neighbour.blocks.duplicate())
+			neighbour_orientations.append(neighbour.orientations.duplicate())
 			neighbour_fluid.append(neighbour.fluid.duplicate())
 	return {
 		"coord": chunk.coord,
 		"blocks": chunk.blocks.duplicate(),
+		"orientations": chunk.orientations.duplicate(),
 		"fluid": chunk.fluid.duplicate(),
 		"biomes": chunk.biomes.duplicate(),
 		"neighbour_blocks": neighbour_blocks,
+		"neighbour_orientations": neighbour_orientations,
 		"neighbour_fluid": neighbour_fluid,
 	}
 
@@ -281,22 +296,27 @@ func _fill_padded(input: Dictionary) -> void:
 	# Without this reset the emitted geometry of a chunk on the edge of the loaded
 	# region depends on the order the chunks happened to be meshed in.
 	_padded.fill(BlockDB.AIR)
+	_padded_orientation.fill(0)
 	_padded_fluid.fill(ChunkData.NO_FLUID)
+	var orientations: PackedByteArray = input["orientations"]
 	for local_y in ChunkData.SIZE:
 		for local_z in ChunkData.SIZE:
 			var row := ChunkData.cell_index(0, local_y, local_z)
 			var padded_row := padded_index(0, local_y, local_z)
 			for local_x in ChunkData.SIZE:
 				_padded[padded_row + local_x] = blocks[row + local_x]
+				_padded_orientation[padded_row + local_x] = orientations[row + local_x]
 				_padded_fluid[padded_row + local_x] = fluid[row + local_x]
 	for face in 6:
 		var neighbour_blocks: PackedByteArray = input["neighbour_blocks"][face]
 		if neighbour_blocks.is_empty():
 			continue
-		_fill_padded_slab(neighbour_blocks, input["neighbour_fluid"][face], face)
+		_fill_padded_slab(neighbour_blocks, input["neighbour_orientations"][face],
+			input["neighbour_fluid"][face], face)
 
 
-func _fill_padded_slab(neighbour_blocks: PackedByteArray, neighbour_fluid: PackedByteArray, face: int) -> void:
+func _fill_padded_slab(neighbour_blocks: PackedByteArray, neighbour_orientations: PackedByteArray,
+		neighbour_fluid: PackedByteArray, face: int) -> void:
 	match face:
 		BlockDB.FACE_NX:
 			for local_y in ChunkData.SIZE:
@@ -304,6 +324,7 @@ func _fill_padded_slab(neighbour_blocks: PackedByteArray, neighbour_fluid: Packe
 					var index := ChunkData.cell_index(ChunkData.SIZE - 1, local_y, local_z)
 					var target := padded_index(-1, local_y, local_z)
 					_padded[target] = neighbour_blocks[index]
+					_padded_orientation[target] = neighbour_orientations[index]
 					_padded_fluid[target] = neighbour_fluid[index]
 		BlockDB.FACE_PX:
 			for local_y in ChunkData.SIZE:
@@ -311,6 +332,7 @@ func _fill_padded_slab(neighbour_blocks: PackedByteArray, neighbour_fluid: Packe
 					var index := ChunkData.cell_index(0, local_y, local_z)
 					var target := padded_index(ChunkData.SIZE, local_y, local_z)
 					_padded[target] = neighbour_blocks[index]
+					_padded_orientation[target] = neighbour_orientations[index]
 					_padded_fluid[target] = neighbour_fluid[index]
 		BlockDB.FACE_NY:
 			for local_z in ChunkData.SIZE:
@@ -318,6 +340,7 @@ func _fill_padded_slab(neighbour_blocks: PackedByteArray, neighbour_fluid: Packe
 					var index := ChunkData.cell_index(local_x, ChunkData.SIZE - 1, local_z)
 					var target := padded_index(local_x, -1, local_z)
 					_padded[target] = neighbour_blocks[index]
+					_padded_orientation[target] = neighbour_orientations[index]
 					_padded_fluid[target] = neighbour_fluid[index]
 		BlockDB.FACE_PY:
 			for local_z in ChunkData.SIZE:
@@ -325,6 +348,7 @@ func _fill_padded_slab(neighbour_blocks: PackedByteArray, neighbour_fluid: Packe
 					var index := ChunkData.cell_index(local_x, 0, local_z)
 					var target := padded_index(local_x, ChunkData.SIZE, local_z)
 					_padded[target] = neighbour_blocks[index]
+					_padded_orientation[target] = neighbour_orientations[index]
 					_padded_fluid[target] = neighbour_fluid[index]
 		BlockDB.FACE_NZ:
 			for local_y in ChunkData.SIZE:
@@ -332,6 +356,7 @@ func _fill_padded_slab(neighbour_blocks: PackedByteArray, neighbour_fluid: Packe
 					var index := ChunkData.cell_index(local_x, local_y, ChunkData.SIZE - 1)
 					var target := padded_index(local_x, local_y, -1)
 					_padded[target] = neighbour_blocks[index]
+					_padded_orientation[target] = neighbour_orientations[index]
 					_padded_fluid[target] = neighbour_fluid[index]
 		BlockDB.FACE_PZ:
 			for local_y in ChunkData.SIZE:
@@ -339,11 +364,13 @@ func _fill_padded_slab(neighbour_blocks: PackedByteArray, neighbour_fluid: Packe
 					var index := ChunkData.cell_index(local_x, local_y, 0)
 					var target := padded_index(local_x, local_y, ChunkData.SIZE)
 					_padded[target] = neighbour_blocks[index]
+					_padded_orientation[target] = neighbour_orientations[index]
 					_padded_fluid[target] = neighbour_fluid[index]
 
 
 func _emit_faces(input: Dictionary) -> void:
 	var blocks: PackedByteArray = input["blocks"]
+	var orientations: PackedByteArray = input["orientations"]
 	var fluid: PackedByteArray = input["fluid"]
 	var origin := VoxelWorld.chunk_origin(input["coord"])
 	var base := Vector3(origin)
@@ -381,6 +408,10 @@ func _emit_faces(input: Dictionary) -> void:
 			# Flower petals are a deliberate colour accent; a green biome multiply
 			# would turn red and blue blossoms muddy.
 			body_tint = Color(variation, variation, variation, 1.0)
+		if BlockShape.is_shaped(block_id):
+			_emit_shaped_block(block_id, int(orientations[index]), centre,
+				padded_index(local_x, local_y, local_z), body_tint)
+			continue
 		if is_deco:
 			_emit_deco(block_id, centre, body_tint)
 			continue
@@ -408,6 +439,28 @@ func _emit_faces(input: Dictionary) -> void:
 		var world_cell := origin + Vector3i(local_x, local_y, local_z)
 		for face in 6:
 			var neighbour := int(padded[padded_centre + stride[face]])
+			# A full cube next to a stair only loses the half-face patches the stair
+			# actually occupies.  Keeping the uncovered patches avoids holes when
+			# looking through the empty half of the stair cell.
+			if not is_liquid and BlockShape.is_shaped(neighbour) \
+					and BlockDB.hides_neighbour_face(block_id, neighbour):
+				var neighbour_orientation := int(_padded_orientation[padded_centre + stride[face]])
+				var covered := BlockShape.boundary_mask(neighbour, neighbour_orientation, face ^ 1)
+				if covered == 0xF:
+					continue
+				var patch_tint := body_tint
+				if (block_id == BlockDB.GRASS or block_id == BlockDB.DRY_GRASS) and face != BlockDB.FACE_PY:
+					patch_tint = Color(variation, variation, variation, 1.0)
+				for patch_index in 4:
+					if (covered & (1 << patch_index)) != 0:
+						continue
+					if not is_custom and not is_water:
+						_emit_face_patch(surface, centre, face, block_id, patch_tint,
+							patch_index % 2, floori(float(patch_index) / 2.0))
+					if solid[block_id] == 1:
+						_emit_collision_patch(centre, face, patch_index % 2,
+							floori(float(patch_index) / 2.0))
+				continue
 			# Inlined `BlockDB.hides_neighbour_face`, kept identical to that
 			# helper by `test_block_db`.
 			if neighbour != BlockDB.AIR:
@@ -445,6 +498,109 @@ func _emit_faces(input: Dictionary) -> void:
 					_emit_collision(centre, face)
 
 
+func _emit_shaped_block(block_id: int, orientation: int, centre: Vector3,
+		padded_centre: int, tint: Color) -> void:
+	var padded := _padded
+	var padded_orientation := _padded_orientation
+	var surface: Dictionary = _buffers[BlockDB.layer_of(block_id)]
+	for descriptor: Dictionary in BlockShape.exposed_faces(block_id, orientation):
+		var cell: Vector3i = descriptor["cell"]
+		var face: int = int(descriptor["face"])
+		var neighbour_half := cell + BlockShape.FACE_STEPS[face]
+		if neighbour_half.x < 0 or neighbour_half.x >= 2 \
+				or neighbour_half.y < 0 or neighbour_half.y >= 2 \
+				or neighbour_half.z < 0 or neighbour_half.z >= 2:
+			var neighbour_index: int = padded_centre + int(FACE_STRIDE[face])
+			var neighbour_id := int(padded[neighbour_index])
+			if BlockDB.hides_neighbour_face(block_id, neighbour_id):
+				if not BlockShape.is_shaped(neighbour_id):
+					continue
+				var adjacent := neighbour_half
+				if adjacent.x < 0:
+					adjacent.x = 1
+				elif adjacent.x > 1:
+					adjacent.x = 0
+				if adjacent.y < 0:
+					adjacent.y = 1
+				elif adjacent.y > 1:
+					adjacent.y = 0
+				if adjacent.z < 0:
+					adjacent.z = 1
+				elif adjacent.z > 1:
+					adjacent.z = 0
+				if BlockShape.is_occupied(neighbour_id, int(padded_orientation[neighbour_index]), adjacent):
+					continue
+		var face_centre: Vector3 = centre + Vector3((float(cell.x) - 0.5) * 0.5,
+			(float(cell.y) - 0.5) * 0.5, (float(cell.z) - 0.5) * 0.5)
+		face_centre += (FACE_NORMALS[face] as Vector3) * 0.25
+		_emit_half_face(surface, face_centre, face, block_id, tint)
+		_emit_half_collision(face_centre, face)
+
+
+func _emit_face_patch(surface: Dictionary, block_centre: Vector3, face: int, block_id: int,
+		tint: Color, first_patch: int, second_patch: int) -> void:
+	var axes: Vector2i = FACE_TANGENT_AXES[face]
+	var face_centre: Vector3 = block_centre + (FACE_NORMALS[face] as Vector3) * 0.5
+	face_centre[axes.x] += (float(first_patch) - 0.5) * 0.5
+	face_centre[axes.y] += (float(second_patch) - 0.5) * 0.5
+	_emit_half_face(surface, face_centre, face, block_id, tint)
+
+
+func _emit_half_face(surface: Dictionary, face_centre: Vector3, face: int,
+		block_id: int, tint: Color) -> void:
+	var vertices: PackedVector3Array = surface["vertex"]
+	var normals: PackedVector3Array = surface["normal"]
+	var uvs: PackedVector2Array = surface["uv"]
+	var uv2s: PackedVector2Array = surface["uv2"]
+	var colors: PackedColorArray = surface["color"]
+	var indices: PackedInt32Array = surface["index"]
+	var axes: Vector2i = FACE_TANGENT_AXES[face]
+	var corners: Array = FACE_CORNERS[face]
+	var face_uvs: Array = FACE_UVS[face]
+	var normal: Vector3 = FACE_NORMALS[face]
+	var layer := face_layer[block_id * 6 + face]
+	var shade: float = FACE_SHADE[face]
+	var tone := Color(tint.r * shade, tint.g * shade, tint.b * shade, 1.0)
+	var uv2 := Vector2(float(layer), 0.0)
+	var base_index := vertices.size()
+	for corner_index in 4:
+		var corner: Vector3 = corners[corner_index]
+		corner[axes.x] *= 0.5
+		corner[axes.y] *= 0.5
+		corner[FACE_NORMAL_AXIS[face]] = 0.0
+		vertices.append(face_centre + corner)
+		normals.append(normal)
+		uvs.append(face_uvs[corner_index])
+		uv2s.append(uv2)
+		colors.append(tone)
+	for quad_index in QUAD_INDICES:
+		indices.append(base_index + quad_index)
+	surface["faces"] = int(surface["faces"]) + 1
+
+
+func _emit_collision_patch(block_centre: Vector3, face: int, first_patch: int,
+		second_patch: int) -> void:
+	var axes: Vector2i = FACE_TANGENT_AXES[face]
+	var face_centre: Vector3 = block_centre + (FACE_NORMALS[face] as Vector3) * 0.5
+	face_centre[axes.x] += (float(first_patch) - 0.5) * 0.5
+	face_centre[axes.y] += (float(second_patch) - 0.5) * 0.5
+	_emit_half_collision(face_centre, face)
+
+
+func _emit_half_collision(face_centre: Vector3, face: int) -> void:
+	var vertices: PackedVector3Array = _collision["vertex"]
+	var indices: PackedInt32Array = _collision["index"]
+	var axes: Vector2i = FACE_TANGENT_AXES[face]
+	var corners: Array = FACE_CORNERS[face]
+	var base_index := vertices.size()
+	for corner_index in 4:
+		var corner: Vector3 = corners[corner_index]
+		corner[axes.x] *= 0.5
+		corner[axes.y] *= 0.5
+		corner[FACE_NORMAL_AXIS[face]] = 0.0
+		vertices.append(face_centre + corner)
+	for quad_index in QUAD_INDICES:
+		indices.append(base_index + quad_index)
 func _emit_face(surface: Dictionary, centre: Vector3, face: int, block_id: int, tint: Color, height_offset: float, ao: PackedFloat32Array = PackedFloat32Array(), glow: float = 0.0) -> void:
 	var vertices: PackedVector3Array = surface["vertex"]
 	var normals: PackedVector3Array = surface["normal"]

@@ -11,6 +11,44 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ---
 
+## M23 — Roof stairs and stair behavior
+
+Design/evidence: `godot-progress.md` M23 section; captures `m23-stairs-roof.png`,
+`m23-stairs-profile.png`, `m23-stairs-dusk.png`.
+
+- [x] `Stair` block id 88, planks faces, solid/opaque, hardness 1.8 and a
+      self-drop; recipe `3 planks + 1 stick → 2 stairs` at a crafting table
+- [x] `core/block_shape.gd`: eight orientations (four facings × upright/upside
+      down), half-cell occupancy, boundary masks and exposed-face enumeration;
+      verified canonical mask `0x3F`, 6 half-cells, 22 exposed faces
+- [x] Placement orientation follows the aimed face and the player's horizontal
+      look (downward hits flip the stair); placement refuses inside the body
+      using the actual half-cell occupancy
+- [x] Shaped meshing: render and collision come from the same 22 half-cell
+      faces; adjacent full cubes keep only the uncovered half-face patches and
+      adjacent stairs cull only overlapping half-faces, including across chunk
+      seams (worker snapshots carry orientation)
+- [x] Half-cell voxel DDA targeting: rays pass through the empty half of a stair
+      and stop on the internal riser with its real normal; mining returns the
+      stair item and clears the orientation
+- [x] Save VERSION 9 stores orientation per edited block; v1–v8 saves load with
+      orientation 0 and are rejected per-row if a pre-v9 row carries orientation;
+      unload/regeneration replays orientation
+- [x] Tests: `test_block_shape.gd`, `test_stair_interaction.gd`, stair cases in
+      the mesher/raycast/edits/persistence/crafting tests and 24 real-scene
+      integration assertions
+- [x] Visual: showcase stair-roofed pavilion (two stair slopes + ridge) with
+      `--visual-test=roof|stairs`; first pass exposed a floating ridge and the
+      ridge was moved onto the inner stair row
+- [x] Milestone gate: unit **1852** / integration **426** assertions, both exit
+      0; smoke twice `world_hash=7821043820538758500` unchanged; three windowed
+      captures inspected
+- [~] No live human keyboard/mouse stair placement; scripted real-controller and
+      showcase evidence only
+- [ ] Slabs and stair variants (e.g. corner/outer stairs) remain future work
+
+---
+
 ## M22 — Stylized voxel world: lush fantasy and medieval settlements
 
 Design contract: `m22-visual-design.md`; evidence: `m22-progress.md`.
@@ -63,7 +101,7 @@ Design contract: `m22-visual-design.md`; evidence: `m22-progress.md`.
 - [~] Live keyboard/mouse play-through and video rotation inspection remain
       outstanding (same limitation as M18–M21); movement was inspected through
       the scripted tour
-- [ ] Next architecture step: roof stairs/slabs for a smoother gable silhouette
+- [x] Next architecture step: roof stairs delivered in M23 (slabs remain a gap)
 - [ ] Next settlement step: cluster cottages/stalls with a procedural path
       network instead of isolated definitions
 

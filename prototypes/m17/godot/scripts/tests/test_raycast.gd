@@ -72,6 +72,17 @@ func run(h: TestHarness) -> void:
 	var into_water := VoxelRay.cast(water, Vector3(2.5, 73.0, 2.5), Vector3(0, -1, 0), 20.0, true)
 	h.eq(into_water["block"], water_position, "liquids are reported when requested")
 
+	# The ray crosses the empty upper-front half of a stair before hitting its
+	# raised rear half.  The returned normal is the actual half-cell riser face.
+	world.set_block_state(Vector3i(8, 8, 8), BlockDB.STAIR, 0)
+	var stair_hit := VoxelRay.cast(world, Vector3(8.5, 8.75, 10.0), Vector3(0, 0, -1), 6.0)
+	h.check(bool(stair_hit["hit"]), "a ray through the stair's empty half reaches the occupied step")
+	h.eq(stair_hit["block"], Vector3i(8, 8, 8), "a shaped hit reports the owning voxel cell")
+	h.eq(stair_hit["normal"], Vector3i(0, 0, 1), "a shaped hit reports the internal riser normal")
+	h.approx(float(stair_hit["distance"]), 1.5, 0.001, "the ray stops at the half-cell riser")
+	var above_stair := VoxelRay.cast(world, Vector3(8.5, 9.5, 10.0), Vector3(0, 0, -1), 6.0)
+	h.check(not bool(above_stair["hit"]), "a ray above the stair passes through its cell")
+
 	# Unloaded chunks read as air, so rays never hit phantom blocks.
 	var unloaded := VoxelRay.cast(world, Vector3(5000.5, 70.0, 5000.5), Vector3(0, -1, 0), 20.0)
 	h.check(not unloaded["hit"], "a ray through unloaded chunks misses")

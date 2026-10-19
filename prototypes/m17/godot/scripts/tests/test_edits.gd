@@ -31,6 +31,12 @@ func run(h: TestHarness) -> void:
 	world.set_block(boundary, BlockDB.PLANKS)
 	h.check(west.mesh_dirty, "an edit on the -X border dirties the western neighbour")
 	h.check(chunk.mesh_dirty, "the edited chunk is dirty too")
+	west.mesh_dirty = false
+	chunk.mesh_dirty = false
+	h.check(world.set_block_state(boundary, BlockDB.STAIR, 5), "a boundary stair orientation is an edit")
+	h.eq(world.get_orientation(boundary), 5, "the edited stair orientation is readable")
+	h.check(west.mesh_dirty, "rotating a boundary stair dirties the western neighbour")
+	h.check(chunk.mesh_dirty, "rotating a stair dirties its own chunk")
 
 	# Editing on a Y border must dirty the chunk above/below.
 	var y_border := Vector3i(8, 47, 8)
@@ -81,11 +87,15 @@ func run(h: TestHarness) -> void:
 	var edited_position := Vector3i(3, 64, 3)
 	world.ensure_chunk(VoxelWorld.world_to_chunk(edited_position))
 	world.set_block(edited_position, BlockDB.BRICK)
+	var edited_stair := edited_position + Vector3i(1, 0, 0)
+	world.set_block_state(edited_stair, BlockDB.STAIR, 6)
 	var coord := VoxelWorld.world_to_chunk(edited_position)
 	world.unload_chunk(coord)
 	h.check(not world.has_chunk(coord), "the chunk can be unloaded")
 	world.ensure_chunk(coord)
 	h.eq(world.get_block(edited_position), BlockDB.BRICK, "the edit survives unload and regeneration")
+	h.eq(world.get_block(edited_stair), BlockDB.STAIR, "the stair survives unload and regeneration")
+	h.eq(world.get_orientation(edited_stair), 6, "the stair orientation survives unload and regeneration")
 
 	# Fluid overrides survive too.  The cell must live in the edited chunk and be
 	# empty in the generated world: trees can occupy any given column, so the

@@ -15,6 +15,8 @@ const SOURCE_LEVEL := 8
 
 var coord: Vector3i
 var blocks: PackedByteArray
+## Per-cell orientation for partial models.  Existing and generated blocks use 0.
+var orientations: PackedByteArray
 var fluid: PackedByteArray
 var sources: PackedByteArray
 var biomes: PackedByteArray
@@ -36,6 +38,8 @@ func _init(chunk_coord: Vector3i = Vector3i.ZERO) -> void:
 	coord = chunk_coord
 	blocks = PackedByteArray()
 	blocks.resize(CELLS)
+	orientations = PackedByteArray()
+	orientations.resize(CELLS)
 	fluid = PackedByteArray()
 	fluid.resize(CELLS)
 	sources = PackedByteArray()

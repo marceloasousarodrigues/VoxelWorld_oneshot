@@ -80,11 +80,12 @@ const LANTERN := 84
 const FENCE := 85
 const BARREL := 86
 const DOOR := 87
+const STAIR := 88
 
-const COUNT := 88
+const COUNT := 89
 ## Number of ids in 0..COUNT-1 that are real blocks (the item-id ranges 35..60
 ## and 67..72 are deliberately undefined here).
-const DEFINED_COUNT := 56
+const DEFINED_COUNT := 57
 
 # --- render layers ---------------------------------------------------------
 const LAYER_OPAQUE := 0
@@ -223,6 +224,8 @@ static func _static_init() -> void:
 			["barrel_top", "barrel_side", "barrel_top"]],
 		["Door", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 1.8, BlockDB.DOOR,
 			["door", "door", "door"]],
+		["Stair", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 1.8, BlockDB.STAIR,
+			["planks", "planks", "planks"]],
 	])
 	if definitions.size() != COUNT:
 		push_error("BlockDB: definition table has %d rows, expected %d" % [definitions.size(), COUNT])

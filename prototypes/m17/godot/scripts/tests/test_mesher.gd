@@ -1,5 +1,7 @@
 extends RefCounted
 
+const BlockShape = preload("res://scripts/core/block_shape.gd")
+
 ## Mesh construction: face culling, cross-chunk borders, water surfaces,
 ## decoration planes and derived collision.
 
@@ -42,6 +44,44 @@ func run(h: TestHarness) -> void:
 	h.eq(int(result["faces"]), 6, "an isolated block emits six faces")
 	h.check(result["mesh"] != null, "produces a mesh for the solid layer")
 	h.check(result["collision"] != null, "produces a collision mesh for solid blocks")
+
+	# A stair is a union of six half-cell cubes.  An isolated stair has 22
+	# exterior half-cell faces (36 minus two for each of the seven internal
+	# adjacencies); rendering and collision are generated from the same faces.
+	var shape_world := VoxelWorld.new(17017)
+	var shape_chunk := _make_chunk(shape_world, Vector3i.ZERO)
+	h.check(shape_world.set_block_state(Vector3i(8, 8, 8), BlockDB.STAIR, 0), "places a canonical stair in world data")	
+	var shape_result := _mesher.build(shape_chunk, shape_world)
+	h.eq(int(shape_result["faces"]), 22, "an isolated stair emits twenty-two half-cell faces")
+	var shape_collision_arrays: Array = shape_result["collision"].surface_get_arrays(0)
+	h.eq((shape_collision_arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size(), 88,
+		"stair collision uses the same twenty-two quads as rendering")
+	var shape_render_arrays: Array = shape_result["mesh"].surface_get_arrays(0)
+	h.eq((shape_render_arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size(), 88,
+		"stair render mesh has four vertices per exposed face")
+	var shape_snapshot := _mesher.capture_input(shape_chunk, shape_world)
+	var stair_index := ChunkData.cell_index(8, 8, 8)
+	h.eq(int((shape_snapshot["orientations"] as PackedByteArray)[stair_index]), 0,
+		"the mesh snapshot captures orientation zero")
+	shape_world.set_block_state(Vector3i(8, 8, 8), BlockDB.STAIR, 3)
+	h.eq(int((shape_snapshot["orientations"] as PackedByteArray)[stair_index]), 0,
+		"an orientation edit cannot mutate a worker snapshot")
+	var rotated_snapshot := _mesher.capture_input(shape_chunk, shape_world)
+	h.eq(int((rotated_snapshot["orientations"] as PackedByteArray)[stair_index]), 3,
+		"a new worker snapshot observes the changed orientation")
+
+	# Across a chunk seam, only overlapping stair patches are culled.  The full
+	# block keeps the one uncovered patch on its -X face.
+	var shape_border_world := VoxelWorld.new(17017)
+	var shape_border_left := _make_chunk(shape_border_world, Vector3i.ZERO)
+	var shape_border_right := _make_chunk(shape_border_world, Vector3i(1, 0, 0))
+	shape_border_world.set_block_state(Vector3i(15, 8, 8), BlockDB.STAIR, 0)
+	shape_border_world.set_block(Vector3i(16, 8, 8), BlockDB.STONE)
+	var stair_border_result := _mesher.build(shape_border_left, shape_border_world)
+	var cube_border_result := _mesher.build(shape_border_right, shape_border_world)
+	h.eq(int(stair_border_result["faces"]), 19, "the stair culls three patches covered by the adjacent cube")
+	h.eq(int(cube_border_result["faces"]), 6, "the cube emits five whole faces and one uncovered half-face")
+	h.check(shape_border_right != null, "the cross-boundary fixture remains loaded")
 
 	# 2) Two adjacent blocks share the face between them.
 	var world2 := VoxelWorld.new(17017)

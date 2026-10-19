@@ -79,6 +79,8 @@ static func _build_catalogue() -> Array:
 			{BlockDB.PLANKS: 4, ItemDB.STICK: 2}, BlockDB.TIMBER_FRAME, 4),
 		_shapeless("packed_path", "Building", STATION_HAND,
 			{BlockDB.DIRT: 2, BlockDB.GRAVEL: 1}, BlockDB.PATH, 3),
+		_shapeless("stair", "Building", STATION_TABLE,
+			{BlockDB.PLANKS: 3, ItemDB.STICK: 1}, BlockDB.STAIR, 2),
 		_shaped("fence", "Building", STATION_TABLE, ["P P", "PSP", "P P"],
 			{"P": BlockDB.PLANKS, "S": ItemDB.STICK}, BlockDB.FENCE, 6),
 		_shaped("door", "Building", STATION_TABLE, ["PP", "PP", "PP"],

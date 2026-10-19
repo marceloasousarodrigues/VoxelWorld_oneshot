@@ -1,6 +1,8 @@
 class_name VoxelWorld
 extends RefCounted
 
+const BlockShape = preload("res://scripts/core/block_shape.gd")
+
 ## Authoritative logical voxel world.
 ##
 ## Owns chunk data, world/chunk coordinate conversion (floor semantics that are
@@ -23,6 +25,10 @@ var chunks: Dictionary = {}
 var edits: Dictionary = {}
 ## Edits grouped by chunk so regenerating one chunk re-applies only its own.
 var edits_by_chunk: Dictionary = {}
+## Orientation of each edited block; grouped separately to preserve the existing
+## position -> block-id edit contract used by game systems and diagnostics.
+var edit_orientations: Dictionary = {}
+var edit_orientations_by_chunk: Dictionary = {}
 ## Fluid overrides that differ from the generated world: position -> level.
 var fluid_overrides: Dictionary = {}
 ## The same overrides grouped by chunk so a regenerated chunk re-applies only
@@ -130,6 +136,14 @@ func get_block(world_position: Vector3i) -> int:
 	return chunk.blocks[ChunkData.cell_index(local.x, local.y, local.z)]
 
 
+func get_orientation(world_position: Vector3i) -> int:
+	var chunk: ChunkData = chunks.get(world_to_chunk(world_position), null)
+	if chunk == null:
+		return 0
+	var local := world_to_local(world_position)
+	return int(chunk.orientations[ChunkData.cell_index(local.x, local.y, local.z)])
+
+
 func get_block_unloaded_as_air(world_position: Vector3i) -> int:
 	return get_block(world_position)
 
@@ -145,7 +159,17 @@ func is_solid(world_position: Vector3i) -> bool:
 ## Sets a block, records it as a player edit and flags affected meshes.
 ## Returns true when the world actually changed.
 func set_block(world_position: Vector3i, block_id: int, record_edit: bool = true) -> bool:
+	return set_block_state(world_position, block_id, 0, record_edit)
+
+
+## Sets a block and its shape orientation as one logical edit.
+func set_block_state(world_position: Vector3i, block_id: int, orientation: int,
+		record_edit: bool = true) -> bool:
 	if not in_world_vertical(world_position.y):
+		return false
+	if not BlockShape.is_valid_orientation(orientation):
+		return false
+	if block_id != BlockDB.STAIR and orientation != 0:
 		return false
 	var coord := world_to_chunk(world_position)
 	var chunk: ChunkData = chunks.get(coord, null)
@@ -154,13 +178,15 @@ func set_block(world_position: Vector3i, block_id: int, record_edit: bool = true
 	var local := world_to_local(world_position)
 	var index := ChunkData.cell_index(local.x, local.y, local.z)
 	var previous := chunk.blocks[index]
-	if previous == block_id:
+	var previous_orientation := int(chunk.orientations[index])
+	if previous == block_id and previous_orientation == orientation:
 		return false
 	var was_solid := BlockDB.is_solid(previous)
 	var is_solid_now := BlockDB.is_solid(block_id)
 	if was_solid != is_solid_now:
 		chunk.solid_cells += 1 if is_solid_now else -1
 	chunk.blocks[index] = block_id
+	chunk.orientations[index] = orientation
 	if block_id == BlockDB.WATER:
 		if chunk.fluid[index] == ChunkData.NO_FLUID:
 			chunk.fluid[index] = ChunkData.SOURCE_LEVEL
@@ -171,7 +197,7 @@ func set_block(world_position: Vector3i, block_id: int, record_edit: bool = true
 	chunk.edited = true
 	chunk.mark_dirty()
 	if record_edit:
-		_record_edit(world_position, block_id, chunk)
+		_record_edit(world_position, block_id, orientation, chunk)
 	_flag_neighbours(world_position)
 	block_changed.emit(world_position, previous, block_id)
 	# Decoration is supported by the block below it.  Removing that support (or
@@ -186,12 +212,16 @@ func set_block(world_position: Vector3i, block_id: int, record_edit: bool = true
 	return true
 
 
-func _record_edit(world_position: Vector3i, block_id: int, chunk: ChunkData) -> void:
+func _record_edit(world_position: Vector3i, block_id: int, orientation: int, chunk: ChunkData) -> void:
 	edits[world_position] = block_id
+	edit_orientations[world_position] = orientation
 	var key := chunk.coord
 	var per_chunk: Dictionary = edits_by_chunk.get(key, {})
 	per_chunk[world_position] = block_id
 	edits_by_chunk[key] = per_chunk
+	var per_chunk_orientation: Dictionary = edit_orientations_by_chunk.get(key, {})
+	per_chunk_orientation[world_position] = orientation
+	edit_orientations_by_chunk[key] = per_chunk_orientation
 	stats["edits"] = edits.size()
 
 
@@ -203,6 +233,8 @@ func _apply_saved_edits(chunk: ChunkData) -> void:
 			var index := ChunkData.cell_index(local.x, local.y, local.z)
 			var block_id: int = (per_chunk as Dictionary)[position]
 			chunk.blocks[index] = block_id
+			var orientations_for_chunk: Dictionary = edit_orientations_by_chunk.get(chunk.coord, {})
+			chunk.orientations[index] = int(orientations_for_chunk.get(position, 0))
 			if block_id != BlockDB.WATER:
 				chunk.fluid[index] = ChunkData.NO_FLUID
 				chunk.sources[index] = 0
@@ -228,9 +260,19 @@ func _apply_saved_fluid(chunk: ChunkData) -> void:
 ##
 ## Regenerating rather than patching is what makes loading a *different* save
 ## safe: no edit from the previous session can survive a load.
-func load_edits(block_edits: Dictionary, fluid_edits: Dictionary, fluid_source_positions: Dictionary) -> void:
+func load_edits(block_edits: Dictionary, fluid_edits: Dictionary, fluid_source_positions: Dictionary,
+		orientation_edits: Dictionary = {}) -> void:
 	edits = block_edits
 	edits_by_chunk = group_by_chunk(block_edits)
+	edit_orientations = {}
+	for position: Vector3i in block_edits:
+		var orientation := int(orientation_edits.get(position, 0))
+		if not BlockShape.is_valid_orientation(orientation):
+			orientation = 0
+		if int(block_edits[position]) != BlockDB.STAIR:
+			orientation = 0
+		edit_orientations[position] = orientation
+	edit_orientations_by_chunk = group_by_chunk(edit_orientations)
 	fluid_overrides = fluid_edits
 	fluid_overrides_by_chunk = group_by_chunk(fluid_edits)
 	fluid_sources = fluid_source_positions
@@ -241,7 +283,7 @@ func load_edits(block_edits: Dictionary, fluid_edits: Dictionary, fluid_source_p
 
 ## Forgets every persisted edit and rebuilds the loaded chunks pristine.
 func clear_edits() -> void:
-	load_edits({}, {}, {})
+	load_edits({}, {}, {}, {})
 
 
 static func group_by_chunk(entries: Dictionary) -> Dictionary:
@@ -409,7 +451,7 @@ static func sorted_coords(source: Dictionary) -> Array:
 	return coords
 
 
-## Stable hash of every loaded chunk's logical data (blocks + fluid).
+## Stable hash of every loaded chunk's logical data (blocks, shape orientation + fluid).
 ##
 ## Two runs that generate the same region must report the same value no matter
 ## how the streaming budgets split the work across frames.
@@ -419,10 +461,12 @@ func fingerprint() -> int:
 		var chunk: ChunkData = chunks[coord]
 		hash_value = _mix(hash_value, coord.x, coord.y, coord.z)
 		var blocks := chunk.blocks
+		var orientations := chunk.orientations
 		var fluid := chunk.fluid
 		var sources := chunk.sources
 		for index in ChunkData.CELLS:
-			hash_value = (hash_value * 1000003 + blocks[index] * 7 + fluid[index] * 131 + sources[index] * 8191) & 0x7FFFFFFFFFFFFFFF
+			hash_value = (hash_value * 1000003 + blocks[index] * 7 + orientations[index] * 97 \
+				+ fluid[index] * 131 + sources[index] * 8191) & 0x7FFFFFFFFFFFFFFF
 	return hash_value
 
 

@@ -37,6 +37,7 @@ const STREAM_Z_MIN := 2
 const STREAM_Z_MAX := HALF - 1
 const COTTAGE_ANCHOR := Vector2i(-6, -9)
 const STALL_ANCHOR := Vector2i(6, 3)
+const PAVILION_ANCHOR := Vector2i(1, -2)
 const GATE_Z := 12
 
 
@@ -44,7 +45,7 @@ func build(world: VoxelWorld) -> Dictionary:
 	var report := {
 		"center": CENTER, "blocks": 0, "chunks": 0,
 		"cottage": 0, "stall": 0, "path": 0, "bridge": 0,
-		"lanterns": 0, "trees": 0, "decorations": 0,
+		"lanterns": 0, "trees": 0, "decorations": 0, "stairs": 0,
 	}
 
 	_level_clearing(world, report)
@@ -52,6 +53,7 @@ func build(world: VoxelWorld) -> Dictionary:
 	_build_pond_and_stream(world, report)
 	_build_cottage(world, report)
 	_build_work_area(world, report)
+	_build_stair_pavilion(world, report)
 	_build_fence_and_bridge(world, report)
 	_build_lanterns(world, report)
 	_plant_trees(world, report)
@@ -202,6 +204,44 @@ func _build_work_area(world: VoxelWorld, report: Dictionary) -> void:
 				BlockDB.COBBLESTONE if (dx + dz) % 3 != 0 else BlockDB.STONE_BRICK)
 
 
+## M23 stair-roofed pavilion: an open post-and-beam shelter whose gable roof is
+## built from oriented stair blocks, so the stepped roof silhouette the stairs
+## exist for is visible at runtime.  Every block is ordinary voxel data written
+## through the same `set_block_state` path the player uses.
+func _build_stair_pavilion(world: VoxelWorld, report: Dictionary) -> void:
+	var anchor := CENTER + Vector3i(PAVILION_ANCHOR.x, 0, PAVILION_ANCHOR.y)
+	# Clear the footprint above the leveled ground.
+	for dz in range(-2, 3):
+		for dx in range(-2, 3):
+			for y in range(1, 8):
+				report["blocks"] += _put(world, anchor + Vector3i(dx, y, dz), BlockDB.AIR)
+	# Four corner posts.
+	for dz in [-2, 2]:
+		for dx in [-2, 2]:
+			for y in range(1, 5):
+				report["blocks"] += _put(world, anchor + Vector3i(dx, y, dz), BlockDB.TIMBER_FRAME)
+	# Perimeter beam at the eaves.
+	for dx in range(-2, 3):
+		for dz in [-2, 2]:
+			report["blocks"] += _put(world, anchor + Vector3i(dx, 4, dz), BlockDB.TIMBER_FRAME)
+	for dz in range(-1, 2):
+		for dx in [-2, 2]:
+			report["blocks"] += _put(world, anchor + Vector3i(dx, 4, dz), BlockDB.TIMBER_FRAME)
+	# Gable roof from oriented stairs: the south slope faces +Z and rises toward
+	# the ridge at z == 0, the north slope is its mirror.  The ridge cap closes
+	# the top.  Two stair rows per slope make the step profile read clearly.
+	for dx in range(-2, 3):
+		_report_put_state(world, report, anchor + Vector3i(dx, 5, 2), BlockDB.STAIR, 0)
+		_report_put_state(world, report, anchor + Vector3i(dx, 6, 1), BlockDB.STAIR, 0)
+		_report_put_state(world, report, anchor + Vector3i(dx, 5, -2), BlockDB.STAIR, 2)
+		_report_put_state(world, report, anchor + Vector3i(dx, 6, -1), BlockDB.STAIR, 2)
+		report["blocks"] += _put(world, anchor + Vector3i(dx, 6, 0), BlockDB.ROOF_RIDGE)
+		report["stairs"] += 4
+	# A warm lantern hangs from the ridge beam.
+	report["blocks"] += _put(world, anchor + Vector3i(0, 4, 0), BlockDB.LANTERN)
+	report["lanterns"] += 1
+
+
 func _build_fence_and_bridge(world: VoxelWorld, report: Dictionary) -> void:
 	# South garden fence with a gate where the path crosses it.
 	var gate_x := CENTER.x + _path_offset(GATE_Z)
@@ -348,6 +388,24 @@ func _put(world: VoxelWorld, position: Vector3i, block_id: int) -> int:
 func _report_put(world: VoxelWorld, report: Dictionary, position: Vector3i, block_id: int) -> void:
 	var changed := _put(world, position, block_id)
 	report["blocks"] += changed
+
+
+## Writes a shaped block and its orientation through the authoritative state path
+## (used for the M23 stair roof).
+func _put_state(world: VoxelWorld, position: Vector3i, block_id: int, orientation: int) -> int:
+	if not world.in_world_vertical(position.y):
+		return 0
+	var coord := VoxelWorld.world_to_chunk(position)
+	if not world.has_chunk(coord):
+		world.ensure_chunk(coord)
+	if world.get_block(position) == block_id and world.get_orientation(position) == orientation:
+		return 0
+	return 1 if world.set_block_state(position, block_id, orientation, false) else 0
+
+
+func _report_put_state(world: VoxelWorld, report: Dictionary, position: Vector3i,
+		block_id: int, orientation: int) -> void:
+	report["blocks"] += _put_state(world, position, block_id, orientation)
 
 
 func _boulder(world: VoxelWorld, base: Vector3i, size: int, ore: int) -> void:

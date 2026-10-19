@@ -37,6 +37,12 @@ func _write_raw(saves: SaveManager, text: String) -> void:
 	file.close()
 
 
+func _set_legacy_version(payload: Dictionary, version: int) -> void:
+	payload["version"] = version
+	for row: Array in payload.get("blocks", []):
+		row.resize(4)
+
+
 func _files_matching(prefix: String) -> Array[String]:
 	var matches: Array[String] = []
 	var directory := DirAccess.open(TEST_DIRECTORY)
@@ -86,9 +92,11 @@ func run(h: TestHarness) -> void:
 	var edited := Vector3i(8, 60, 8)
 	var removed := Vector3i(9, 60, 8)
 	var built := Vector3i(10, 60, 8)
+	var stair := Vector3i(11, 60, 8)
 	h.check(world.set_block(edited, BlockDB.PLANKS), "a block is placed before saving")
 	h.check(world.set_block(removed, BlockDB.AIR), "a block is broken before saving")
 	h.check(world.set_block(built, BlockDB.TIMBER_FRAME), "an M22 building block is placed before saving")
+	h.check(world.set_block_state(stair, BlockDB.STAIR, 6), "an oriented stair is placed before saving")
 	var fluid_cell := Vector3i(8, 60, 9)
 	world.fluid_overrides[fluid_cell] = 7
 	world.fluid_sources[fluid_cell] = true
@@ -122,7 +130,15 @@ func run(h: TestHarness) -> void:
 	var data: Dictionary = result["data"]
 	h.eq(int(data["seed"]), 17017, "the saved seed round-trips")
 	h.eq(int(data["version"]), SaveManager.VERSION, "the save is written at the current version")
-	h.eq(int(SaveManager.VERSION), 8, "the current save version is 8")
+	h.eq(int(SaveManager.VERSION), 9, "the current save version is 9")
+	var saved_stair_row: Array = []
+	for row: Array in data["blocks"]:
+		if int(row[3]) == BlockDB.STAIR:
+			saved_stair_row = row
+			break
+	h.eq(saved_stair_row.size(), 5, "a v9 block edit row stores orientation in its fifth value")
+	if saved_stair_row.size() == 5:
+		h.eq(int(saved_stair_row[4]), 6, "the v9 row stores the stair orientation")
 
 	# --- apply to a fresh session ------------------------------------------
 	var restored_world := VoxelWorld.new(17017)
@@ -133,7 +149,7 @@ func run(h: TestHarness) -> void:
 	var restored_health := Health.new()
 	var applied: Dictionary = saves.apply(result, restored_world, restored_player, restored_inventory, restored_clock, restored_health)
 	h.check(bool(applied["ok"]), "apply() accepts a save from the same seed")
-	h.eq(int(applied["block_edits"]), 3, "apply() reports the three block edits")
+	h.eq(int(applied["block_edits"]), 4, "apply() reports the four block edits")
 	h.eq(int(applied["fluid_edits"]), 1, "apply() reports the one fluid edit")
 	h.approx(restored_health.health, 13.0, 1e-6, "the saved health survived the round-trip")
 	h.approx(restored_health.max_health, 20.0, 1e-6, "the saved maximum health survived the round-trip")
@@ -142,6 +158,8 @@ func run(h: TestHarness) -> void:
 
 	h.eq(restored_world.get_block(edited), BlockDB.PLANKS, "the placed block survived the round-trip")
 	h.eq(restored_world.get_block(built), BlockDB.TIMBER_FRAME, "the M22 building block survived the round-trip")
+	h.eq(restored_world.get_block(stair), BlockDB.STAIR, "the stair survived the round-trip")
+	h.eq(restored_world.get_orientation(stair), 6, "the stair orientation survived the round-trip")
 	h.eq(restored_world.get_block(removed), BlockDB.AIR, "the broken block stayed broken")
 	h.check(restored_world.edits.has(edited), "the restored world records the edit")
 	h.eq(int(restored_world.fluid_overrides.get(fluid_cell, -1)), 7, "the fluid override survived")
@@ -162,6 +180,22 @@ func run(h: TestHarness) -> void:
 	h.approx(restored_clock.time_of_day, 0.42, 1e-6, "the clock time survived")
 	h.approx(restored_clock.day_length_seconds, 900.0, 1e-6, "the clock day length survived")
 
+	# A v8 row has no orientation field; it is normalized to orientation zero.
+	# Build a real v9 write payload (with the format/world-shape headers a save
+	# file needs), then downgrade it to the v8 four-column block row.
+	var legacy_v8: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath, hunger)
+	_set_legacy_version(legacy_v8, 8)
+	_write_raw(saves, JSON.stringify(legacy_v8))
+	var legacy_result: Dictionary = saves.read()
+	h.check(bool(legacy_result["ok"]), "a v8 four-value block row remains loadable")
+	if bool(legacy_result["ok"]):
+		var legacy_world := VoxelWorld.new(17017)
+		legacy_world.ensure_chunk(chunk_coord)
+		var legacy_applied: Dictionary = saves.apply(legacy_result, legacy_world, null, null)
+		h.check(bool(legacy_applied["ok"]), "a v8 save applies to the world")
+		h.eq(legacy_world.get_block(stair), BlockDB.STAIR, "the legacy stair block id is retained")
+		h.eq(legacy_world.get_orientation(stair), 0, "a v8 row defaults orientation to zero")
+
 	# --- a save from another seed must never be applied --------------------
 	var other_world := VoxelWorld.new(4242)
 	var rejected: Dictionary = saves.apply(result, other_world, player, inventory, clock)
@@ -170,7 +204,7 @@ func run(h: TestHarness) -> void:
 
 	# --- version 1 and 2 saves still load (newer fields are optional) -------
 	var v1_payload: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath)
-	v1_payload["version"] = 1
+	_set_legacy_version(v1_payload, 1)
 	v1_payload.erase("clock")
 	v1_payload.erase("health")
 	v1_payload.erase("breath")
@@ -188,7 +222,7 @@ func run(h: TestHarness) -> void:
 		h.less(float(v1_applied["hunger"]), 0.0, "a version 1 save reports no hunger")
 
 	var v2_payload: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath)
-	v2_payload["version"] = 2
+	_set_legacy_version(v2_payload, 2)
 	v2_payload.erase("health")
 	v2_payload.erase("breath")
 	v2_payload.erase("hunger")
@@ -206,7 +240,7 @@ func run(h: TestHarness) -> void:
 	# A version 3 save has breath but no hunger: it loads, and the game keeps a
 	# full hunger bar (the sentinel tells the game to leave it alone).
 	var v3_payload: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath)
-	v3_payload["version"] = 3
+	_set_legacy_version(v3_payload, 3)
 	v3_payload.erase("hunger")
 	v3_payload.erase("npcs")
 	v3_payload.erase("stations")
@@ -223,7 +257,7 @@ func run(h: TestHarness) -> void:
 	# A version 7 save has no crop payload: it still loads and starts with no
 	# tracked crops, so the M20 save format remains readable.
 	var v7_payload: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath, hunger)
-	v7_payload["version"] = 7
+	_set_legacy_version(v7_payload, 7)
 	v7_payload.erase("crops")
 	_write_raw(saves, JSON.stringify(v7_payload))
 	var v7_result: Dictionary = saves.read()

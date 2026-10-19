@@ -537,6 +537,9 @@ func _main() -> void:
 	# --- M22 bounded lantern lighting ---------------------------------------
 	await _lantern_lights_section()
 
+	# --- M23 roof stairs through the real scene -----------------------------
+	await _stairs_section()
+
 	# --- Inventory interface: slots, stack moves and item details ----------
 	await _inventory_section()
 
@@ -621,6 +624,112 @@ func _lantern_lights_section() -> void:
 		and FileAccess.get_modified_time(save_path) == save_time,
 		"the showcase mode refuses to write a normal save")
 	_game._options["visual_test"] = previous_mode
+
+
+## M23 roof stairs through the real scene: the recipe is reachable, the crafted
+## stair is selected and placed from the player's aim with an orientation, the
+## live streamed mesh and collision match a fresh build of the same voxels, the
+## stair is mined back for its drop, and a small player-built stair roof keeps its
+## orientation through a chunk unload and regeneration.
+func _stairs_section() -> void:
+	var player: VoxelPlayer = _game.player
+	var world: VoxelWorld = _game.world
+	var streamer: ChunkStreamer = _game.streamer
+	var inventory: Inventory = _game.inventory
+
+	var recipe: Dictionary = Crafting.recipe("stair")
+	_check(not recipe.is_empty(), "the stair recipe is in the catalogue")
+	_check(int(recipe.get("output", -1)) == BlockDB.STAIR, "the stair recipe outputs the stair block")
+	_check(str(recipe.get("station", "")) == Crafting.STATION_TABLE, "the stair recipe needs a crafting table")
+
+	# A small stone platform in clear air above the terrain, near spawn; the player
+	# hovers above it so the aimed face is the platform's top and the placement
+	# cell is clear of the body.
+	var base := Vector3i(24, 90, 24)
+	world.ensure_chunk(VoxelWorld.world_to_chunk(base))
+	for y in range(base.y, base.y + 6):
+		world.set_block(Vector3i(base.x, y, base.z), BlockDB.AIR, false)
+	for offset: Vector3i in [Vector3i(0, 0, 0), Vector3i.RIGHT, Vector3i(0, 0, 1),
+			Vector3i.RIGHT + Vector3i(0, 0, 1)]:
+		world.set_block(base + offset, BlockDB.STONE, false)
+	var stair_cell := base + Vector3i.UP
+
+	inventory.clear_slot(0)
+	inventory.put_stack(0, {"item": BlockDB.STAIR, "count": 8})
+	inventory.select(0)
+	_check(inventory.selected_item() == BlockDB.STAIR, "the crafted stair is selectable from the hotbar")
+	if inventory.selected_item() != BlockDB.STAIR:
+		return
+
+	player.flying = true
+	player.teleport_to(Vector3(stair_cell.x + 0.5, stair_cell.y + 2.0, stair_cell.z + 0.5))
+	player.look_yaw(-90.0)  # forward is +X, so the stair's low side faces +X
+	player.look_pitch(-89.0)
+	for i in range(3):
+		await process_frame
+	var aimed: Dictionary = player.target()
+	var aimed_cell: Vector3i = base
+	if aimed.get("hit", false):
+		aimed_cell = aimed["block"]
+	_check(aimed.get("hit", false) and aimed_cell == base,
+		"the player aims at the platform's top face before placing")
+	var count_before := inventory.count_of(BlockDB.STAIR)
+	var placed: bool = player.place_selected()
+	await process_frame
+	_check(placed, "the player places a stair from the hotbar")
+	_check(world.get_block(stair_cell) == BlockDB.STAIR, "the placed cell holds a stair")
+	_check(world.get_orientation(stair_cell) == 1, "the stair faces the player's look direction")
+	_check(inventory.count_of(BlockDB.STAIR) == count_before - 1, "placing the stair consumes one item")
+
+	# The live streamed mesh and collision must be exactly what the mesher derives
+	# from the same voxels, including the partial stair geometry.
+	var settled := await _stream_until_settled()
+	_check(settled >= 0, "the streamer settles after placing the stair")
+	var stair_coord := VoxelWorld.world_to_chunk(stair_cell)
+	var fresh := ChunkMesher.new(_game.library, _game.materials).build(world.get_chunk(stair_coord), world)
+	_check(int(streamer.face_counts.get(stair_coord, -1)) == int(fresh["faces"]),
+		"the live chunk mesh matches a fresh build after placing the stair")
+	var stair_view: Node3D = streamer.views.get(stair_coord)
+	var live_collision := _collision_shape_faces(stair_view)
+	_check(live_collision.size() / 3 == _collision_triangle_count(fresh["collision"]),
+		"the live collision matches a fresh build of the stair chunk")
+
+	# Mine it back through the real player path: one stair in, one stair out.
+	player.teleport_to(Vector3(stair_cell.x + 0.5, stair_cell.y + 2.0, stair_cell.z + 0.5))
+	player.look_yaw(-90.0)
+	player.look_pitch(-89.0)
+	for i in range(3):
+		await process_frame
+	var stair_target: Dictionary = player.target()
+	var stair_target_cell: Vector3i = stair_cell
+	if stair_target.get("hit", false):
+		stair_target_cell = stair_target["block"]
+	_check(stair_target.get("hit", false) and stair_target_cell == stair_cell,
+		"the player targets the placed stair")
+	var before_mine := inventory.count_of(BlockDB.STAIR)
+	if stair_target.get("hit", false):
+		_check(player.break_target(), "the player mines the stair")
+		_check(world.get_block(stair_cell) == BlockDB.AIR, "mining removes the stair")
+		_check(world.get_orientation(stair_cell) == 0, "mining clears the stair orientation")
+		_check(inventory.count_of(BlockDB.STAIR) == before_mine + 1, "mining returns the stair item")
+	player.flying = false
+
+	# A three-cell player-built stair roof in a far chunk keeps its block ids and
+	# orientations through an unload and regeneration, the data path the streamer
+	# uses when it drops and later rebuilds a chunk.
+	var roof := Vector3i(260, 74, 260)
+	var roof_coord := VoxelWorld.world_to_chunk(roof)
+	world.ensure_chunk(roof_coord)
+	for index in 3:
+		world.set_block_state(roof + Vector3i(index, 0, 0), BlockDB.STAIR, index)
+	world.unload_chunk(roof_coord)
+	_check(not world.has_chunk(roof_coord), "the stair-roof chunk unloads")
+	world.ensure_chunk(roof_coord)
+	for index in 3:
+		_check(world.get_block(roof + Vector3i(index, 0, 0)) == BlockDB.STAIR,
+			"stair roof block %d survives unload and regeneration" % index)
+		_check(world.get_orientation(roof + Vector3i(index, 0, 0)) == index,
+			"stair roof orientation %d survives unload and regeneration" % index)
 
 
 ## Crafting and mining through the real scene: the station is taken from the

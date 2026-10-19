@@ -1,5 +1,87 @@
 # M17 Godot — Progress and Resume Point
 
+## M23 — Roof stairs and stair behavior (2026-10-19/20)
+
+Mission: complete the delegated stair feature so roofs can form intentional
+slopes, with correct voxel interaction, meshing/collision, crafting, saving and
+streaming.  Started from OpenCode's partial handoff; the delegated code did not
+compile and had two real defects that are fixed here (see below).
+
+### What was actually changed
+
+- **Fixed the delegated build break (root cause of "M23 in progress")**:
+  `scripts/core/chunk_mesher.gd` had three GDScript type-inference parse errors
+  (`neighbour_index`, `face_centre` inferred from untyped constant arrays),
+  which broke the whole unit suite.  Added explicit types/casts.
+- **Restored the deleted cube/water face emitter**: the delegated edit removed
+  the normal `elif is_water: … else: …` branch from `_emit_faces`, so every
+  non-stair cube emitted **0** faces (all terrain/mesh tests failed).  Restored
+  the original emission path after the custom-model branch.
+- **Corrected the stair face-count contract**: the delegated `test_mesher.gd`
+  expected 20 exterior faces for an isolated stair; the verified geometry (and
+  `test_block_shape.gd`) is **22** (36 half-faces − 2×7 internal adjacencies).
+  Updated the mesher expectations (22 faces, 88 render/collision vertices,
+  19 faces when three patches are covered by a neighbouring cube).
+- **Fixed the v8 save legacy test**: it duplicated the *sanitised* payload
+  (which omits `format`/`chunk_size`/`world_height`) and then expected `read()`
+  to accept it.  It now builds a real write payload and downgrades its block
+  rows to four columns.
+- **Stair feature itself (delegated, now verified)**: block id 88 (`Stair`) with
+  planks faces; `core/block_shape.gd` (8-orientation half-cell occupancy,
+  boundary masks, exposed faces); `ChunkData.orientations` + worker snapshots;
+  shaped meshing with half-cell render/collision and neighbour patch culling;
+  half-cell `VoxelRay` targeting; player orientation from the aimed face and
+  look direction; save VERSION 9 with per-edit orientation and v1–v8 loading;
+  recipe `3 planks + 1 stick → 2 stairs` at a crafting table.
+- **Real-scene integration**: new `_stairs_section()` drives the actual scene —
+  recipe reachability, hotbar selection, aimed placement with orientation 1,
+  live streamed mesh/collision equal to a fresh build, mining back for the item,
+  and a three-cell far-chunk roof surviving unload/regeneration with orientation.
+- **Runtime stair-roof evidence**: added a stair-roofed pavilion to the
+  `--visual-test` showcase (`_build_stair_pavilion`, two stair slopes + ridge
+  cap + lantern) with fixed `roof` and `stairs` viewpoints.  A first pass showed
+  a floating ridge (a block-height gap); the ridge now sits on the inner stair
+  row so the roof is closed.  `test_visuals.gd` pins the stair blocks, both
+  slope orientations and the ridge.
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows)
+
+- Unit: `--headless --path prototypes/m17/godot --script
+  res://scripts/tests/run_tests.gd` → **1852 assertions, exit 0**, no script
+  errors (M22: 1767; +85 stair assertions).
+- Integration: `--headless --path prototypes/m17/godot --script
+  res://scripts/tests/run_integration.gd -- --straight-to-game` →
+  **426 assertions, exit 0** (M22: 402; +24 stair assertions).
+- Headless smoke twice: exit 0, 0 bytes stderr,
+  `world_hash=7821043820538758500`, `faces=174353`,
+  `faces_hash=665917304729475893`, 392 chunks — **identical to the M22
+  baseline both runs**, so ordinary generation is unchanged (all generated
+  orientations are 0; only player stair edits add orientation).
+- **Windowed captures inspected**:
+  - `results/godot/m23-stairs-roof.png` — the stair-roofed pavilion in the
+    showcase (gable roof, timber posts, cottage/stall/path context).
+  - `results/godot/m23-stairs-profile.png` — close gable-end view: the stepped
+    stair silhouette rises from both eaves to the ridge; the posts/beam and the
+    pond are readable.
+  - `results/godot/m23-stairs-dusk.png` — the same roof at dusk with warm
+    lantern pools.
+  The captures are rendered from the running game (windowed `--capture`), but
+  they are scripted viewpoints, not a human keyboard/mouse play-through.
+
+### Limitations / notes
+
+- No human keyboard/mouse placement of stairs was performed; placement,
+  orientation, mining and persistence are exercised through the real player
+  controller in the integration harness and through the showcase data path.
+- The showcase pavilion is an isolated diagnostic scene (`--visual-test`); the
+  player-facing build loop is covered by the integration route.  A normal-world
+  player-built stair roof arrives with the M25 construction milestone.
+- Stairs use the planks texture on every face; no dedicated stair side/top
+  variant was added (not required by M23).
+- Collision is exact half-cell trimesh geometry; there is no step-up assist
+  beyond the existing player physics (walking into a one-block stair still
+  needs a jump, as for any block).
+
 ## M22 — Stylized voxel world: lush fantasy and medieval settlements (2026-10-19)
 
 Mission: turn the existing Godot world into one coherent stylized voxel place —

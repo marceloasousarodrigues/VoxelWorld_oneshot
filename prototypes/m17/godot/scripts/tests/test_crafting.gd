@@ -72,9 +72,10 @@ func _test_catalogue_integrity(h: TestHarness) -> void:
 
 	h.eq(Crafting.recipe("planks_oak").get("output"), BlockDB.PLANKS, "a recipe can be looked up by id")
 	h.check((Crafting.recipe("nope") as Dictionary).is_empty(), "an unknown id resolves to an empty recipe")
-	for id: String in ["timber_frame", "packed_path", "fence", "door", "barrel", "lantern",
+	for id: String in ["timber_frame", "packed_path", "stair", "fence", "door", "barrel", "lantern",
 			"roof_tile", "planks_birch"]:
 		h.check(not (Crafting.recipe(id) as Dictionary).is_empty(), "the M22 building recipe %s exists" % id)
+	h.eq(Crafting.recipe("stair").get("output"), BlockDB.STAIR, "the stair recipe creates the stair block")
 	h.eq(Crafting.recipe("lantern").get("output"), BlockDB.LANTERN, "the lantern recipe outputs a lantern")
 	h.eq(Crafting.recipe("roof_tile").get("station"), Crafting.STATION_FURNACE,
 		"roof tiles are fired in a furnace")

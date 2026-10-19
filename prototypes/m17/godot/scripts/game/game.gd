@@ -823,6 +823,24 @@ func _apply_visual_test_view(mode: String) -> void:
 			player.teleport_to(Vector3(centre.x + 13.5, feet + 2.0, centre.z + 5.0))
 			player.look_yaw(90.0)
 			player.look_pitch(-14.0)
+		"roof":
+			# The M23 stair-roofed pavilion from the south, close enough to read
+			# the two stair slopes and the ridge.
+			player.flying = true
+			player.teleport_to(Vector3(centre.x + VisualTestArena.PAVILION_ANCHOR.x,
+				float(VisualTestArena.BASE_Y) + 4.5,
+				centre.z + VisualTestArena.PAVILION_ANCHOR.y + 10))
+			player.look_yaw(0.0)
+			player.look_pitch(-16.0)
+		"stairs":
+			# The same pavilion from the gable end: the stepped stair silhouette
+			# rises from both eaves to the ridge.
+			player.flying = true
+			player.teleport_to(Vector3(centre.x + VisualTestArena.PAVILION_ANCHOR.x + 8.5,
+				float(VisualTestArena.BASE_Y) + 4.0,
+				centre.z + VisualTestArena.PAVILION_ANCHOR.y + 0.5))
+			player.look_yaw(90.0)
+			player.look_pitch(-12.0)
 		"dusk":
 			player.teleport_to(Vector3(centre.x - 2.0, feet, centre.z + 8.0))
 			player.look_yaw(4.0)

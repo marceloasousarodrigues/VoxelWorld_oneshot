@@ -1,6 +1,8 @@
 class_name VoxelPlayer
 extends CharacterBody3D
 
+const BlockShape = preload("res://scripts/core/block_shape.gd")
+
 ## First-person voxel player: mouse look, WASD movement with gravity and jumping,
 ## and block interaction driven by exact voxel traversal (`VoxelRay`) rather than
 ## physics probing, so targeting keeps working while collision meshes rebuild.
@@ -518,14 +520,17 @@ func place_selected() -> bool:
 	if not VoxelWorld.in_world_vertical(cell.y):
 		interaction_failed.emit("Outside the buildable height")
 		return false
+	var orientation := 0
+	if block_id == BlockDB.STAIR:
+		orientation = BlockShape.orientation_for_placement(-camera.global_basis.z, normal)
 	var existing := world.get_block(cell)
 	if existing != BlockDB.AIR and not BlockDB.is_liquid(existing):
 		interaction_failed.emit("That space is occupied")
 		return false
-	if cell_intersects_body(cell):
+	if cell_intersects_body(cell, block_id, orientation):
 		interaction_failed.emit("Cannot build inside yourself")
 		return false
-	if not world.set_block(cell, block_id):
+	if not world.set_block_state(cell, block_id, orientation):
 		interaction_failed.emit("That block is outside the loaded world")
 		return false
 	block_placed.emit(cell, block_id)
@@ -534,12 +539,22 @@ func place_selected() -> bool:
 
 
 ## True when the given world cell overlaps the player's collision volume.
-func cell_intersects_body(cell: Vector3i) -> bool:
+func cell_intersects_body(cell: Vector3i, block_id: int = BlockDB.STONE, orientation: int = 0) -> bool:
 	var feet := global_position
 	var top := feet.y + BODY_HEIGHT
-	return float(cell.x) + 1.0 > feet.x - BODY_RADIUS and float(cell.x) < feet.x + BODY_RADIUS \
-		and float(cell.y) + 1.0 > feet.y + 0.05 and float(cell.y) < top \
-		and float(cell.z) + 1.0 > feet.z - BODY_RADIUS and float(cell.z) < feet.z + BODY_RADIUS
+	for half_y in 2:
+		for half_z in 2:
+			for half_x in 2:
+				var half_cell := Vector3i(half_x, half_y, half_z)
+				if not BlockShape.is_occupied(block_id, orientation, half_cell):
+					continue
+				var minimum := Vector3(cell) + Vector3(half_cell) * 0.5
+				var maximum := minimum + Vector3.ONE * 0.5
+				if maximum.x > feet.x - BODY_RADIUS and minimum.x < feet.x + BODY_RADIUS \
+						and maximum.y > feet.y + 0.05 and minimum.y < top \
+						and maximum.z > feet.z - BODY_RADIUS and minimum.z < feet.z + BODY_RADIUS:
+					return true
+	return false
 
 
 func is_submerged() -> bool:

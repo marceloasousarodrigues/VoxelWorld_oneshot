@@ -19,11 +19,12 @@ const FORMAT := "voxelworld.godot.save"
 ## and residents.  6: adds placed-station inventories (M19).  7: the inventory
 ## payload grows from one nine-slot row to 27 main slots + the nine-slot hotbar
 ## (M20).  8: adds wheat-crop growth progress (M21); the crop blocks themselves
-## are ordinary block edits, so only the growth timers are new.  Older saves still
+## are ordinary block edits, so only the growth timers are new.  9 adds block
+## orientation to edited block rows (M23).  Older saves still
 ## load: every field a version did not know about is optional and keeps its
 ## default, and a nine-row inventory fills the hotbar while the 27 main slots
 ## start empty.
-const VERSION := 8
+const VERSION := 9
 const DEFAULT_DIRECTORY := "user://saves"
 const DEFAULT_NAME := "world.json"
 
@@ -54,7 +55,8 @@ func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory,
 		npcs: Dictionary = {}, stations: Array = [], crops: Array = []) -> Dictionary:
 	var block_edits: Array = []
 	for position: Vector3i in world.edits:
-		block_edits.append([position.x, position.y, position.z, int(world.edits[position])])
+		block_edits.append([position.x, position.y, position.z, int(world.edits[position]),
+			int(world.edit_orientations.get(position, 0))])
 	block_edits.sort_custom(_compare_edit_rows)
 	var fluid_edits: Array = []
 	for position: Vector3i in world.fluid_overrides:
@@ -195,8 +197,11 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 			return {"ok": false, "error": "the saved player position is invalid"}
 	var edits := data["blocks"] as Array
 	var block_edits: Dictionary = {}
+	var block_orientations: Dictionary = {}
 	for row: Array in edits:
-		block_edits[Vector3i(int(row[0]), int(row[1]), int(row[2]))] = int(row[3])
+		var position := Vector3i(int(row[0]), int(row[1]), int(row[2]))
+		block_edits[position] = int(row[3])
+		block_orientations[position] = int(row[4]) if row.size() >= 5 else 0
 	var fluid_edits: Dictionary = {}
 	var fluid_sources: Dictionary = {}
 	for row: Array in data["fluid"]:
@@ -204,7 +209,7 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 		fluid_edits[position] = int(row[3])
 		if int(row[4]) == 1:
 			fluid_sources[position] = true
-	world.load_edits(block_edits, fluid_edits, fluid_sources)
+	world.load_edits(block_edits, fluid_edits, fluid_sources, block_orientations)
 	if clock != null and data.has("clock"):
 		clock.from_dictionary(data["clock"] as Dictionary)
 	if inventory != null and not inventory_payload.is_empty():
@@ -230,7 +235,7 @@ func _sanitise(data: Dictionary) -> Variant:
 	if seed_value < 0:
 		last_error = "save has no usable seed"
 		return null
-	var rows: Variant = _sanitise_rows(data.get("blocks"), 4)
+	var rows: Variant = _sanitise_block_rows(data.get("blocks"), version)
 	if rows == null:
 		return null
 	var fluid: Variant = _sanitise_rows(data.get("fluid"), 5)
@@ -340,6 +345,46 @@ func _sanitise_rows(candidate: Variant, width: int) -> Variant:
 				last_error = "an edit row contains a non-numeric value"
 				return null
 			cleaned.append(int(value))
+		rows.append(cleaned)
+	return rows
+
+
+## Version 8 and earlier stored [x,y,z,id]; v9 appends orientation.  Normalize
+## legacy rows to orientation zero so the apply path has one stable contract.
+func _sanitise_block_rows(candidate: Variant, version: int) -> Variant:
+	if candidate == null:
+		return []
+	if typeof(candidate) != TYPE_ARRAY:
+		last_error = "block edit table is not an array"
+		return null
+	var rows: Array = []
+	for entry: Variant in (candidate as Array):
+		if typeof(entry) != TYPE_ARRAY:
+			last_error = "a block edit row is not an array"
+			return null
+		var row: Array = entry
+		if row.size() != 4 and row.size() != 5:
+			last_error = "a block edit row has %d columns, expected 4 or 5" % row.size()
+			return null
+		if row.size() == 5 and version < 9:
+			last_error = "a pre-v9 block edit row contains orientation"
+			return null
+		var cleaned: Array = []
+		for value: Variant in row:
+			if typeof(value) != TYPE_FLOAT and typeof(value) != TYPE_INT:
+				last_error = "a block edit row contains a non-numeric value"
+				return null
+			cleaned.append(int(value))
+		if row.size() == 4:
+			cleaned.append(0)
+		var block_id := int(cleaned[3])
+		var orientation := int(cleaned[4])
+		if orientation < 0 or orientation > 7:
+			last_error = "a block edit row has an invalid orientation"
+			return null
+		if block_id != BlockDB.STAIR and orientation != 0:
+			last_error = "orientation is only supported for stair blocks"
+			return null
 		rows.append(cleaned)
 	return rows
 

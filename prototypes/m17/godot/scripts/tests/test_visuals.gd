@@ -263,6 +263,18 @@ func _visual_arena(h: TestHarness) -> void:
 	h.greater(float(report["trees"]), 2.0, "several custom trees are planted")
 	h.greater(float(report["decorations"]), 10.0, "flowers and ground cover are scattered")
 	var floor_y := VisualTestArena.FLOOR_Y
+	# M23: the pavilion roof is built from oriented stair blocks and a ridge cap.
+	h.greater(float(report["stairs"]), 10.0, "the showcase builds a stair roof")
+	var pavilion := Vector3i(VisualTestArena.CENTER.x + VisualTestArena.PAVILION_ANCHOR.x,
+		floor_y, VisualTestArena.CENTER.z + VisualTestArena.PAVILION_ANCHOR.y)
+	h.eq(world.get_block(pavilion + Vector3i(0, 5, 2)), BlockDB.STAIR,
+		"the pavilion roof uses stair blocks")
+	h.eq(world.get_orientation(pavilion + Vector3i(0, 5, 2)), 0,
+		"the south roof slope rises toward the ridge")
+	h.eq(world.get_orientation(pavilion + Vector3i(0, 5, -2)), 2,
+		"the north roof slope is the mirror orientation")
+	h.eq(world.get_block(pavilion + Vector3i(0, 6, 0)), BlockDB.ROOF_RIDGE,
+		"the pavilion roof is closed by a ridge")
 	h.eq(world.get_block(Vector3i(VisualTestArena.CENTER.x - 2, floor_y + 4, VisualTestArena.CENTER.z - 12)),
 		BlockDB.ROOF_TILE, "the cottage has a tiled roof")
 	h.eq(world.get_block(Vector3i(VisualTestArena.CENTER.x - 6, floor_y + 2, VisualTestArena.CENTER.z - 6)),
