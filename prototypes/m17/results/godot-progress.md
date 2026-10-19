@@ -63,7 +63,7 @@ and these result documents; the production Ursina implementation was not touched
 
 ### Verification actually run (Godot 4.7.2 stable mono, Windows)
 
-- Unit: **1687 assertions**, exit 0, 0 bytes stderr.  New
+- Unit: **1690 assertions**, exit 0, 0 bytes stderr.  New
   `test_m21_gameplay.gd` covers species loot, cooking, farming growth/harvest/
   fertilise/persistence, chest slots/round-trip and the chest recipe; existing
   item, block, crafting, creature, hostile and persistence tests were updated.
@@ -107,7 +107,7 @@ M21's implemented loops are mining → tool tiers → ore/smelting, hunting → 
 hide/bone → cooking, seeds → wheat → bread/replanting, and chest storage.
 Next independent work: equipment/armour and combat depth, or a human play-through
 of the new interactions.  Code savepoint: **9ba924b** — “M21 Godot: species loot,
-cooking, farming and storage chest” (unit 1687 / integration 389 assertions).
+cooking, farming and storage chest” (unit 1690 / integration 389 assertions).
 
 ---
 

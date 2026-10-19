@@ -217,6 +217,20 @@ func run(h: TestHarness) -> void:
 		h.eq((v3_applied["npcs"] as Dictionary).size(), 0, "a version 3 save carries no residents")
 		h.eq((v3_applied["stations"] as Array).size(), 0, "a version 3 save carries no station state")
 
+	# A version 7 save has no crop payload: it still loads and starts with no
+	# tracked crops, so the M20 save format remains readable.
+	var v7_payload: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath, hunger)
+	v7_payload["version"] = 7
+	v7_payload.erase("crops")
+	_write_raw(saves, JSON.stringify(v7_payload))
+	var v7_result: Dictionary = saves.read()
+	h.check(bool(v7_result["ok"]), "a version 7 save is still accepted")
+	if bool(v7_result["ok"]):
+		var v7_applied: Dictionary = saves.apply(v7_result, restored_world, restored_player,
+			restored_inventory, null, null)
+		h.check(bool(v7_applied["ok"]), "a version 7 save applies")
+		h.eq((v7_applied["crops"] as Array).size(), 0, "a version 7 save carries no crop progress")
+
 	# A current-version save round-trips the settlement stores and residents.
 	var npc_payload := {
 		"settlements": [{"id": "settlement-8-8", "name": "Oakhollow", "store": [[BlockDB.OAK_LOG, 6]]}],

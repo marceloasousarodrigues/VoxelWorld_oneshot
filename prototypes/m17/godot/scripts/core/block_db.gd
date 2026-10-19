@@ -50,9 +50,9 @@ const CRAFTING_TABLE := 33
 const FURNACE := 34
 
 # --- M21 farming and storage blocks ---------------------------------------
-# Ids 35..60 are the M21 material/tool item definitions in `ItemDB`; they are
-# therefore *undefined block slots* in this table.  Keeping the historical item
-# ids stable is what lets existing saves load unchanged.  New world blocks
+# Ids 35..60 are the existing material/tool item definitions in `ItemDB`; they
+# are therefore *undefined block slots* in this table.  Keeping the historical
+# item ids stable is what lets existing saves load unchanged.  New world blocks
 # continue after that range.
 const FARMLAND := 61
 const WHEAT_0 := 62

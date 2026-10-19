@@ -45,7 +45,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       updated item/block/creature/hostile/persistence/crafting tests, and real
       scene integration for boar loot, planting → save/reload → growth →
       harvest, timed cooking, chest UI, chest persistence and chest recovery
-- [x] Verification: unit **1687 assertions**, integration **389 assertions**,
+- [x] Verification: unit **1690 assertions**, integration **389 assertions**,
       both exit 0 with empty stderr; headless smoke starts and reports
       `world_hash=7995773462820745781` (untouched generation unchanged);
       inspected `m21-farming.png` (four crop stages, farmland, chest model) and
