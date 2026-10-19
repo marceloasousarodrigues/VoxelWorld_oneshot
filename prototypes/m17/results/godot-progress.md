@@ -139,8 +139,8 @@ M21's implemented loops are mining → tool tiers → ore/smelting, hunting → 
 hide/bone → cooking, seeds → wheat → bread/replanting, and chest storage.
 Next independent work: equipment/armour and combat depth, or a human play-through
 of the new interactions.  Feature savepoint: **9ba924b** — “M21 Godot: species
-loot, cooking, farming and storage chest”; harvest-gate follow-up is the commit
-after **abfd13a** (unit 1693 / integration 391 assertions).
+loot, cooking, farming and storage chest”; harvest-gate follow-up **ed1a87a**
+(unit 1693 / integration 391 assertions).
 
 ---
 
