@@ -454,23 +454,30 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 
 ## 9. Resume
 
-Read this file and `godot-roadmap.md`, then run the tests and the smoke command from
-§5 to confirm the baseline still holds (`587` unit + `35` integration assertions;
-current `world_hash=441363152919021799`, `faces=166074`, `faces_hash=6977993294663025454`
-— the clay generation fix in §12 changed the world content, so the earlier
-`world_hash=6372495951065888771` is historical). Then continue with the first unchecked
-item of `godot-roadmap.md` phase B/C (crafting, health/death/respawn and passive creatures
-are implemented; next planned increment is hostile creatures + combat exchange + loot).
+Read this file and `godot-roadmap.md`, then run the baseline commands at the end of this
+section. The current baseline is **1238 unit + 184 integration assertions**, both exit 0 with
+0 bytes of stderr, and a spawn-region smoke of `world_hash=441363152919021799`,
+`faces=166074`, `faces_hash=6977993294663025454`, `edits=0` (this has been stable through the
+inventory, structure, settlement and raid increments because none of them touch the terrain
+inside the streamed spawn region; the *earlier* hashes in this file are historical).
 
-**Stabilization is done for the three user-reported items**: the WASD movement failure,
-the rendering defects and the water concern all traced to the inverted-winding bug now
-fixed in `c22d056` (§8). Phase B is under way: crafting and health/death/respawn are
-implemented and independently reviewed PASS. Remaining Phase B items are the full
-inventory interface, tools/durability, hunger and a configuration screen.
+Phases A, B and C are complete and phase D is well under way. What is implemented and verified
+is listed in `godot-roadmap.md`; the honest remaining gaps are:
 
-**Outstanding validation**: the fix is verified headless (unit + integration) and by
-offscreen capture; a human play-through with real keyboard/mouse has not been done. If a
-real play-through is possible, it should be the first thing to do before building on top.
+- **Phase C**: weather / environmental variation.
+- **Phase D**: player construction beyond single blocks (blueprints/paste), and the
+  city-management foundation (settlement growth, resource economy with the player, guards and
+  worked plots).  Raids, residents, tasks and settlement stores exist.
+- **Crafting follow-ups** the roadmap still lists as done-with-limits: smelting is menu-driven
+  (no timed furnace), the interface matches by ingredient multiset (the shaped *definitions* and
+  `match_grid` are real and tested, but there is no drag-and-drop 3×3 grid), and there is no
+  anvil/repair.
+- **Known limitations per increment** are listed at the end of each section of this file; read
+  those before deciding what to fix next — several are deliberate scoping decisions rather than
+  defects.
+- **Never verified by a human**: every runtime claim in this file comes from headless
+  integration tests, scripted captures and inspected PNGs. A real keyboard/mouse play-through
+  remains the single most valuable validation left.
 
 Baseline sanity command set (copy/paste):
 
@@ -480,6 +487,14 @@ $godot = 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64
 & $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd | Select-Object -Last 1
 & $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game | Select-Object -Last 1
 & $godot --headless --path prototypes/m17/godot -- --straight-to-game --quit-after=30 | Select-String M17_GAME_SUMMARY
+```
+
+Note for any new `class_name` script: the headless runner cannot see a new class until the
+project's class cache is refreshed, so run this once after adding one (it is not a test change,
+just a scan):
+
+```powershell
+& $godot --headless --path prototypes/m17/godot --import
 ```
 
 ## 10. Savepoint log
