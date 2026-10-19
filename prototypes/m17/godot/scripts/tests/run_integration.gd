@@ -17,6 +17,8 @@ const CreatureScript = preload("res://scripts/game/passive_creature.gd")
 const CreatureModel = preload("res://scripts/core/passive_creatures.gd")
 const HostileScript = preload("res://scripts/game/hostile_creature.gd")
 const HostileModel = preload("res://scripts/core/hostile_creatures.gd")
+const NpcModel = preload("res://scripts/core/npc.gd")
+const SettlementModel = preload("res://scripts/core/settlement.gd")
 
 
 func _initialize() -> void:
@@ -523,6 +525,9 @@ func _main() -> void:
 	# --- Inventory interface: slots, stack moves and item details ----------
 	await _inventory_section()
 
+	# --- Settlements and residents -----------------------------------------
+	await _residents_section()
+
 	if _failures.is_empty():
 		print("M17_INTEGRATION_PASS %d assertions" % _passes)
 		quit(0)
@@ -818,3 +823,106 @@ func _inventory_section() -> void:
 	await process_frame
 	_check(not panel.is_open(), "the inventory panel closes")
 	_check(inventory.count_of(BlockDB.OAK_LOG) == logs_before, "closing with a carried stack puts it back")
+
+
+## Settlement residents through the real scene: a settlement's resident gets a
+## node, the model's work loop runs against the live world, the player can target
+## and kill a resident, and the store and resident state survive a save round-trip.
+##
+## The "settlement" is built by hand on an elevated platform so the test does not
+## depend on where the generator put a hut: the platform is the resident's work
+## and the empty air above it gives the attack ray a clear line of sight.
+func _residents_section() -> void:
+	var player: Node = _game.player
+	var inventory: Inventory = _game.inventory
+	player.flying = true
+	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.look_pitch(0.0)
+	for i in range(2):
+		await process_frame
+
+	# Settlements are derived from the world: a wide scan must find some.
+	var somewhere: Array = SettlementModel.nearby(_game.world, Vector3i(0, 70, 0), 4000, 4)
+	_check(somewhere.size() > 0, "settlements are derived from placed structures (%d found)" % somewhere.size())
+	if somewhere.size() > 0:
+		var settlement: Dictionary = somewhere[0]
+		_check(not str(settlement["name"]).is_empty(), "a settlement has a name (%s)" % settlement["name"])
+		var residents := NpcModel.residents_for(_game.world.world_seed, settlement)
+		_check(residents.size() > 0, "a settlement has residents")
+
+	# A controlled settlement on an elevated platform so the resident has work and
+	# the attack ray has clear air above it.
+	var anchor := Vector3i(12, 75, 12)
+	for dz in range(-2, 3):
+		for dx in range(-2, 3):
+			for dy in range(-4, 0):
+				_game.world.set_block(anchor + Vector3i(dx, dy, dz), BlockDB.STONE)
+	var plot := {"id": "settlement-test", "name": "Testhold", "kind": "hut", "anchor": anchor,
+		"width": 5, "depth": 4}
+	var state := NpcModel.spawn_state(_game.world.world_seed, plot, 0)
+	state["role"] = NpcModel.Role.MINER
+	state["position"] = Vector3(12.5, 75.0, 12.5)
+	_game.npc_states[str(state["id"])] = state
+	_game.settlement_stores["settlement-test"] = {}
+	_game._settlement_names["settlement-test"] = "Testhold"
+	_game._update_npcs(0.1)
+	_check(_game.npc_nodes.size() == 1, "the resident gets a scene node")
+	var node: Node = _game.npc_nodes.get(str(state["id"]), null)
+	_check(node != null and node.is_in_group("npc"), "the resident node is in the npc group")
+	_check(node != null and node.is_alive(), "the resident node is alive")
+
+	# The real work loop: the resident mines the platform and carries it home.
+	var steps := 0
+	while int(state["gathered"]) == 0 and steps < 600:
+		_game._update_npcs(0.2)
+		steps += 1
+	_check(int(state["gathered"]) > 0, "the resident gathered a block through the game loop (%d steps)" % steps)
+	_check(NpcModel.carried_total(state) > 0 or int(state["delivered"]) > 0, "the resident carries what it mined")
+	_check(NpcModel.carried_total(state) <= NpcModel.CARRY_CAP, "the resident never carries more than its cap")
+
+	# The player targets and kills the resident with its own attack path.
+	player.teleport_to(Vector3(float(state["position"].x), float(state["position"].y) + 2.5,
+		float(state["position"].z)))
+	player.look_pitch(-89.0)
+	await physics_frame
+	var targeted: Node = player._creature_in_front()
+	_check(targeted != null and targeted.is_in_group("npc")
+		and str(targeted.state.get("id", "")) == str(state["id"]),
+		"the player's attack ray targets the resident")
+	_check(_game._npc_target_text().contains(str(state["name"])),
+		"the readout describes the resident under the crosshair (%s)" % _game._npc_target_text())
+	_check(_game._npc_target_text().contains(NpcModel.role_name(int(state["role"]))),
+		"the readout names the resident's role")
+	state["carried"] = {BlockDB.COBBLESTONE: 2}
+	var cobble_before := inventory.count_of(BlockDB.COBBLESTONE)
+	var hits := 0
+	while is_instance_valid(node) and hits < 30:
+		player.break_target()
+		await physics_frame
+		hits += 1
+	_check(not is_instance_valid(node), "the player killed the resident in %d hits" % hits)
+	_check(inventory.count_of(BlockDB.COBBLESTONE) >= cobble_before + 2,
+		"the dead resident dropped what it carried")
+	_check(not bool(state["alive"]), "the dead resident stays dead")
+
+	# The store and the residents survive a save round-trip.
+	_game.settlement_stores["settlement-test"] = {BlockDB.OAK_LOG: 5, ItemDB.COAL: 2}
+	var payload: Dictionary = _game._npcs_to_dictionary()
+	_check((payload["settlements"] as Array).size() >= 1, "the save payload carries the settlement")
+	_check((payload["npcs"] as Array).size() >= 1, "the save payload carries the resident")
+	_game.npc_states.clear()
+	_game.settlement_stores.clear()
+	var restored: int = _game._apply_npcs(payload)
+	_check(restored >= 1, "the residents were restored from the payload")
+	_check(_game.npc_states.has(str(state["id"])), "the resident id survived")
+	var restored_store: Dictionary = _game.settlement_stores.get("settlement-test", {})
+	_check(int(restored_store.get(BlockDB.OAK_LOG, 0)) == 5, "the settlement store survived")
+	_check(str(_game._settlement_names.get("settlement-test", "")) == "Testhold",
+		"the settlement name survived")
+	_game.npc_states.clear()
+	_game.settlement_stores.clear()
+	_game.npc_nodes.clear()
+	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.look_pitch(-20.0)
+	for i in range(2):
+		await process_frame

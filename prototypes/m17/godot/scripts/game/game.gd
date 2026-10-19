@@ -32,6 +32,23 @@ var hud: GameHUD
 var menu: MainMenu
 var crafting: CraftingPanel
 var inventory_panel: InventoryPanel
+
+# --- settlements and residents -------------------------------------------
+const NpcModel = preload("res://scripts/core/npc.gd")
+const NpcNodeScript = preload("res://scripts/game/npc_node.gd")
+const SettlementModel = preload("res://scripts/core/settlement.gd")
+
+## Resident state by npc id, kept across sessions and across node retirement.
+var npc_states: Dictionary = {}
+## Shared settlement stores: settlement id -> { item_id: count }.
+var settlement_stores: Dictionary = {}
+## Live scene nodes by npc id.
+var npc_nodes: Dictionary = {}
+var settlements: Array = []
+var npc_root: Node3D
+var _settlement_timer := 0.0
+## Settlement names by id (kept so a loaded resident can still say where it lives).
+var _settlement_names: Dictionary = {}
 var settings_panel: SettingsPanelNode
 var death_screen: DeathScreen
 var saves: SaveManager
@@ -278,6 +295,10 @@ func _build_nodes() -> void:
 	streamer.focus_node = player
 	add_child(streamer)
 
+	npc_root = Node3D.new()
+	npc_root.name = "Residents"
+	add_child(npc_root)
+
 	player.block_broken.connect(_on_block_broken)
 	player.block_placed.connect(_on_block_placed)
 	player.target_changed.connect(_on_target_changed)
@@ -420,6 +441,10 @@ func _parse_arguments() -> void:
 				# Diagnostic: teleport to the nearest placed structure (optionally of
 				# a given id) so a capture can show one without a long walk.
 				_options["find_structure"] = value if not value.is_empty() else "any"
+			"--follow-resident":
+				# Diagnostic: keep the capture camera on the nearest resident, so a
+				# screenshot shows somebody actually working.
+				_options["follow_resident"] = true
 			"--open-settings":
 				_options["open_settings"] = true
 			"--tools":
@@ -582,6 +607,7 @@ func _start_world(seed_value: int, save: Variant) -> void:
 				breath = float(applied["breath"])
 			if float(applied.get("hunger", -1.0)) >= 0.0:
 				hunger = float(applied["hunger"])
+			_apply_npcs(applied.get("npcs", {}))
 			streamer.focus_at(player.global_position)
 			hud.flash("Loaded %d block edits and %d fluid changes" % [int(applied["block_edits"]), int(applied["fluid_edits"])], 5.0)
 	hud.set_hunger(hunger, Survival.MAX_HUNGER)
@@ -662,10 +688,12 @@ func _apply_find_structure() -> void:
 	var size := StructureDB.footprint(definition)
 	var origin_x := int(placement["x"]) - (size.x - 1) / 2
 	var origin_z := int(placement["z"]) - (size.z - 1) / 2
+	# A high, slightly behind view: close enough that a settlement's residents are
+	# visible, high enough to see over the trees around it.
 	player.flying = true
-	player.teleport_to(Vector3(origin_x + size.x * 0.5, float(placement["base_y"]) + 5.0, origin_z - 8.0))
+	player.teleport_to(Vector3(origin_x + size.x * 0.5, float(placement["base_y"]) + 9.0, origin_z - 12.0))
 	player.look_yaw(180.0)
-	player.look_pitch(-22.0)
+	player.look_pitch(-28.0)
 	streamer.focus_at(player.global_position)
 	hud.flash("Found %s at (%d, %d, %d)" % [definition["name"], int(placement["x"]),
 		int(placement["base_y"]), int(placement["z"])], 8.0)
@@ -961,6 +989,7 @@ func _process(delta: float) -> void:
 			_update_survival(delta)
 			_update_creatures(delta)
 			_update_hostiles(delta)
+			_update_npcs(delta)
 			_update_status()
 			if hud != null and player != null:
 				hud.set_mining_progress(player.mining_ratio())
@@ -972,6 +1001,8 @@ func _process(delta: float) -> void:
 	# The capture harness also has to run on the death screen, so it is driven
 	# from every "world is up" state rather than from the playing branch.
 	if bool(_options["capture"]) and state in [State.PLAYING, State.DEAD]:
+		if bool(_options.get("follow_resident", false)) and state == State.PLAYING:
+			_follow_nearest_resident()
 		_update_capture(delta)
 
 
@@ -1153,6 +1184,11 @@ func _update_status() -> void:
 		target_text = "Target: %s (%d, %d, %d)" % [
 			BlockDB.name_of(int(target["block_id"])), block_cell.x, block_cell.y, block_cell.z,
 		]
+	# A resident under the crosshair describes itself (name, role, what it is
+	# doing) on its own line.
+	var resident := _npc_target_text()
+	if not resident.is_empty():
+		target_text += "\n%s" % resident
 	hud.set_debug("%s\nXYZ %.1f / %.1f / %.1f   %s   %s   %s %s\nchunks %d/%d queued %d  ·  fluid queue %d  ·  %d fps%s" % [
 		target_text,
 		eye.x, eye.y, eye.z,
@@ -1464,6 +1500,13 @@ func _update_creatures(delta: float) -> void:
 func _on_creature_attacked(creature, damage: int = 1) -> void:
 	if not is_instance_valid(creature):
 		return
+	if creature.is_in_group("npc"):
+		if creature.apply_hit(damage):
+			creature.die()
+		else:
+			hud.flash("%s is hurt (%d/%d)" % [str(creature.state.get("name", "Resident")),
+				int(creature.state["health"]), int(NpcModel.HEALTH)], 1.2)
+		return
 	if creature.is_in_group("hostile_creature"):
 		var hostile_drops: int = creature.apply_hit(damage)
 		if hostile_drops <= 0:
@@ -1586,7 +1629,7 @@ func _on_fly_changed(enabled: bool) -> void:
 # =========================================================================
 
 func _save_now() -> void:
-	var written := saves.write(world, player, inventory, clock, health, breath, hunger)
+	var written := saves.write(world, player, inventory, clock, health, breath, hunger, _npcs_to_dictionary())
 	if written:
 		hud.flash("Saved %d block edits to %s" % [world.edits.size(), ProjectSettings.globalize_path(saves.save_path())], 4.0)
 		print("M17_GAME_SAVED path=%s block_edits=%d fluid_edits=%d" % [
@@ -1598,7 +1641,7 @@ func _save_now() -> void:
 
 
 func _save_silently(reason: String) -> void:
-	if saves.write(world, player, inventory, clock, health, breath, hunger):
+	if saves.write(world, player, inventory, clock, health, breath, hunger, _npcs_to_dictionary()):
 		print("M17_GAME_AUTOSAVE reason=%s block_edits=%d" % [reason, world.edits.size()])
 	else:
 		push_error("M17_GAME_AUTOSAVE_FAILED %s" % saves.last_error)
@@ -1618,6 +1661,7 @@ func _reload_now() -> void:
 	if float(applied.get("hunger", -1.0)) >= 0.0:
 		hunger = float(applied["hunger"])
 		exhaustion = 0.0
+	_apply_npcs(applied.get("npcs", {}))
 	streamer.focus_at(player.global_position)
 	hud.refresh()
 	hud.flash("Reloaded save (%d block edits)" % int(applied["block_edits"]), 4.0)
@@ -1720,6 +1764,8 @@ func _smoke_summary() -> void:
 		"health": health.to_dictionary() if health != null else {},
 		"breath": breath,
 		"hunger": {"hunger": hunger, "exhaustion": exhaustion},
+		"npcs": {"states": npc_states.size(), "nodes": npc_nodes.size(),
+			"settlements": settlements.size(), "stored": settlement_stores.size()},
 	}))
 	print("M17_RENDER_STATS draw_calls=%d primitives=%d objects=%d" % [
 		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
@@ -1767,3 +1813,252 @@ func _write_capture_metrics() -> String:
 	}, "\t") + "\n")
 	file.close()
 	return path
+
+
+# =========================================================================
+# Settlements and residents
+# =========================================================================
+
+## Residents are derived from the settlements near the player (a settlement is a
+## placed hut or campsite), stepped by the node-free model, and shown by one node
+## each.  A settlement only "exists" while it is close, and only the settlements
+## close enough to matter are tracked, so a distant village costs nothing.
+func _update_npcs(delta: float) -> void:
+	if world == null or player == null or npc_root == null:
+		return
+	_settlement_timer -= delta
+	if _settlement_timer <= 0.0:
+		_settlement_timer = 2.0
+		_refresh_settlements()
+	for id: Variant in npc_states.keys():
+		var state: Dictionary = npc_states[id]
+		if _npc_distance(state) > NpcModel.ACTIVE_RADIUS:
+			continue
+		_settle_npc_on_ground(state)
+		var store: Dictionary = settlement_stores.get(str(state.get("settlement", "")), {})
+		var events: Dictionary = NpcModel.step(state, world, store, delta)
+		_report_npc_events(state, events)
+	_sync_npc_nodes()
+
+
+## The model moves a resident in x/z only; the game keeps its feet on the ground.
+## A resident that has fallen (or been dug out from under) more than a few blocks
+## away from its home level is sent home instead of wandering underground.
+func _settle_npc_on_ground(state: Dictionary) -> void:
+	var position: Vector3 = state["position"]
+	var cell := Vector3i(floori(position.x), floori(position.y) - 1, floori(position.z))
+	var ground := -2147483648
+	for offset in range(-2, 6):
+		var probe := cell + Vector3i(0, -offset, 0)
+		if not world.is_loaded(probe):
+			continue
+		var block_id := world.get_block(probe)
+		if block_id != BlockDB.AIR and BlockDB.is_solid(block_id) and not BlockDB.is_liquid(block_id):
+			ground = probe.y + 1
+			break
+	var home_y := int(state["home"].y)
+	if ground == -2147483648 or absi(ground - home_y) > 3:
+		state["position"] = Vector3(float(state["home"].x), float(home_y), float(state["home"].z))
+		state["task"] = NpcModel.Task.SEEK
+		state["target"] = NpcModel.NO_CELL
+		state["seek_timer"] = NpcModel.SEEK_RETRY_SECONDS
+		return
+	state["position"] = Vector3(position.x, float(ground), position.z)
+
+
+## Re-derives the settlements near the player, creates the residents that are
+## missing (a dead resident stays dead) and retires the ones that have moved too
+## far away, cap included.
+func _refresh_settlements() -> void:
+	var feet := Vector3i(floori(player.global_position.x), floori(player.global_position.y),
+		floori(player.global_position.z))
+	settlements = SettlementModel.nearby(world, feet, int(NpcModel.ACTIVE_RADIUS), 4)
+	for settlement: Dictionary in settlements:
+		var id := str(settlement["id"])
+		_settlement_names[id] = str(settlement["name"])
+		if not settlement_stores.has(id):
+			settlement_stores[id] = {}
+		for resident: Dictionary in NpcModel.residents_for(world.world_seed, settlement):
+			var npc_id := str(resident["id"])
+			if npc_states.has(npc_id):
+				continue
+			if npc_states.size() >= NpcModel.CAP * 2:
+				break
+			npc_states[npc_id] = resident
+			print("M17_NPC_SPAWNED id=%s settlement=%s role=%s" % [npc_id, id,
+				NpcModel.role_name(int(resident["role"]))])
+
+
+func _npc_distance(state: Dictionary) -> float:
+	var position: Vector3 = state["position"]
+	return Vector2(position.x - player.global_position.x, position.z - player.global_position.z).length()
+
+
+## Adds, updates and retires the scene node of every resident.  A retired node
+## keeps its state, so walking away and back resumes the same person.
+func _sync_npc_nodes() -> void:
+	for id: Variant in npc_states.keys():
+		var state: Dictionary = npc_states[id]
+		var near := _npc_distance(state) <= NpcModel.ACTIVE_RADIUS
+		var node: Variant = npc_nodes.get(id)
+		if not near or not bool(state.get("alive", true)):
+			if node != null and is_instance_valid(node):
+				npc_nodes.erase(id)
+				(node as Node).queue_free()
+			continue
+		if node == null or not is_instance_valid(node):
+			var spawned = NpcNodeScript.new()
+			spawned.name = "Resident_%s" % str(id).replace(":", "_")
+			spawned.configure(state, world)
+			npc_root.add_child(spawned)
+			spawned.killed.connect(_on_npc_killed)
+			npc_nodes[id] = spawned
+		else:
+			(node as NpcNode).state = state
+			# The node walks (physics resolves the ground); if the model jumped
+			# (fall recovery) or the body is stuck, put it back where it belongs.
+			var body := node as CharacterBody3D
+			var expected := Vector3(float(state["position"].x), float(state["position"].y) + 0.2,
+				float(state["position"].z))
+			var current := body.global_position
+			if Vector2(current.x - expected.x, current.z - expected.z).length() > 3.0 \
+					or absf(current.y - expected.y) > 2.5:
+				body.global_position = expected
+				body.velocity = Vector3.ZERO
+
+
+## Reports what residents did this step.  Deliberately quiet: only a delivery is
+## worth a message, so the HUD is not flooded by routine work.
+func _report_npc_events(state: Dictionary, events: Dictionary) -> void:
+	var delivered: Dictionary = events.get("delivered", {})
+	if delivered.is_empty():
+		return
+	var parts: Array = []
+	var keys: Array = delivered.keys()
+	keys.sort()
+	for item_id in keys:
+		parts.append("%d %s" % [int(delivered[item_id]), ItemDB.name_of(int(item_id))])
+	hud.flash("%s delivered %s to %s" % [str(state["name"]), " + ".join(parts),
+		str(state.get("settlement_name", "the settlement"))], 2.4)
+
+
+## A player killed a resident: its carried load drops into the inventory and its
+## node goes away.  The state stays (dead) so it is not immediately re-spawned.
+func _on_npc_killed(npc) -> void:
+	var npc_id := ""
+	for id: Variant in npc_nodes.keys():
+		if npc_nodes[id] == npc:
+			npc_id = str(id)
+			break
+	if npc_id.is_empty():
+		return
+	var state: Dictionary = npc_states.get(npc_id, {})
+	var collected := 0
+	for drop: Dictionary in NpcModel.death_drops(state):
+		if inventory.add(int(drop["item"]), int(drop["count"])) == 0:
+			collected += int(drop["count"])
+	npc_nodes.erase(npc_id)
+	if is_instance_valid(npc):
+		npc.queue_free()
+	hud.flash("%s is dead%s" % [str(state.get("name", "The resident")),
+		"" if collected == 0 else "  +%d items" % collected], 2.4)
+	hud.refresh()
+
+
+## One line for the readout when the crosshair is on a resident.
+func _npc_target_text() -> String:
+	if player == null:
+		return ""
+	var targeted: Object = player._creature_in_front()
+	if targeted == null or not is_instance_valid(targeted) or not (targeted as Node).is_in_group("npc"):
+		return ""
+	return NpcModel.describe((targeted as NpcNode).state)
+
+
+## Capture diagnostic (`--follow-resident`): keeps the camera in front of the
+## nearest live resident, so a screenshot shows somebody actually working.
+func _follow_nearest_resident() -> void:
+	var best: Node3D = null
+	var best_distance := INF
+	for id: Variant in npc_nodes.keys():
+		var node: Variant = npc_nodes[id]
+		if node == null or not is_instance_valid(node) or not (node as NpcNode).is_alive():
+			continue
+		var distance: float = player.global_position.distance_to((node as Node3D).global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = node as Node3D
+	if best == null:
+		return
+	var look_at := best.global_position + Vector3(0.0, 0.9, 0.0)
+	var offset := Vector3(4.6, 2.8, 4.6)
+	var direction := (look_at - (look_at + offset)).normalized()
+	player.flying = true
+	player.teleport_to(look_at + offset)
+	player.look_yaw(rad_to_deg(atan2(-direction.x, -direction.z)))
+	player.look_pitch(rad_to_deg(asin(direction.y)))
+
+
+## Settlement stores and resident state, for the save file.
+func _npcs_to_dictionary() -> Dictionary:
+	var settlement_rows: Array = []
+	var ids: Array = settlement_stores.keys()
+	ids.sort()
+	for id in ids:
+		var store_rows: Array = []
+		var items: Array = (settlement_stores[id] as Dictionary).keys()
+		items.sort()
+		for item_id in items:
+			store_rows.append([int(item_id), int((settlement_stores[id] as Dictionary)[item_id])])
+		settlement_rows.append({
+			"id": str(id),
+			"name": str(_settlement_names.get(str(id), "")),
+			"store": store_rows,
+		})
+	var states: Array = []
+	var npc_ids: Array = npc_states.keys()
+	npc_ids.sort()
+	for npc_id in npc_ids:
+		states.append(NpcModel.to_dictionary(npc_states[npc_id]))
+	return {"settlements": settlement_rows, "npcs": states}
+
+## Restores the stores and the residents from a save.  Anything unreadable is
+## dropped rather than turning into a broken resident.  Returns how many residents
+## were restored.
+func _apply_npcs(payload: Dictionary) -> int:
+	settlement_stores.clear()
+	npc_states.clear()
+	_settlement_names.clear()
+	if not payload.is_empty():
+		var names := {}
+		for row: Variant in (payload.get("settlements", []) as Array):
+			if typeof(row) != TYPE_DICTIONARY:
+				continue
+			var id := str((row as Dictionary).get("id", ""))
+			if id.is_empty():
+				continue
+			names[id] = str((row as Dictionary).get("name", ""))
+			_settlement_names[id] = names[id]
+			var store := {}
+			for entry: Variant in ((row as Dictionary).get("store", []) as Array):
+				if typeof(entry) != TYPE_ARRAY or (entry as Array).size() < 2:
+					continue
+				var item_id := int((entry as Array)[0])
+				var count := int((entry as Array)[1])
+				if ItemDB.is_valid(item_id) and count > 0:
+					store[item_id] = count
+			settlement_stores[id] = store
+		var restored := 0
+		for row: Variant in (payload.get("npcs", []) as Array):
+			if typeof(row) != TYPE_DICTIONARY:
+				continue
+			var payload_row: Dictionary = row
+			var state: Dictionary = NpcModel.from_dictionary(payload_row,
+				str(names.get(str(payload_row.get("settlement", "")), "")))
+			if state.is_empty():
+				continue
+			npc_states[str(state["id"])] = state
+			restored += 1
+		return restored
+	_refresh_settlements()
+	return npc_states.size()

@@ -1,10 +1,10 @@
 {
-	"biome": "Snow",
+	"biome": "Beach",
 	"evidence": "offscreen Godot viewport PNG written from inside the running game scene; not a human visual inspection",
 	"eye": [
-		-115.5,
-		71.620002746582,
-		53.0
+		-14.7085475921631,
+		72.3208465576172,
+		-116.156700134277
 	],
 	"fluid": {
 		"changes": 0,
@@ -13,7 +13,7 @@
 		"pending": 0,
 		"seeded_chunks": 0
 	},
-	"fps_last_sample": 60.0,
+	"fps_last_sample": 39.9333303541802,
 	"godot_version": {
 		"build": "official",
 		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
@@ -26,48 +26,48 @@
 		"timestamp": 0
 	},
 	"look": [
-		-179.999984741211,
-		-22.0
+		45.0000114440918,
+		-23.2876873016357
 	],
 	"mesher": {
-		"assemble_ms": 81.313,
-		"builds": 481,
-		"emit_ms": 2308.472,
-		"faces": 195696,
-		"fill_ms": 500.404,
-		"ms": 2818.341,
-		"triangles": 391392
+		"assemble_ms": 81.726,
+		"builds": 482,
+		"emit_ms": 2320.245,
+		"faces": 206715,
+		"fill_ms": 503.020000000001,
+		"ms": 2833.11,
+		"triangles": 413430
 	},
 	"player": [
-		-115.5,
-		70.0,
-		53.0
+		-14.7085475921631,
+		70.7008438110352,
+		-116.156700134277
 	],
 	"seed": 17017,
 	"streaming": {
-		"attach_ms_total": 3941.017,
-		"center": "(-8, 4, 3)",
-		"faces": 194402,
-		"faces_hash": 1996746191217077250,
-		"generated": 614,
+		"attach_ms_total": 3497.816,
+		"center": "(-1, 4, -8)",
+		"faces": 205541,
+		"faces_hash": 188602412230919731,
+		"generated": 616,
 		"generation_in_flight": 0,
-		"generation_ms_total": 766.405,
-		"generation_worker_ms": 4081.05,
+		"generation_ms_total": 755.684,
+		"generation_worker_ms": 3993.556,
 		"loaded": 392,
-		"mesh_ms_total": 2799.636,
-		"meshed": 479,
+		"mesh_ms_total": 2807.221,
+		"meshed": 480,
 		"meshes_in_flight": 0,
 		"queued": 0,
 		"render_radius": 4,
-		"unloaded": 222,
+		"unloaded": 224,
 		"vertical_radius": 4,
 		"views": 392,
 		"wanted": 392,
-		"worst_mesh_ms": 16.886
+		"worst_mesh_ms": 20.694
 	},
 	"window_size": [
 		1280,
 		720
 	],
-	"world_hash": 7593456547551010670
+	"world_hash": 5824747884541380800
 }

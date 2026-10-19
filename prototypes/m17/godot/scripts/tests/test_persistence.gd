@@ -117,7 +117,7 @@ func run(h: TestHarness) -> void:
 	var data: Dictionary = result["data"]
 	h.eq(int(data["seed"]), 17017, "the saved seed round-trips")
 	h.eq(int(data["version"]), SaveManager.VERSION, "the save is written at the current version")
-	h.eq(int(SaveManager.VERSION), 4, "the current save version is 4")
+	h.eq(int(SaveManager.VERSION), 5, "the current save version is 5")
 
 	# --- apply to a fresh session ------------------------------------------
 	var restored_world := VoxelWorld.new(17017)
@@ -199,6 +199,7 @@ func run(h: TestHarness) -> void:
 	var v3_payload: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath)
 	v3_payload["version"] = 3
 	v3_payload.erase("hunger")
+	v3_payload.erase("npcs")
 	_write_raw(saves, JSON.stringify(v3_payload))
 	var v3_result: Dictionary = saves.read()
 	h.check(bool(v3_result["ok"]), "a version 3 save is accepted")
@@ -206,6 +207,36 @@ func run(h: TestHarness) -> void:
 		var v3_applied: Dictionary = saves.apply(v3_result, restored_world, restored_player, restored_inventory, null, null)
 		h.approx(float(v3_applied["breath"]), 4.5, 1e-6, "a version 3 save still restores breath")
 		h.less(float(v3_applied["hunger"]), 0.0, "a version 3 save reports no hunger")
+		h.eq((v3_applied["npcs"] as Dictionary).size(), 0, "a version 3 save carries no residents")
+
+	# A current-version save round-trips the settlement stores and residents.
+	var npc_payload := {
+		"settlements": [{"id": "settlement-8-8", "name": "Oakhollow", "store": [[BlockDB.OAK_LOG, 6]]}],
+		"npcs": [{
+			"id": "settlement-8-8:npc0", "settlement": "settlement-8-8", "name": "Bram",
+			"role": 0, "position": [9.0, 70.0, 9.0], "home": [8.5, 70.0, 8.5],
+			"carried": [[ItemDB.STICK, 2]], "health": 12.0, "alive": true,
+			"gathered": 3, "delivered": 1,
+		}],
+	}
+	var npc_written := saves.to_dictionary(world, player, inventory, clock, health, breath, hunger, npc_payload)
+	_write_raw(saves, JSON.stringify(npc_written))
+	var npc_result: Dictionary = saves.read()
+	h.check(bool(npc_result["ok"]), "a save with residents is accepted")
+	if bool(npc_result["ok"]):
+		var npc_applied: Dictionary = saves.apply(npc_result, restored_world, restored_player,
+			restored_inventory, null, null)
+		h.check(bool(npc_applied["ok"]), "a save with residents applies")
+		var restored_npcs: Dictionary = npc_applied["npcs"]
+		h.eq((restored_npcs.get("npcs", []) as Array).size(), 1, "the resident survived the round-trip")
+		h.eq((restored_npcs.get("settlements", []) as Array).size(), 1, "the settlement store survived")
+
+	# A malformed npcs payload is rejected and quarantined.
+	var bad_npcs: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath, hunger)
+	bad_npcs["npcs"] = "not an object"
+	_write_raw(saves, JSON.stringify(bad_npcs))
+	h.check(not bool(saves.read()["ok"]), "a malformed residents payload is rejected")
+	h.check(not FileAccess.file_exists(saves.save_path()), "the malformed-residents save is quarantined")
 
 	# --- a save whose health payload is malformed is quarantined ------------
 	var bad_health: Dictionary = saves.to_dictionary(world, player, inventory, clock, health, breath)

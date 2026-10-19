@@ -1264,6 +1264,99 @@ generation, and written across chunk boundaries without any runtime bookkeeping.
   as close as ~90 blocks; there is no "village" grouping yet.
 - No runtime evidence of a player *walking* to a structure: the captures teleport to one.
 
+## M17 Phase D: settlements and their residents (2026-10-19)
+
+Structures that people live in (huts and campsites) now have residents with a job: they gather
+resources near the settlement, carry them home to a shared store, and their identity and state
+persist across saves.  This is the NPC foundation plus its first integrated task.
+
+### Settlements (`scripts/core/settlement.gd`, new)
+
+- A settlement is **derived**, not stored: it exists wherever the generator placed a hut or a
+  campsite, so its id (`settlement-<x>-<z>`), name (a deterministic "Oakrest"/"Coldwater" pair)
+  and anchor are pure functions of the seed and the structure.  The same world always has the
+  same settlements from any direction.
+- `nearby(world, center, radius, limit)` scans only the regions that radius can reach, sorts by
+  distance and caps the result, so asking from anywhere is cheap.  `LEASH` (24 blocks) is the
+  radius a resident may not leave.
+
+### Residents (`scripts/core/npc.gd`, new)
+
+- A resident is a plain dictionary: id, name, role (woodcutter or miner), task, position, home,
+  target block, work progress, what it is carrying, health, and lifetime counters.  Everything
+  is a pure function of the seed and the settlement, so a world always has the same people with
+  the same names and jobs.
+- The task loop is `SEEK → WALK → WORK → RETURN`: a woodcutter looks for exposed logs and a
+  miner for exposed stone and ore within 10 blocks of home, walks to the block, works it for
+  3.5 s, then carries it home — and hands the whole load to the settlement store at 6 items.
+- **Bounded by construction**: only loaded chunks are considered (so a resident never edits a
+  chunk the player has not streamed in), only *exposed* blocks (so it never tunnels through
+  rock), only within `GATHER_RADIUS` of home, at most `SEARCH_BUDGET` cells per search, with a
+  1.5 s retry when there is no work, and never more than `REACH_HEIGHT` (3) above or below its
+  feet.  A resident beyond the leash heads home.
+- Mining goes through the same `world.set_block` path the player uses, so a resident's work is a
+  real world edit that the meshes, collision, saves and the fingerprint all see.
+
+### The node and the game
+
+- `scripts/game/npc_node.gd`: a primitive villager (green tunic for a woodcutter, blue for a
+  miner) with a capsule collider on the interaction layer, gravity and collision so it walks the
+  terrain, a work bob, and hit reactions.  It is in the `npc` group, so the player's LMB ray
+  targets it like a creature, and killing one drops everything it was carrying into the
+  inventory.
+- `game.gd` derives the settlements near the player every 2 s, spawns a state per resident
+  (capped), steps only the residents within `ACTIVE_RADIUS` (96 blocks), retires nodes that walk
+  out of range while **keeping their state**, reports deliveries on the HUD, shows the resident
+  under the crosshair in the readout ("Neil the Woodcutter — working (1 Oak Log)"), and keeps
+  each body on the ground: the model moves in x/z, the game resolves the ground and pulls a
+  resident that has fallen (or been dug out from under) more than 3 blocks back home.
+- Capture diagnostics: `--follow-resident` keeps the camera on the nearest live resident, so a
+  screenshot shows somebody actually working.
+
+### Persistence
+
+- Save `VERSION 5` adds `npcs`: the settlement stores (as `[item_id, count]` rows, because JSON
+  turns integer keys into strings) and every resident's serialised state.  Versions 1-4 still
+  load with no residents.  `_apply_npcs` restores the stores and the residents and drops
+  anything unreadable (a bad payload is quarantined by the existing save validation), and a
+  restored resident starts looking for work rather than resuming a stale target.
+
+### Tests and evidence
+
+- New `scripts/tests/test_npcs.gd` (73 assertions): settlement derivation and determinism, names,
+  `nearby` radius/limit/sorting, resident rosters and ids, the full work loop on a controlled
+  plot (find a log, walk to it, work it, carry it, deliver a full load, store accounting), the
+  miner's stone→cobblestone drop, the leash, "no work in an unloaded region", bounded carrying,
+  dead residents doing nothing, damage and death drops, and serialisation (round-trip, the
+  no-target sentinel, and every rejection case).
+- `test_persistence.gd` covers the v5 payload (stores and residents survive a write/read/apply),
+  the legacy paths (v1-v4 report no residents) and quarantine for a malformed `npcs` payload.
+- `run_integration.gd` gained **21 assertions** (153 -> 174): settlements are derived from the
+  world, a resident gets a scene node in the `npc` group, the resident gathers a block through
+  the game's own update loop and carries it home, the player's attack ray targets it, the
+  readout names it and its role, killing it drops its load, and the store, names and resident
+  state survive `_npcs_to_dictionary` → `_apply_npcs`.
+- Unit **1185 assertions**, integration **174 assertions**, both exit 0 with **0 bytes stderr**
+  (the residents' name plates started as `Label3D`s, which leaked font/text RIDs at exit in this
+  engine build; role-coloured tunics plus the readout replaced them).  Smoke unchanged:
+  `world_hash=441363152919021799`, `faces=166074`, `edits=0` — the nearest settlement is outside
+  the streamed spawn region, so no resident acts during a smoke run.
+- Windowed captures inspected: `resident-working.png` (a green-tunic woodcutter standing on its
+  campsite by the shore) and `settlement-hut.png` / `settlement-campsite.png` (settlements with
+  the readout naming the resident under the crosshair).
+
+### Limitations
+
+- Two roles only (woodcutter, miner) and no construction, farming, trading or guard behaviour;
+  there are no raids yet.
+- Settlement stores accumulate but the player cannot open or withdraw from them, and residents
+  do not consume anything.
+- A resident that falls is teleported home rather than learning to avoid the edge; there is no
+  pathfinding around obstacles (a stuck resident just re-seeks).
+- The "settlement" is the structure's own footprint: there are no plots, buildings or layout
+  generation, and residents do not build.
+- Verification is scripted (headless integration + windowed captures); no human play-through.
+
 
 ## M17 Priority 3: items, tools, mining and a real crafting system (2026-10-19)
 

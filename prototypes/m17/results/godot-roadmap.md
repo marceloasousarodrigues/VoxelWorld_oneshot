@@ -31,7 +31,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 - [x] Texture atlas (Minetest `default` pack), directional sun with shadows, sky, fog, SSAO
 - [x] Versioned save/load of block edits, fluid overrides, player and inventory (atomic write, corrupt-save quarantine)
 - [x] Main menu, pause menu, autosave, HUD with hotbar and item counts
-- [x] Automated test suite (1105 assertions, verified 2026-10-19) + runtime integration harness (153 assertions, verified 2026-10-19) + headless determinism fingerprint
+- [x] Automated test suite (1185 assertions, verified 2026-10-19) + runtime integration harness (174 assertions, verified 2026-10-19) + headless determinism fingerprint
 - [x] Frame-time benchmark harness (`scripts/tests/run_perf.gd`): six scripted activities, per-frame
       timings and streaming counters, before/after JSON reports (verified 2026-10-16)
 - [x] Capture harness for reproducible screenshots + objective image statistics tool
@@ -155,10 +155,23 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       validated by `StructureDB.validate()` (reserved symbols, unknown blocks/biomes, footprint
       limit, siting limits). Pure data: the generator, tests and a future editor share it
 - [ ] Player construction beyond single blocks (blueprint/paste helpers)
-- [ ] NPC foundation with persistent identity and state
-- [ ] NPC movement and basic tasks
-- [ ] Settlement layout and resident assignment
-- [ ] Resource storage and task delegation
+- [x] NPC foundation with persistent identity and state (2026-10-19) — `core/npc.gd` (a resident
+      is a serialisable dictionary: id, name, role, task, position, home, target, carried,
+      health) + `core/settlement.gd` (settlements derived from placed huts/campsites), saved as
+      save VERSION 5 and restored by `_apply_npcs`. Same world, same residents: identity,
+      roster and roles are pure functions of the seed
+- [x] NPC movement and basic tasks (2026-10-19) — the `SEEK → WALK → WORK → RETURN` loop: a
+      woodcutter fells exposed nearby logs and a miner works exposed stone/ore within 10 blocks
+      of home, then carries the load back and hands it to the settlement store. Bounded to
+      loaded chunks, exposed blocks, the gather radius, a search budget and vertical reach;
+      `game/npc_node.gd` walks the terrain with physics, and the game pulls a fallen resident
+      home. Guards, construction, farming and trading are not implemented
+- [x] Settlement layout and resident assignment (2026-10-19) — a settlement *is* its structure's
+      footprint, and it is assigned 1-3 residents with deterministic names and roles. There is no
+      plot/building layout generation and residents do not build
+- [x] Resource storage and task delegation (2026-10-19) — each settlement has a shared store that
+      residents deliver to (persisted, with lifetime counters per resident). The player cannot
+      open or withdraw from a store yet and there is no trading
 - [ ] Defensive behaviour and enemy raids
 - [ ] City-management foundation
 
