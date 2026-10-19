@@ -87,7 +87,7 @@ var exhaustion := 0.0
 var sun: DirectionalLight3D
 var environment_node: WorldEnvironment
 var environment: Environment
-var sky_material: ProceduralSkyMaterial
+var sky_material: ShaderMaterial
 
 var clock: DayNight
 
@@ -102,7 +102,7 @@ var _options := {
 	"fluid_cells_per_tick": 1024,
 	"shadow_distance": 96.0,
 	"shadows": true,
-	"fog_density": 0.0008,
+	"fog_density": 0.0012,
 	"time_of_day": 0.28,
 	"time_rate": 1.0,
 	"capture": false,
@@ -127,6 +127,7 @@ var _options := {
 	"health": -1.0,
 	"hurt": -1.0,
 	"submerge": false,
+	"visual_test": "",
 }
 
 ## Set when `--time-rate=` appears on the command line, so the capture harness
@@ -201,43 +202,40 @@ func _build_environment() -> void:
 	environment = Environment.new()
 	environment.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
-	sky_material = ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = clock.sky_top_color()
-	sky_material.sky_horizon_color = clock.sky_horizon_color()
-	sky_material.sky_curve = 0.12
-	sky_material.ground_bottom_color = clock.ground_bottom_color()
-	sky_material.ground_horizon_color = clock.ground_horizon_color()
-	sky_material.ground_curve = 0.05
-	sky_material.sun_angle_max = 12.0
-	sky_material.sun_curve = 0.08
+	var sky_shader: Shader = load("res://shaders/sky.gdshader")
+	sky_material = ShaderMaterial.new()
+	sky_material.shader = sky_shader
 	sky.sky_material = sky_material
 	environment.sky = sky
+	environment.background_energy_multiplier = 1.0
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	environment.ambient_light_color = clock.ambient_color()
 	environment.ambient_light_sky_contribution = clock.ambient_sky_contribution()
 	environment.ambient_light_energy = clock.ambient_energy()
-	environment.background_energy_multiplier = 0.95
-	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	environment.tonemap_white = 1.6
+	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
+	environment.tonemap_white = 1.0
 	environment.adjustment_enabled = true
-	environment.adjustment_saturation = 1.08
-	environment.adjustment_contrast = 1.02
-	environment.adjustment_brightness = 1.02
+	environment.adjustment_saturation = 1.0
+	environment.adjustment_contrast = 1.04
+	environment.adjustment_brightness = 1.0
 	environment.fog_enabled = true
 	environment.fog_light_color = clock.fog_color()
-	# A gentle exponential haze: enough to soften the edge of the loaded world
-	# without washing out the landscape. `--fog=0` disables it for comparison
-	# captures; `--fog=<density>` retunes it.
+	# A gentle exponential haze with sun scatter: enough to give distance and
+	# soften the loaded-world edge without washing out the palette. `--fog=0`
+	# disables it for comparison captures; `--fog=<density>` retunes it.
 	environment.fog_mode = Environment.FOG_MODE_EXPONENTIAL
 	environment.fog_density = float(_options["fog_density"])
-	environment.fog_sky_affect = 0.3
+	environment.fog_sky_affect = 0.45
+	environment.fog_sun_scatter = 0.22
+	environment.fog_aerial_perspective = 0.35
 	environment.ssao_enabled = true
-	environment.ssao_radius = 0.5
-	environment.ssao_intensity = 0.85
-	environment.ssao_power = 1.1
-	environment.ssao_detail = 0.4
+	environment.ssao_radius = 0.8
+	environment.ssao_intensity = 0.5
+	environment.ssao_power = 1.4
+	environment.ssao_detail = 0.5
 	environment_node.environment = environment
 	add_child(environment_node)
+	_update_sky()
 
 	sun = DirectionalLight3D.new()
 	sun.name = "Sun"
@@ -245,11 +243,17 @@ func _build_environment() -> void:
 	sun.light_color = clock.sun_color()
 	sun.light_energy = clock.sun_energy()
 	sun.shadow_enabled = bool(_options["shadows"])
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	sun.directional_shadow_max_distance = float(_options["shadow_distance"])
-	sun.shadow_bias = 0.03
-	sun.shadow_normal_bias = 1.0
-	sun.light_angular_distance = 1.2
+	sun.directional_shadow_split_1 = 0.08
+	sun.directional_shadow_split_2 = 0.22
+	sun.directional_shadow_split_3 = 0.5
+	sun.directional_shadow_blend_splits = true
+	sun.shadow_bias = 0.025
+	sun.shadow_normal_bias = 1.4
+	sun.shadow_opacity = 0.88
+	sun.light_angular_distance = 1.0
+	sun.light_specular = 0.35
 	add_child(sun)
 
 
@@ -269,10 +273,15 @@ func _update_sky() -> void:
 	environment.ambient_light_sky_contribution = clock.ambient_sky_contribution()
 	environment.fog_light_color = clock.fog_color()
 	if sky_material != null:
-		sky_material.sky_top_color = clock.sky_top_color()
-		sky_material.sky_horizon_color = clock.sky_horizon_color()
-		sky_material.ground_bottom_color = clock.ground_bottom_color()
-		sky_material.ground_horizon_color = clock.ground_horizon_color()
+		sky_material.set_shader_parameter("sky_top", clock.sky_top_color())
+		sky_material.set_shader_parameter("sky_horizon", clock.sky_horizon_color())
+		sky_material.set_shader_parameter("ground_bottom", clock.ground_bottom_color())
+		sky_material.set_shader_parameter("ground_horizon", clock.ground_horizon_color())
+		sky_material.set_shader_parameter("sunset_color", clock.sunset_color())
+		sky_material.set_shader_parameter("sunset_amount", clock.sunset_amount())
+		sky_material.set_shader_parameter("day_amount", clock.daylight())
+		sky_material.set_shader_parameter("star_amount", clock.star_amount())
+		sky_material.set_shader_parameter("cloud_amount", clock.cloud_amount())
 	var water := materials.water_material()
 	if water != null:
 		water.set_shader_parameter("water_tint", clock.water_tint())
@@ -285,6 +294,7 @@ func _set_sun_angles(pitch: float, yaw: float) -> void:
 func _build_nodes() -> void:
 	player = VoxelPlayer.new()
 	player.name = "Player"
+	player.show_target_marker = str(_options["visual_test"]).is_empty()
 	player.gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 24.0))
 	player.can_interact = false
 	player.set_physics_process(false)
@@ -494,6 +504,10 @@ func _parse_arguments() -> void:
 				# stays put instead of sinking to the sea floor.
 				_options["submerge"] = true
 				_options["fly"] = true
+			"--visual-test":
+				# M18 reproducible visual test area (see VisualTestArena).  The
+				# optional value selects the fixed viewpoint: close, normal, wide.
+				_options["visual_test"] = value if not value.is_empty() else "normal"
 
 
 func _parse_vector(value: String) -> Vector3:
@@ -603,6 +617,9 @@ func _start_world(seed_value: int, save: Variant) -> void:
 		hunger = float(_options["hunger"])
 
 	var spawn_column := _find_spawn_column()
+	if not str(_options["visual_test"]).is_empty():
+		# Load the showcase site first; the arena is built once the area is ready.
+		spawn_column = Vector2i(VisualTestArena.CENTER.x, VisualTestArena.CENTER.z)
 	var eye_guess := world.generator.height_at(spawn_column.x, spawn_column.y)
 	player.teleport_to(Vector3(spawn_column.x + 0.5, float(eye_guess) + 4.0, spawn_column.y + 0.5))
 	player.look_yaw(38.0)
@@ -712,6 +729,40 @@ func _apply_find_structure() -> void:
 		int(placement["base_y"]), int(placement["z"]), int(placement["biome"])])
 
 
+## Fixed viewpoints for the M18 visual test area.  They are absolute so the same
+## `--visual-test` run always produces a comparable capture.
+func _apply_visual_test_view(mode: String) -> void:
+	var centre := VisualTestArena.CENTER
+	var feet := float(VisualTestArena.BASE_Y) + 1.05
+	match mode:
+		"close":
+			player.teleport_to(Vector3(centre.x + 0.5, feet, centre.z + 4.0))
+			player.look_yaw(0.0)
+			player.look_pitch(-12.0)
+		"wide":
+			player.flying = true
+			player.teleport_to(Vector3(centre.x + 0.5, 90.0, centre.z + 20.0))
+			player.look_yaw(0.0)
+			player.look_pitch(-38.0)
+		"shore":
+			# East of the pond, raised slightly, looking back across the water and
+			# the plaza so the shoreline and the water surface are both readable.
+			player.flying = true
+			player.teleport_to(Vector3(centre.x + 10.5, float(VisualTestArena.BASE_Y) + 3.5, centre.z + 2.0))
+			player.look_yaw(100.0)
+			player.look_pitch(-18.0)
+		"sky":
+			player.flying = true
+			player.teleport_to(Vector3(centre.x + 0.5, float(VisualTestArena.BASE_Y) + 7.0, centre.z + 8.0))
+			player.look_yaw(0.0)
+			player.look_pitch(32.0)
+		_:
+			player.teleport_to(Vector3(centre.x + 0.5, feet, centre.z + 8.0))
+			player.look_yaw(0.0)
+			player.look_pitch(-6.0)
+	streamer.focus_at(player.global_position)
+
+
 ## The nearest placement matching `wanted` ("any" or a structure id), searched in
 ## expanding rings of regions around the origin.
 func _nearest_structure(wanted: String) -> Dictionary:
@@ -770,7 +821,11 @@ func _update_loading(delta: float) -> void:
 
 func _enter_play(area_ready: bool) -> void:
 	player.spawn_on_column(int(floor(player.global_position.x)), int(floor(player.global_position.z)))
+	if not str(_options["visual_test"]).is_empty():
+		VisualTestArena.new().build(world)
 	_apply_override_position()
+	if not str(_options["visual_test"]).is_empty() and not (_options["player_at"] as Vector3).is_finite():
+		_apply_visual_test_view(str(_options["visual_test"]))
 	player.can_interact = true
 	player.set_physics_process(true)
 	if bool(_options["fly"]) and not player.flying:
@@ -998,14 +1053,18 @@ func _process(delta: float) -> void:
 			if fluid != null:
 				fluid.tick()
 			_update_survival(delta)
-			_update_creatures(delta)
-			_update_hostiles(delta)
-			_update_npcs(delta)
-			_update_raid(delta)
+			# The visual test area is a still-life render target.  Keep transient
+			# creatures, residents and raids out of it so captures are stable and
+			# comparable; normal play still runs all of them.
+			if str(_options["visual_test"]).is_empty():
+				_update_creatures(delta)
+				_update_hostiles(delta)
+				_update_npcs(delta)
+				_update_raid(delta)
 			_update_status()
 			if hud != null and player != null:
 				hud.set_mining_progress(player.mining_ratio())
-			if not bool(_options["capture"]) and _autosave_timer >= AUTOSAVE_SECONDS:
+			if not bool(_options["capture"]) and str(_options["visual_test"]).is_empty() and _autosave_timer >= AUTOSAVE_SECONDS:
 				_autosave_timer = 0.0
 				_save_silently("autosave")
 		_:
@@ -1716,6 +1775,9 @@ func _update_capture(delta: float) -> void:
 				return
 			if _shot_index >= 0:
 				await _save_capture(_shot_filename(_shot_index))
+				if shots.is_empty():
+					_report_and_quit()
+					return
 			_shot_index += 1
 			if _shot_index >= maxi(1, shots.size()):
 				_report_and_quit()

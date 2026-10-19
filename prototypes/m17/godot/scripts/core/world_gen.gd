@@ -27,15 +27,18 @@ enum Biome { OCEAN, BEACH, PLAINS, FOREST, DESERT, SAVANNA, SNOW, MOUNTAIN }
 
 const BIOME_NAMES := ["Ocean", "Beach", "Plains", "Forest", "Desert", "Savanna", "Snow", "Mountain"]
 
+## M18 tints are deliberately close to white: the graded textures now carry the
+## hue, and the biome only shifts it (cooler forest, warmer savanna, paler snow)
+## instead of multiplying it into neon.
 static var BIOME_TINTS := [
-	Color(0.435, 0.612, 0.447),  # ocean floor
-	Color(0.643, 0.710, 0.416),  # beach
-	Color(0.494, 0.769, 0.333),  # plains
-	Color(0.388, 0.702, 0.290),  # forest
-	Color(0.710, 0.674, 0.369),  # desert
-	Color(0.702, 0.678, 0.322),  # savanna
-	Color(0.624, 0.722, 0.580),  # snow
-	Color(0.541, 0.659, 0.463),  # mountain
+	Color(0.866, 0.960, 0.906),  # ocean floor
+	Color(0.976, 0.976, 0.882),  # beach
+	Color(0.960, 0.988, 0.858),  # plains
+	Color(0.872, 0.960, 0.840),  # forest
+	Color(0.996, 0.964, 0.858),  # desert
+	Color(0.996, 0.964, 0.836),  # savanna
+	Color(0.960, 0.976, 1.000),  # snow
+	Color(0.916, 0.960, 0.906),  # mountain
 ]
 
 # Blocks that receive the biome tint on their mesh vertices.
@@ -299,12 +302,12 @@ func tree_at(x: int, z: int) -> Dictionary:
 
 
 func _oak(x: int, z: int, ground: int) -> Dictionary:
-	var trunk := 4 + _hash2(x, z, 4242) % 3
+	var trunk := 5 + _hash2(x, z, 4242) % 3
 	return {"type": TreeType.OAK, "base": ground + 1, "height": trunk, "canopy": 2 + _hash2(x, z, 555) % 2}
 
 
 func _pine(x: int, z: int, ground: int) -> Dictionary:
-	var trunk := 7 + _hash2(x, z, 8888) % 4
+	var trunk := 8 + _hash2(x, z, 8888) % 4
 	return {"type": TreeType.PINE, "base": ground + 1, "height": trunk}
 
 
@@ -412,11 +415,64 @@ func generate_chunk(chunk: ChunkData) -> void:
 					blocks[index] = BlockDB.AIR
 
 	_generate_trees(chunk)
+	_generate_boulders(chunk)
 	_generate_decorations(chunk, heights, biomes, base_x, base_z, base_y)
 	_apply_structures(chunk)
 	chunk.surface = heights.duplicate()
 	chunk.generated = true
 	chunk.mark_dirty()
+
+
+## Plants one tree of the given kind at a world column using the same shape
+## functions as normal chunk generation.  Used by the M18 visual test area (and
+## available to gameplay code that wants to plant a tree at runtime).
+##
+## Writes directly into the affected chunks, marks them dirty, and returns the
+## number of chunks touched.  It is a pure function of the seed and the column,
+## so planting the same tree twice produces the same voxels.
+func plant_tree(world: VoxelWorld, x: int, z: int, tree_type: int) -> int:
+	var ground := _world_height(x, z)
+	var tree: Dictionary
+	match tree_type:
+		TreeType.OAK:
+			tree = _oak(x, z, ground)
+		TreeType.PINE:
+			tree = _pine(x, z, ground)
+		TreeType.CACTUS:
+			tree = {"type": TreeType.CACTUS, "base": ground + 1, "height": 1 + _hash2(x, z, 991) % 3}
+		_:
+			return 0
+	var base := int(tree["base"])
+	var min_chunk_x := floori(float(x - TREE_PAD - 1) / ChunkData.SIZE)
+	var max_chunk_x := floori(float(x + TREE_PAD + 1) / ChunkData.SIZE)
+	var min_chunk_z := floori(float(z - TREE_PAD - 1) / ChunkData.SIZE)
+	var max_chunk_z := floori(float(z + TREE_PAD + 1) / ChunkData.SIZE)
+	var min_chunk_y := floori(float(base - 2) / ChunkData.SIZE)
+	var max_chunk_y := floori(float(base + 14) / ChunkData.SIZE)
+	var touched := 0
+	for chunk_z in range(min_chunk_z, max_chunk_z + 1):
+		for chunk_x in range(min_chunk_x, max_chunk_x + 1):
+			for chunk_y in range(min_chunk_y, max_chunk_y + 1):
+				if chunk_y < 0 or chunk_y >= CHUNKS_Y:
+					continue
+				var chunk := world.get_chunk(Vector3i(chunk_x, chunk_y, chunk_z))
+				if chunk == null:
+					chunk = world.ensure_chunk(Vector3i(chunk_x, chunk_y, chunk_z))
+				if chunk == null:
+					continue
+				var base_x := chunk_x * ChunkData.SIZE
+				var base_y := chunk_y * ChunkData.SIZE
+				var base_z := chunk_z * ChunkData.SIZE
+				match tree_type:
+					TreeType.CACTUS:
+						_place_single_column(chunk, x - base_x, base, z - base_z, int(tree["height"]), BlockDB.CACTUS, base_y)
+					TreeType.PINE:
+						_place_pine(chunk, x - base_x, base, z - base_z, int(tree["height"]), base_y)
+					_:
+						_place_oak(chunk, x - base_x, base, z - base_z, int(tree["height"]), int(tree["canopy"]), base_y)
+				chunk.mark_dirty()
+				touched += 1
+	return touched
 
 
 func _generate_trees(chunk: ChunkData) -> void:
@@ -464,18 +520,27 @@ func _place_oak(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk: 
 	for offset in trunk:
 		_place_block(chunk, local_x, base + offset, local_z, BlockDB.OAK_LOG, base_y, false)
 	var top := base + trunk
-	var radius := maxi(1, canopy_radius)
-	for dy in range(-2, 2):
-		var layer_radius := radius if dy < 0 else maxi(1, radius - 1)
-		if dy == -2:
-			layer_radius = radius
+	var radius := clampi(canopy_radius, 2, 3)
+	# Rounded crown: seven layers from a narrow underside through the widest
+	# middle to a narrow top, with the corners trimmed deterministically.
+	var layer_radii := [1, 2, 2, 3, 3, 2, 1] if radius >= 3 else [0, 1, 1, 2, 2, 1, 0]
+	for layer_index in layer_radii.size():
+		var layer_radius: int = int(layer_radii[layer_index])
+		var dy := layer_index - 3
 		for dz in range(-layer_radius, layer_radius + 1):
 			for dx in range(-layer_radius, layer_radius + 1):
-				if absi(dx) == layer_radius and absi(dz) == layer_radius and (dy >= 0 or layer_radius > 1):
-					# Trim the corners so canopies read as rounded blobs.
+				if dx * dx + dz * dz > layer_radius * layer_radius + 1:
+					continue
+				if absi(dx) == layer_radius and absi(dz) == layer_radius:
+					# Trim only the outer corners, and not every one of them.
 					if _hash3(local_x + dx, top + dy, local_z + dz, 5) % 3 != 0:
 						continue
 				_place_block(chunk, local_x + dx, top + dy, local_z + dz, BlockDB.OAK_LEAVES, base_y, true)
+	# A short branch on each side of the upper trunk gives the silhouette a
+	# recognizable oak shape instead of a single green blob.
+	if trunk >= 6:
+		_place_block(chunk, local_x + 1, top - 2, local_z, BlockDB.OAK_LOG, base_y, false)
+		_place_block(chunk, local_x - 1, top - 1, local_z, BlockDB.OAK_LOG, base_y, false)
 	_place_block(chunk, local_x, top + 2, local_z, BlockDB.OAK_LEAVES, base_y, true)
 
 
@@ -483,19 +548,24 @@ func _place_pine(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk:
 	for offset in trunk:
 		_place_block(chunk, local_x, base + offset, local_z, BlockDB.PINE_LOG, base_y, false)
 	var top := base + trunk
-	var radius := 3
-	for offset in range(-2, 3):
-		var layer := top + offset
-		var level := 2 - absi(offset - 0)
-		var layer_radius := clampi(radius - absi(offset + 2), 0, radius)
-		if offset >= 0:
-			layer_radius = maxi(0, 1 - offset + 1)
+	# Conical tiers: wide near the base, narrowing to a point, with every other
+	# layer one block smaller so the silhouette reads as a pine rather than a
+	# cylinder.  The offsets give the tiers a slightly ragged edge.
+	var tier_radii := [1, 1, 2, 2, 3, 3, 2, 1]
+	for tier in tier_radii.size():
+		var layer_radius: int = int(tier_radii[tier])
+		var dy := tier - 7
+		var lean := 1 if _hash3(local_x, top + dy, local_z, 909) % 5 == 0 else 0
 		for dz in range(-layer_radius, layer_radius + 1):
 			for dx in range(-layer_radius, layer_radius + 1):
 				if layer_radius > 1 and absi(dx) + absi(dz) > layer_radius + 1:
 					continue
-				_place_block(chunk, local_x + dx, layer, local_z + dz, BlockDB.PINE_LEAVES, base_y, true)
-	_place_block(chunk, local_x, top + 3, local_z, BlockDB.PINE_LEAVES, base_y, true)
+				if absi(dx) == layer_radius and absi(dz) == layer_radius and _hash3(local_x + dx, top + dy, local_z + dz, 17) % 3 != 0:
+					continue
+				_place_block(chunk, local_x + dx + lean, top + dy, local_z + dz,
+					BlockDB.PINE_LEAVES, base_y, true)
+	_place_block(chunk, local_x, top + 1, local_z, BlockDB.PINE_LEAVES, base_y, true)
+	_place_block(chunk, local_x, top + 2, local_z, BlockDB.PINE_LEAVES, base_y, true)
 
 
 func _generate_decorations(chunk: ChunkData, heights: PackedInt32Array, biomes: PackedByteArray, base_x: int, base_z: int, base_y: int) -> void:
@@ -519,6 +589,63 @@ func _generate_decorations(chunk: ChunkData, heights: PackedInt32Array, biomes: 
 			var deco := decoration_at(base_x + local_x, base_z + local_z, height, surface_block, biome)
 			if deco != BlockDB.AIR:
 				chunk.blocks[index] = deco
+
+
+## Sparse boulder clusters on flat, dry land.  Anchors are deterministic columns
+## and every chunk writes the part of a cluster that falls inside it, so a
+## boulder crossing a chunk border is complete regardless of generation order.
+func _generate_boulders(chunk: ChunkData) -> void:
+	var coord := chunk.coord
+	var base_x := coord.x * ChunkData.SIZE
+	var base_y := coord.y * ChunkData.SIZE
+	var base_z := coord.z * ChunkData.SIZE
+	for local_z in range(-2, ChunkData.SIZE + 2):
+		for local_x in range(-2, ChunkData.SIZE + 2):
+			var world_x := base_x + local_x
+			var world_z := base_z + local_z
+			if _hash2(world_x, world_z, 8842) % 1000 >= 3:
+				continue
+			var height := _world_height(world_x, world_z)
+			if height <= SEA_LEVEL:
+				continue
+			var biome := _world_biome(world_x, world_z)
+			if biome == Biome.OCEAN or biome == Biome.BEACH or biome == Biome.DESERT:
+				continue
+			var surface := _surface_block(biome, height)
+			if surface != BlockDB.GRASS and surface != BlockDB.DRY_GRASS and surface != BlockDB.STONE and surface != BlockDB.SNOW:
+				continue
+			# Flat ground only, so the cluster never hangs over a slope.
+			var flat := true
+			for dz in range(-1, 2):
+				for dx in range(-1, 2):
+					if absi(_world_height(world_x + dx, world_z + dz) - height) > 1:
+						flat = false
+			if not flat:
+				continue
+			# Do not put a boulder inside a tree trunk.
+			if int(tree_at(world_x, world_z)["type"]) != TreeType.NONE:
+				continue
+			var ore_roll := _hash2(world_x, world_z, 551) % 3
+			var ore := BlockDB.COAL_ORE if ore_roll == 0 else (BlockDB.IRON_ORE if ore_roll == 1 else BlockDB.AIR)
+			for dz in range(-1, 2):
+				for dx in range(-1, 2):
+					if dx * dx + dz * dz > 2:
+						continue
+					var roll := _hash3(world_x + dx, height + 1, world_z + dz, 2207)
+					if roll % 5 == 0:
+						continue
+					var block_height := 1 + roll % 2
+					for dy in block_height:
+						var block_id := BlockDB.STONE
+						var material_roll := _hash3(world_x + dx, height + 1 + dy, world_z + dz, 91) % 6
+						if material_roll == 0:
+							block_id = BlockDB.MOSSY_COBBLE
+						elif material_roll <= 2:
+							block_id = BlockDB.COBBLESTONE
+						if dy == block_height - 1 and ore != BlockDB.AIR and roll % 3 == 0:
+							block_id = ore
+						_place_block(chunk, world_x + dx - base_x, height + 1 + dy, world_z + dz - base_z,
+							block_id, base_y, true)
 
 
 # --- structures (Phase D foundation) --------------------------------------

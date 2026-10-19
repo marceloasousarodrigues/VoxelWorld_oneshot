@@ -55,6 +55,40 @@ const FACE_UVS := [
 const QUAD_INDICES := [0, 2, 1, 0, 3, 2]
 ## Face shading: top faces catch the most light, bottom faces the least.
 const FACE_SHADE := [0.84, 0.84, 1.0, 0.52, 0.70, 0.70]
+## Flattened (face * 4 + corner) offsets for the two in-plane AO neighbours and
+## the diagonal.  These are `PADDED_STRIDE` combinations, precomputed so the
+## hot emit loop never builds Vectors or loops over axes.
+const AO_OFFSET_A := [
+	-324, 324, 324, -324,  # PX
+	-324, 324, 324, -324,  # NX
+	-1, 1, 1, -1,          # PY
+	-1, 1, 1, -1,          # NY
+	1, 1, -1, -1,          # PZ
+	-1, -1, 1, 1,          # NZ
+]
+const AO_OFFSET_B := [
+	-18, -18, 18, 18,      # PX
+	18, 18, -18, -18,      # NX
+	18, 18, -18, -18,      # PY
+	-18, -18, 18, 18,      # NY
+	-324, 324, 324, -324,  # PZ
+	-324, 324, 324, -324,  # NZ
+]
+const AO_OFFSET_DIAGONAL := [
+	-342, 306, 342, -306,  # PX
+	-306, 342, 306, -342,  # NX
+	17, 19, -17, -19,      # PY
+	-19, -17, 19, 17,      # NY
+	-323, 325, 323, -325,  # PZ
+	-325, 323, 325, -323,  # NZ
+]
+## How dark a fully occluded vertex gets.  0.22 gives four readable steps
+## (1.0, 0.78, 0.56, 0.34) without turning crevices black.
+const AO_STRENGTH := 0.22
+## Slow per-block brightness variation, keyed by world cell.  It breaks the
+## tiled look without hiding face boundaries.
+const VARIATION_MIN := 0.945
+const VARIATION_RANGE := 0.11
 const WATER_RENDER_HEIGHT := 0.875
 ## Layers that make up the shadow-casting chunk mesh; water is a separate mesh
 ## so it never casts shadows and sorts independently.
@@ -63,10 +97,19 @@ const SOLID_LAYERS := [BlockDB.LAYER_OPAQUE, BlockDB.LAYER_CUTOUT, BlockDB.LAYER
 var library: TextureLibrary
 var materials: VoxelMaterials
 var face_layer: PackedInt32Array = PackedInt32Array()
+## 1 when a block casts baked ambient occlusion (opaque, leaves, cactus).
+var _occluder: PackedByteArray = PackedByteArray()
 var _buffers: Array = []
 var _collision := {"vertex": PackedVector3Array(), "index": PackedInt32Array()}
 var _padded: PackedByteArray = PackedByteArray()
 var _padded_fluid: PackedByteArray = PackedByteArray()
+## Reused ambient-occlusion scratch (four corner factors) so per-face AO does
+## not allocate inside the hot emit loop.
+var _ao_scratch: PackedFloat32Array = PackedFloat32Array([1.0, 1.0, 1.0, 1.0])
+## Reused "no AO" marker for cutout/transparent faces, which do not get baked
+## contact darkening (their many overlapping leaf faces made AO expensive and
+## visually noisy).
+var _no_ao: PackedFloat32Array = PackedFloat32Array()
 var stats := {"builds": 0, "faces": 0, "triangles": 0, "ms": 0.0, "fill_ms": 0.0, "emit_ms": 0.0, "assemble_ms": 0.0}
 
 
@@ -82,10 +125,14 @@ func _init(texture_library: TextureLibrary, voxel_materials: VoxelMaterials = nu
 
 func _resolve_layers() -> void:
 	face_layer.resize(BlockDB.COUNT * 6)
+	_occluder.resize(BlockDB.COUNT)
 	for block_id in BlockDB.COUNT:
 		var keys: PackedStringArray = BlockDB.face_keys[block_id]
 		for face in 6:
 			face_layer[block_id * 6 + face] = library.layer_index(keys[face]) if not keys[face].is_empty() else 0
+		var occludes := BlockDB.is_opaque(block_id) or block_id == BlockDB.OAK_LEAVES \
+			or block_id == BlockDB.PINE_LEAVES or block_id == BlockDB.CACTUS
+		_occluder[block_id] = 1 if occludes else 0
 
 
 func _empty_surface() -> Dictionary:
@@ -317,23 +364,35 @@ func _emit_faces(input: Dictionary) -> void:
 		var centre := Vector3(local_x + 0.5, local_y + 0.5, local_z + 0.5)
 		var is_deco := solid[block_id] == 0 and liquid[block_id] == 0
 		var tint := Color.WHITE
-		if block_id == BlockDB.GRASS or block_id == BlockDB.DRY_GRASS or block_id == BlockDB.OAK_LEAVES \
-				or block_id == BlockDB.PINE_LEAVES or is_deco:
+		var tinted := block_id == BlockDB.GRASS or block_id == BlockDB.DRY_GRASS or block_id == BlockDB.OAK_LEAVES \
+				or block_id == BlockDB.PINE_LEAVES or is_deco
+		if tinted:
 			tint = WorldGen.BIOME_TINTS[biomes[ChunkData.column_index(local_x, local_z)]]
+		var variation := _cell_variation(origin + Vector3i(local_x, local_y, local_z))
+		var body_tint := Color(tint.r * variation, tint.g * variation, tint.b * variation, 1.0)
 		if is_deco:
-			_emit_deco(block_id, centre, tint)
+			_emit_deco(block_id, centre, body_tint)
 			continue
 		var layer := BlockDB.layer_of(block_id)
 		var is_water := block_id == BlockDB.WATER
 		if is_water:
 			layer = BlockDB.LAYER_WATER
 		var surface: Dictionary = _buffers[layer]
+		var is_station := block_id == BlockDB.CRAFTING_TABLE or block_id == BlockDB.FURNACE
+		if is_station:
+			_emit_station(surface, centre, block_id)
 		var padded_centre := padded_index(local_x, local_y, local_z)
 		var surface_height := 1.0
 		if is_water:
 			var above := int(padded[padded_centre + stride[BlockDB.FACE_PY]])
 			var level := int(fluid[index])
-			surface_height = 1.0 if above == block_id else WATER_RENDER_HEIGHT * clampf(float(level) / 8.0, 0.125, 1.0)
+			# Source water (and any column with water above it) keeps a full
+			# block surface, so an ocean forms one flat plane instead of a
+			# stair-stepped mosaic; only genuinely flowing cells sit lower.
+			if above == block_id or level >= 7:
+				surface_height = 1.0
+			else:
+				surface_height = WATER_RENDER_HEIGHT * clampf(float(level) / 8.0, 0.125, 1.0)
 		var is_liquid := liquid[block_id] == 1
 		var culls := cull_same[block_id] == 1
 		var world_cell := origin + Vector3i(local_x, local_y, local_z)
@@ -349,15 +408,30 @@ func _emit_faces(input: Dictionary) -> void:
 					continue
 				elif neighbour == block_id and culls:
 					continue
-			if is_water:
+			if is_station:
+				# The custom model is not a cube, but its collision and logical
+				# identity still are: keep the full-cube collision on every
+				# exposed face and skip the cube's own render face.
+				if solid[block_id] == 1:
+					_emit_collision(centre, face)
+			elif is_water:
 				_emit_water_face(surface, centre, base + centre, face, FACE_NORMAL_I[face], surface_height, block_id, world_cell)
 			else:
-				_emit_face(surface, centre, face, block_id, tint, 1.0)
+				# Grass keeps its biome tint on the top face only; its sides are
+				# dirt and must not turn into green slabs.
+				var face_tint := body_tint
+				if (block_id == BlockDB.GRASS or block_id == BlockDB.DRY_GRASS) and face != BlockDB.FACE_PY:
+					face_tint = Color(variation, variation, variation, 1.0)
+				if layer == BlockDB.LAYER_OPAQUE:
+					_face_ao_into(padded_centre, face)
+					_emit_face(surface, centre, face, block_id, face_tint, 1.0, _ao_scratch)
+				else:
+					_emit_face(surface, centre, face, block_id, face_tint, 1.0, _no_ao)
 				if solid[block_id] == 1:
 					_emit_collision(centre, face)
 
 
-func _emit_face(surface: Dictionary, centre: Vector3, face: int, block_id: int, tint: Color, height_offset: float) -> void:
+func _emit_face(surface: Dictionary, centre: Vector3, face: int, block_id: int, tint: Color, height_offset: float, ao: PackedFloat32Array = PackedFloat32Array(), glow: float = 0.0) -> void:
 	var vertices: PackedVector3Array = surface["vertex"]
 	var normals: PackedVector3Array = surface["normal"]
 	var uvs: PackedVector2Array = surface["uv"]
@@ -369,8 +443,9 @@ func _emit_face(surface: Dictionary, centre: Vector3, face: int, block_id: int, 
 	var normal: Vector3 = FACE_NORMALS[face]
 	var layer := face_layer[block_id * 6 + face]
 	var shade: float = FACE_SHADE[face]
-	var tone := Color(tint.r * shade, tint.g * shade, tint.b * shade, 1.0)
-	var uv2 := Vector2(float(layer), 0.0)
+	var base_tone := Color(tint.r * shade, tint.g * shade, tint.b * shade, 1.0)
+	var has_ao := ao.size() == 4
+	var uv2 := Vector2(float(layer), glow)
 	var top := 1.0 if face != BlockDB.FACE_NY else 0.0
 	var base_index := vertices.size()
 	for corner_index in 4:
@@ -381,10 +456,43 @@ func _emit_face(surface: Dictionary, centre: Vector3, face: int, block_id: int, 
 		normals.append(normal)
 		uvs.append(face_uvs[corner_index])
 		uv2s.append(uv2)
-		colors.append(tone)
+		if has_ao:
+			var factor: float = ao[corner_index]
+			colors.append(Color(base_tone.r * factor, base_tone.g * factor, base_tone.b * factor, 1.0))
+		else:
+			colors.append(base_tone)
 	for quad_index in QUAD_INDICES:
 		indices.append(base_index + quad_index)
 	surface["faces"] = int(surface["faces"]) + 1
+
+
+## Fills `_ao_scratch` with the four ambient-occlusion factors of one face, in
+## `FACE_CORNERS` order.  Standard voxel AO: a corner is darkened by the two
+## in-plane neighbours and the diagonal cell, and fully hidden corners are never
+## darker than the two-sided case.
+func _face_ao_into(padded_centre: int, face: int) -> void:
+	var outside: int = padded_centre + int(FACE_STRIDE[face])
+	var base := face * 4
+	var padded := _padded
+	var occluder := _occluder
+	for corner_index in 4:
+		var slot := base + corner_index
+		var side_a := occluder[padded[outside + AO_OFFSET_A[slot]]] == 1
+		var side_b := occluder[padded[outside + AO_OFFSET_B[slot]]] == 1
+		var diagonal := false
+		if not (side_a and side_b):
+			diagonal = occluder[padded[outside + AO_OFFSET_DIAGONAL[slot]]] == 1
+		var occlusion := (1 if side_a else 0) + (1 if side_b else 0) + (1 if diagonal else 0)
+		_ao_scratch[corner_index] = 1.0 - AO_STRENGTH * float(occlusion)
+
+
+## Deterministic, order-independent brightness multiplier for one world cell.
+func _cell_variation(cell: Vector3i) -> float:
+	var h: int = cell.x * 374761393 + cell.y * 668265263 + cell.z * 1274126177
+	h = (h ^ (h >> 13)) * 1274126177
+	h = h ^ (h >> 16)
+	var roll: int = absi(h) % 1000
+	return VARIATION_MIN + float(roll) / 1000.0 * VARIATION_RANGE
 
 
 ## Water faces are emitted in chunk-local space like every other layer (the chunk
@@ -464,6 +572,130 @@ func _emit_deco(block_id: int, centre: Vector3, tint: Color) -> void:
 			vertices.append(plane[corner_index])
 			normals.append(Vector3.UP)
 			uvs.append(quad_uvs[corner_index])
+			uv2s.append(uv2)
+			colors.append(tone)
+		for quad_index in QUAD_INDICES:
+			indices.append(base_index + quad_index)
+		surface["faces"] = int(surface["faces"]) + 1
+
+
+## Custom station models.  They are ordinary opaque geometry emitted into the
+## chunk mesh (no per-block scene nodes) and stay inside the one-metre cell, so
+## placement, save/load, collision and chunk streaming are unchanged.
+func _emit_station(surface: Dictionary, centre: Vector3, block_id: int) -> void:
+	# A tiny lift keeps the station's bottom faces off the coplanar top face of
+	# the block below it, which otherwise z-fights and reads as a translucent
+	# slab underneath the model.  5 mm is invisible at gameplay distance.
+	var lifted := centre + Vector3(0.0, 0.005, 0.0)
+	if block_id == BlockDB.CRAFTING_TABLE:
+		_emit_crafting_table(surface, lifted)
+	elif block_id == BlockDB.FURNACE:
+		_emit_furnace(surface, lifted)
+
+
+func _emit_crafting_table(surface: Dictionary, centre: Vector3) -> void:
+	var top := library.layer_index("crafting_table_top")
+	var side := library.layer_index("crafting_table_side")
+	var planks := library.layer_index("planks")
+	var log_side := library.layer_index("oak_log_side")
+	var log_top := library.layer_index("oak_log_top")
+	# Four legs, open underneath.
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			var x0: float = 0.30 if sx > 0 else -0.42
+			var z0: float = 0.30 if sz > 0 else -0.42
+			_emit_box(surface, centre, Vector3(x0, -0.5, z0), Vector3(x0 + 0.12, 0.34, z0 + 0.12),
+				log_top, log_side, log_top)
+	# Side aprons with the tool-rack texture.
+	_emit_box(surface, centre, Vector3(-0.42, 0.06, 0.40), Vector3(0.42, 0.24, 0.48),
+		planks, side, planks)
+	_emit_box(surface, centre, Vector3(-0.42, 0.06, -0.48), Vector3(0.42, 0.24, -0.40),
+		planks, side, planks)
+	_emit_box(surface, centre, Vector3(0.40, 0.06, -0.40), Vector3(0.48, 0.24, 0.40),
+		planks, side, planks)
+	_emit_box(surface, centre, Vector3(-0.48, 0.06, -0.40), Vector3(-0.40, 0.24, 0.40),
+		planks, side, planks)
+	# Overhanging tabletop with a framed working surface.
+	_emit_box(surface, centre, Vector3(-0.48, 0.30, -0.48), Vector3(0.48, 0.42, 0.48),
+		top, side, planks)
+	# Raised rim around the top, in dark log wood.
+	_emit_box(surface, centre, Vector3(-0.48, 0.42, -0.48), Vector3(0.48, 0.46, -0.43),
+		log_top, log_side, log_side)
+	_emit_box(surface, centre, Vector3(-0.48, 0.42, 0.43), Vector3(0.48, 0.46, 0.48),
+		log_top, log_side, log_side)
+	_emit_box(surface, centre, Vector3(-0.48, 0.42, -0.43), Vector3(-0.43, 0.46, 0.43),
+		log_top, log_side, log_side)
+	_emit_box(surface, centre, Vector3(0.43, 0.42, -0.43), Vector3(0.48, 0.46, 0.43),
+		log_top, log_side, log_side)
+
+
+func _emit_furnace(surface: Dictionary, centre: Vector3) -> void:
+	var masonry := library.layer_index("furnace_side")
+	var cap := library.layer_index("furnace_top")
+	var stone := library.layer_index("stone_brick")
+	var opening := library.layer_index("furnace_opening")
+	# Plinth and main body.  The +Z face of the body is omitted so the recessed
+	# opening and its frame can be built in front of it.
+	_emit_box(surface, centre, Vector3(-0.47, -0.5, -0.47), Vector3(0.47, -0.40, 0.47),
+		stone, stone, stone)
+	_emit_box(surface, centre, Vector3(-0.44, -0.40, -0.44), Vector3(0.44, 0.40, 0.44),
+		cap, masonry, cap, -1, BlockDB.FACE_PZ)
+	# Slightly overhanging top cap.
+	_emit_box(surface, centre, Vector3(-0.47, 0.40, -0.47), Vector3(0.47, 0.47, 0.47),
+		cap, stone, stone)
+	# Recessed ember interior (its +Z face carries the glow flag).
+	_emit_box(surface, centre, Vector3(-0.23, -0.30, 0.36), Vector3(0.23, 0.17, 0.40),
+		opening, opening, opening, BlockDB.FACE_PZ)
+	# Masonry frame around the opening, proud of the body.
+	_emit_box(surface, centre, Vector3(-0.44, -0.30, 0.40), Vector3(-0.23, 0.17, 0.46),
+		masonry, masonry, masonry)
+	_emit_box(surface, centre, Vector3(0.23, -0.30, 0.40), Vector3(0.44, 0.17, 0.46),
+		masonry, masonry, masonry)
+	_emit_box(surface, centre, Vector3(-0.23, -0.44, 0.40), Vector3(0.23, -0.30, 0.46),
+		masonry, masonry, masonry)
+	_emit_box(surface, centre, Vector3(-0.23, 0.17, 0.40), Vector3(0.23, 0.40, 0.46),
+		masonry, masonry, masonry)
+	# Lintel above the mouth.
+	_emit_box(surface, centre, Vector3(-0.31, 0.17, 0.44), Vector3(0.31, 0.25, 0.49),
+		stone, stone, stone)
+
+
+## Adds an axis-aligned box to a surface.  Textures are mapped 0..1 per face;
+## this is intentionally simple and only used for small station details.
+func _emit_box(surface: Dictionary, centre: Vector3, box_min: Vector3, box_max: Vector3,
+		top_layer: int, side_layer: int, bottom_layer: int,
+		glow_face: int = -1, skip_face: int = -1) -> void:
+	var vertices: PackedVector3Array = surface["vertex"]
+	var normals: PackedVector3Array = surface["normal"]
+	var uvs: PackedVector2Array = surface["uv"]
+	var uv2s: PackedVector2Array = surface["uv2"]
+	var colors: PackedColorArray = surface["color"]
+	var indices: PackedInt32Array = surface["index"]
+	for face in 6:
+		if face == skip_face:
+			continue
+		var layer := side_layer
+		if face == BlockDB.FACE_PY:
+			layer = top_layer
+		elif face == BlockDB.FACE_NY:
+			layer = bottom_layer
+		var corners: Array = FACE_CORNERS[face]
+		var face_uvs: Array = FACE_UVS[face]
+		var normal: Vector3 = FACE_NORMALS[face]
+		var shade: float = FACE_SHADE[face]
+		var tone := Color(shade, shade, shade, 1.0)
+		var uv2 := Vector2(float(layer), 1.0 if face == glow_face else 0.0)
+		var base_index := vertices.size()
+		for corner_index in 4:
+			var unit: Vector3 = corners[corner_index]
+			var corner := Vector3(
+				centre.x + (box_min.x if unit.x < 0.0 else box_max.x),
+				centre.y + (box_min.y if unit.y < 0.0 else box_max.y),
+				centre.z + (box_min.z if unit.z < 0.0 else box_max.z)
+			)
+			vertices.append(corner)
+			normals.append(normal)
+			uvs.append(face_uvs[corner_index])
 			uv2s.append(uv2)
 			colors.append(tone)
 		for quad_index in QUAD_INDICES:

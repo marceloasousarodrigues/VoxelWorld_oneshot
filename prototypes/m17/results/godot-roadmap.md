@@ -11,6 +11,34 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ---
 
+## M18 — Visual quality upgrade
+
+Design contract: `prototypes/m17/results/m18-visual-design.md`.
+
+- [x] `--visual-test` reproducible showcase (clearing, material pads, terraces,
+      pond, boulders/ores, stations, planted trees, fixed viewpoints), isolated
+      from autosave/creatures/NPCs/raids
+- [x] In-memory texture grading + near-white biome tints + grass top-only tint +
+      per-cell variation + world-space macro-noise term
+- [x] Baked vertex ambient occlusion with an optimized offset-table path
+- [x] Custom crafting-table and furnace models (geometry inside the voxel cell,
+      full-cube collision), with derived top/side/opening textures and a furnace
+      ember glow carried in `UV2.y`
+- [x] Rounded oak/pine crowns and denser leaf textures; deterministic boulder
+      clusters with ore faces; runtime `WorldGen.plant_tree`
+- [x] Custom sky shader (gradient, dawn/dusk band, sun/moon disc, clouds, stars),
+      ACES tonemapping, four-split blended shadows, fog scatter/aerial perspective,
+      retuned night palette
+- [x] Water shader with depth absorption, wave normals, shoreline thinning and a
+      flat source-water plane; reduced atlas checkerboard
+- [x] `test_visuals.gd` regression module (1273 unit assertions total, 184
+      integration assertions), perf harness rerun at radius 5
+- [~] Live rotating-camera shimmer/video inspection and a human play-through
+      remain outstanding
+- [ ] Weather/particles, quality settings menu, richer bark/side material variants
+
+---
+
 ## Phase A — Core playable world
 
 - [x] Godot project that opens, runs and renders (4.7.2-stable, windowed run verified)

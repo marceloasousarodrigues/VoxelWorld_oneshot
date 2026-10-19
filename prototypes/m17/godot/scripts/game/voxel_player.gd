@@ -56,6 +56,9 @@ var marker: MeshInstance3D
 
 var flying := false
 var can_interact := true
+## When false the targeted-block outline is not drawn; the M18 visual test
+## captures turn it off so the station geometry is unobstructed.
+var show_target_marker := true
 
 var _pitch := 0.0
 var _break_cooldown := 0.0
@@ -307,7 +310,7 @@ func _update_target() -> void:
 	if found.get("hit", false):
 		var cell: Vector3i = found["block"]
 		marker.global_position = Vector3(cell) + Vector3.ONE * 0.5
-		marker.visible = true
+		marker.visible = show_target_marker
 	else:
 		marker.visible = false
 	var key := "%s|%s" % [str(found.get("hit", false)), str(found.get("block", Vector3i.ZERO))]

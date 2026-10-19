@@ -16,30 +16,32 @@ const NOON_ELEVATION := 74.0
 
 # Palette of the sky at noon and at midnight; everything in between is lerped by
 # the smooth `daylight()` factor.
-const DAY_SKY_TOP := Color("2f7cc4")
-const DAY_SKY_HORIZON := Color("cfe3e8")
-const NIGHT_SKY_TOP := Color("050a1c")
-const NIGHT_SKY_HORIZON := Color("16203c")
+const DAY_SKY_TOP := Color("2b6fae")
+const DAY_SKY_HORIZON := Color("c9dde4")
+const NIGHT_SKY_TOP := Color("060c1f")
+const NIGHT_SKY_HORIZON := Color("1d2b4a")
 const DAY_GROUND_BOTTOM := Color("7f97a6")
 const DAY_GROUND_HORIZON := Color("c6d7dd")
-const NIGHT_GROUND_BOTTOM := Color("070b16")
-const NIGHT_GROUND_HORIZON := Color("101a2e")
-const DAY_FOG := Color("c3dae0")
-const NIGHT_FOG := Color("0e1526")
-const DAY_SUN := Color("fff4e2")
-const NIGHT_SUN := Color("93a9dc")
-const DAY_WATER_TINT := Color(0.20, 0.44, 0.78)
-const NIGHT_WATER_TINT := Color(0.045, 0.105, 0.235)
+const NIGHT_GROUND_BOTTOM := Color("0a1020")
+const NIGHT_GROUND_HORIZON := Color("18233a")
+const DAY_FOG := Color("c6d9dd")
+const NIGHT_FOG := Color("111a30")
+const DAY_SUN := Color("fff2dd")
+const NIGHT_SUN := Color("a9bde8")
+const DAY_WATER_TINT := Color(0.17, 0.40, 0.72)
+const NIGHT_WATER_TINT := Color(0.060, 0.140, 0.300)
 
 const DAY_SUN_ENERGY := 1.22
-const NIGHT_SUN_ENERGY := 0.30
-const DAY_AMBIENT_ENERGY := 1.45
-const NIGHT_AMBIENT_ENERGY := 0.95
+const NIGHT_SUN_ENERGY := 0.45
+const DAY_AMBIENT_ENERGY := 1.15
+const NIGHT_AMBIENT_ENERGY := 1.05
+## Warm band added to the sky horizon at dawn and dusk.
+const SUNSET_COLOR := Color("ff7a3a")
 ## Ambient colour used for the non-sky part of the fill light.  Ambient is taken
 ## from the sky during the day, but a night sky is almost black, so at night the
 ## fill must come from this colour instead or the world is unreadable.
-const DAY_AMBIENT := Color("8fb6d6")
-const NIGHT_AMBIENT := Color("33436b")
+const DAY_AMBIENT := Color("a9c6de")
+const NIGHT_AMBIENT := Color("465a86")
 
 ## Half-width, in sine-of-elevation space, of the dawn/dusk transition.  0.24 is
 ## about 14 degrees of sun elevation, so twilight lasts long enough to see.
@@ -145,6 +147,29 @@ func fog_color() -> Color:
 ## Tint multiplied into the water texture; dimmer and less saturated at night.
 func water_tint() -> Color:
 	return NIGHT_WATER_TINT.lerp(DAY_WATER_TINT, daylight())
+
+
+## `1` at sunrise/sunset, `0` at noon and deep night.  Drives the warm horizon
+## band in the sky shader without touching the tested `daylight()` curve.
+func horizon_warmth() -> float:
+	return 1.0 - smoothstep(0.0, TWILIGHT, absf(sin(TAU * time_of_day)))
+
+
+func sunset_color() -> Color:
+	return SUNSET_COLOR
+
+
+func sunset_amount() -> float:
+	return horizon_warmth() * 0.8
+
+
+## Stars appear only once daylight has fallen well below half.
+func star_amount() -> float:
+	return clampf(1.0 - daylight() * 2.2, 0.0, 1.0)
+
+
+func cloud_amount() -> float:
+	return lerpf(0.34, 0.55, daylight())
 
 
 ## Wall-clock hour the in-game time maps to, for the HUD (`0.0` = sunrise = 06:00).

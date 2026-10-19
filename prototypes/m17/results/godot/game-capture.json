@@ -1,15 +1,15 @@
 {
-	"biome": "Beach",
+	"biome": "Forest",
 	"evidence": "offscreen Godot viewport PNG written from inside the running game scene; not a human visual inspection",
 	"eye": [
-		-7.06192541122437,
-		69.3208465576172,
-		-114.111434936523
+		72.7371597290039,
+		67.6192855834961,
+		-84.0
 	],
 	"fluid": {
 		"changes": 0,
-		"evaluations": 0,
-		"observed_edits": 0,
+		"evaluations": 4678,
+		"observed_edits": 2678,
 		"pending": 0,
 		"seeded_chunks": 0
 	},
@@ -26,48 +26,48 @@
 		"timestamp": 0
 	},
 	"look": [
-		45.0000076293945,
-		-23.287691116333
+		0.0,
+		-12.0
 	],
 	"mesher": {
-		"assemble_ms": 81.618,
-		"builds": 482,
-		"emit_ms": 2337.892,
-		"faces": 206715,
-		"fill_ms": 524.532,
-		"ms": 2872.021,
-		"triangles": 413430
+		"assemble_ms": 129.409,
+		"builds": 670,
+		"emit_ms": 4933.929,
+		"faces": 311844,
+		"fill_ms": 681.899,
+		"ms": 5630.687,
+		"triangles": 623688
 	},
 	"player": [
-		-7.06192541122437,
-		67.7008438110352,
-		-114.111434936523
+		72.7371597290039,
+		65.9992828369141,
+		-84.0
 	],
 	"seed": 17017,
 	"streaming": {
-		"attach_ms_total": 3345.087,
-		"center": "(-1, 4, -8)",
-		"faces": 205541,
-		"faces_hash": 188602412230919731,
-		"generated": 620,
+		"attach_ms_total": 5459.082,
+		"center": "(4, 4, -6)",
+		"faces": 311844,
+		"faces_hash": 624043163758989185,
+		"generated": 648,
 		"generation_in_flight": 0,
-		"generation_ms_total": 769.438,
-		"generation_worker_ms": 4046.329,
-		"loaded": 392,
-		"mesh_ms_total": 2854.094,
-		"meshed": 480,
+		"generation_ms_total": 815.133,
+		"generation_worker_ms": 4999.21499999999,
+		"loaded": 648,
+		"mesh_ms_total": 5630.687,
+		"meshed": 670,
 		"meshes_in_flight": 0,
 		"queued": 0,
-		"render_radius": 4,
-		"unloaded": 228,
+		"render_radius": 5,
+		"unloaded": 0,
 		"vertical_radius": 4,
-		"views": 392,
-		"wanted": 392,
-		"worst_mesh_ms": 16.723
+		"views": 648,
+		"wanted": 648,
+		"worst_mesh_ms": 23.223
 	},
 	"window_size": [
 		1280,
 		720
 	],
-	"world_hash": 5824747884541380800
+	"world_hash": 6578015106849129457
 }

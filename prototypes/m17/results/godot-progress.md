@@ -1,5 +1,92 @@
 # M17 Godot — Progress and Resume Point
 
+## M18 — Visual quality upgrade (current work, 2026-10-19)
+
+Mission: raise the Godot world to a polished stylized voxel-survival look without
+changing the voxel architecture or the production Ursina implementation. Visual
+design contract: `prototypes/m17/results/m18-visual-design.md`.
+
+### Implemented and verified in the running game
+
+- **Reproducible visual test area**: `--visual-test[=close|normal|wide|shore|sky]`
+  builds a deterministic forest clearing at `(72, 65, -88)` with material pads,
+  terraces, a sand-rimmed pond, boulders with ores, a crafting table, furnace,
+  plank/glass wall and planted oak/pine trees, then places the camera at fixed
+  viewpoints. It uses the real world, mesher, materials, fluid and streamer; it is
+  disabled from autosave/creatures/NPCs/raids so captures are stable.
+- **Materials**: `TextureLibrary` grades the vendored Minetest art in memory
+  (brightness/contrast/saturation plus per-material channel tints) into a
+  restrained palette; biome tints are now near-white hue shifts and grass is tinted
+  on its top face only. A slow world-space macro-noise term in the voxel shaders
+  breaks up tiling; a deterministic per-cell brightness variation is baked into the
+  mesh.
+- **Baked ambient occlusion**: the mesher computes standard 4-corner AO per opaque
+  face (opaque/leaves/cactus occlude), so terrain, tree bases and station contact
+  areas gain readable depth. The AO path is a flat offset table and skips
+  cutout/transparent layers; it was optimized after an initial 2x mesher cost.
+- **Custom stations**: the crafting table and furnace are real models emitted by the
+  chunk mesher inside the one-metre cell (tabletop with a 3x3 grid, four legs,
+  aprons, raised rim; furnace with plinth, body, top cap, recessed opening and a
+  glowing ember interior). Collision and logical identity are still the full cube.
+  New derived textures: `crafting_table_top`, `crafting_table_side`,
+  `furnace_opening` (with an emissive flag carried in `UV2.y`).
+- **Trees and rocks**: oaks and pines use rounded/conical multi-layer crowns and
+  denser leaf textures (`oak_leaves_clean`/`pine_leaves_clean`); sparse boulder
+  clusters with ore faces generate deterministically on flat dry land;
+  `WorldGen.plant_tree` plants production-shaped trees at runtime.
+- **Lighting/sky**: custom `shaders/sky.gdshader` (layered gradient, warm
+  dawn/dusk band, sun/moon disc from the scene light, drifting clouds, night stars)
+  driven by the existing `DayNight` clock; ACES tonemapping; four-split blended
+  shadows; fog with sun scatter and aerial perspective; retuned day/night palette
+  for readable nights.
+- **Water**: rewritten `voxel_water.gdshader` with depth-based absorption/opacity
+  from the depth prepass, world-space wave normals, shoreline thinning and a
+  reduced atlas contribution (no more checkerboard). Source water surfaces are
+  emitted at full height, so oceans are a single flat plane.
+
+### Evidence
+
+- Unit suite: **1273 assertions**, exit 0, 0 bytes stderr (`run_tests.gd`), including
+  the new `test_visuals.gd` (station geometry/collision, AO, grass tinting,
+  planted trees, boulders, visual-arena contents, sky curves).
+- Integration suite: **184 assertions**, exit 0, 0 bytes stderr.
+- Inspected captures (all `--hide-hud`, seed 17017, radius 5): `m18-step9-close-noon`,
+  `m18-step9-normal-noon`, `m18-step9-normal-night`, `m18-step9-ocean-noon`,
+  `m18-step9-ocean-sunset`, `m18-step6-coast-sunrise`, `m18-step6-shore-noon`,
+  `m18-step6-water-noon`, plus the pre-change baselines `m18-baseline-vt4-*`.
+- Frame-time harness (`run_perf.gd`, radius 5, RTX 3080 / i7-10700K), M18:
+
+  | scenario | p50 | p95 | p99 | 1 % low |
+  | --- | --- | --- | --- | --- |
+  | settle | 2.25 ms | 6.61 ms | 10.15 ms | 54 fps |
+  | look | 1.96 ms | 2.79 ms | 3.22 ms | 177 fps |
+  | walk | 2.01 ms | 6.05 ms | 9.63 ms | 77 fps |
+  | cross | 1.81 ms | 4.14 ms | 7.05 ms | 104 fps |
+  | water | 2.00 ms | 2.69 ms | 3.19 ms | 193 fps |
+
+  Draw calls rose (settle ≈510 vs ≈369 before) because shadows now use four blended
+  splits rather than two; frame times are unchanged-to-better and stream-work frames
+  remain in the same range.
+- Asset manifest and `assets/texture_sources.json` record the six M18 derived
+  textures and their attribution.
+
+### Limitations / not verified
+
+- No human keyboard/mouse play-through; all runtime evidence is scripted captures
+  plus headless unit/integration and the windowed perf harness.
+- Runtime captures are frozen-clock; the live day/night transition was validated by
+  the clock tests and earlier M17 cycle captures, not re-recorded as video here.
+- The `boot` phase of one perf run showed a 1.35 s first-use frame (single run;
+  other runs ~50 ms). It looks like one-off engine/first-use work, not a per-frame
+  regression, but it is recorded rather than hidden.
+- Leaf transparency still uses an alpha scissor; the denser leaf texture reduces
+  shimmer/confetti but film-level inspection during a long camera sweep was not
+  performed.
+
+Next useful work (not started): weather/particles, richer bark/grass side variants,
+an in-game quality menu for shadows/SSAO/fog, and a scripted rotating-camera clip
+for shimmer inspection.
+
 ## Renderer investigation — texture corruption and streaming frame-time spikes (2026-10-16, autonomous session)
 
 Two independent defects were reproduced from the 15:39 and 17:27 recordings and fixed.

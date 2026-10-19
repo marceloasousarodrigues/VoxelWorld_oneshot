@@ -15,6 +15,71 @@ extends RefCounted
 const TILE_SIZE := 128
 const SOURCES_PATH := "res://assets/texture_sources.json"
 
+## M18 material grading.  The vendored Minetest textures are high-saturation
+## pixel art; at one tile per metre, their neon greens and noisy contrast read as
+## raw assets rather than a designed palette.  These per-texture
+## brightness/contrast/saturation values pull them toward the M18 palette
+## (restrained grass, umber soil, cool stone, warm sand) while keeping the
+## source art and its attribution untouched on disk.
+const GRADE := {
+	"grass_top": [0.82, 1.04, 0.28],
+	"grass_side": [0.90, 1.02, 0.50],
+	"dry_grass_top": [0.93, 1.01, 0.58],
+	"dry_grass_side": [0.93, 1.01, 0.66],
+	"oak_leaves": [0.90, 1.01, 0.46],
+	"pine_leaves": [0.88, 1.01, 0.44],
+	"dirt": [0.92, 1.02, 0.76],
+	"stone": [0.88, 1.03, 0.88],
+	"cobble": [0.80, 1.04, 0.86],
+	"gravel": [0.90, 1.03, 0.84],
+	"sand": [0.95, 1.01, 0.80],
+	"sandstone": [0.95, 1.01, 0.80],
+	"brick": [0.86, 1.02, 0.60],
+	"stone_brick": [0.62, 1.06, 0.86],
+	"mossy_cobble": [0.82, 1.03, 0.74],
+	"planks": [0.95, 1.01, 0.86],
+	"oak_log_side": [0.94, 1.01, 0.86],
+	"oak_log_top": [0.94, 1.01, 0.86],
+	"pine_log_side": [0.94, 1.01, 0.86],
+	"pine_log_top": [0.94, 1.01, 0.86],
+	"furnace_side": [0.92, 1.01, 0.84],
+	"furnace_top": [0.94, 1.01, 0.86],
+	"water_anim": [0.94, 1.01, 0.55],
+	"deco_grass_1": [0.92, 1.02, 0.58],
+	"deco_grass_2": [0.92, 1.02, 0.58],
+	"deco_grass_3": [0.92, 1.02, 0.58],
+	"deco_grass_4": [0.92, 1.02, 0.58],
+	"deco_grass_5": [0.92, 1.02, 0.58],
+	"deco_jungle_grass": [0.92, 1.02, 0.56],
+	"deco_dry_grass": [0.95, 1.0, 0.72],
+	"cactus_side": [0.94, 1.01, 0.66],
+	"cactus_top": [0.94, 1.01, 0.66],
+}
+
+## Small channel multipliers applied after `adjust_bcs` to warm soil and foliage
+## and cool stone, keeping one consistent light direction across materials.
+const GRADE_TINT := {
+	"grass_top": [1.10, 1.0, 0.88],
+	"grass_side": [1.05, 1.0, 0.94],
+	"oak_leaves": [1.02, 1.0, 0.92],
+	"pine_leaves": [0.98, 1.0, 0.95],
+	"dirt": [1.05, 1.0, 0.93],
+	"stone": [1.0, 1.0, 1.0],
+	"cobble": [1.0, 0.995, 1.0],
+	"stone_brick": [1.0, 0.99, 0.97],
+	"sand": [1.05, 1.0, 0.92],
+	"sandstone": [1.05, 1.0, 0.92],
+	"brick": [1.0, 0.96, 0.94],
+	"planks": [1.03, 1.0, 0.95],
+	"oak_log_side": [1.03, 1.0, 0.95],
+	"oak_log_top": [1.03, 1.0, 0.95],
+	"deco_grass_1": [1.0, 1.0, 0.95],
+	"deco_grass_2": [1.0, 1.0, 0.95],
+	"deco_grass_3": [1.0, 1.0, 0.95],
+	"deco_grass_4": [1.0, 1.0, 0.95],
+	"deco_grass_5": [1.0, 1.0, 0.95],
+}
+
 var tiles: PackedStringArray = PackedStringArray()
 var layer_of: Dictionary = {}
 var animated: Dictionary = {}
@@ -56,9 +121,9 @@ func load_all() -> bool:
 			for frame in frames:
 				var slot := Image.create(image.get_width(), image.get_width(), false, image.get_format())
 				slot.blit_rect(image, Rect2i(0, frame * image.get_width(), image.get_width(), image.get_width()), Vector2i.ZERO)
-				images.append(_prepare(slot))
+				images.append(_prepare(slot, key))
 		else:
-			images.append(_prepare(image))
+			images.append(_prepare(image, key))
 		layer_of[key] = images.size() - 1 if frames <= 1 else images.size() - frames
 		tiles.append(key)
 	if not missing.is_empty():
@@ -96,14 +161,33 @@ func _load_image(path: String) -> Image:
 	return null
 
 
-func _prepare(image: Image) -> Image:
+func _prepare(image: Image, key: String) -> Image:
 	if image.get_width() != TILE_SIZE or image.get_height() != TILE_SIZE:
 		var interpolation := Image.INTERPOLATE_LANCZOS if image.get_width() > TILE_SIZE else Image.INTERPOLATE_NEAREST
 		image.resize(TILE_SIZE, TILE_SIZE, interpolation)
 	if image.get_format() != Image.FORMAT_RGBA8:
 		image.convert(Image.FORMAT_RGBA8)
+	_grade(image, key)
 	image.generate_mipmaps()
 	return image
+
+
+func _grade(image: Image, key: String) -> void:
+	var factors: Variant = GRADE.get(key)
+	if factors != null:
+		image.adjust_bcs(float(factors[0]), float(factors[1]), float(factors[2]))
+	var tint: Variant = GRADE_TINT.get(key)
+	if tint == null:
+		return
+	var red := float(tint[0])
+	var green := float(tint[1])
+	var blue := float(tint[2])
+	var data := image.get_data()
+	for index in range(0, data.size(), 4):
+		data[index] = clampi(int(float(data[index]) * red), 0, 255)
+		data[index + 1] = clampi(int(float(data[index + 1]) * green), 0, 255)
+		data[index + 2] = clampi(int(float(data[index + 2]) * blue), 0, 255)
+	image.set_data(image.get_width(), image.get_height(), false, image.get_format(), data)
 
 
 func layer_index(key: String) -> int:

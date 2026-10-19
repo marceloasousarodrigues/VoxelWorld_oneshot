@@ -10,8 +10,14 @@ texture that already exists inside this repository and is already used by the
 production Ursina game (M12/M14 texture integration), so the Godot port adds no
 new third-party dependency and no new licence obligation.  The 2026-10-19 crafting
 increment added the pack's furnace faces and 26 item icons (materials, food and
-tools) from the same in-repo `MINETEST_TEXTURES` directory; 67 keys are vendored
-now.
+tools) from the same in-repo `MINETEST_TEXTURES` directory; 72 keys are vendored
+now. The M18 visual pass added six *derived* textures (not external downloads):
+`crafting_table_top`, `crafting_table_side`, `furnace_opening`, `glass_clean`,
+`oak_leaves_clean` and `pine_leaves_clean`. They are generated from the same
+Minetest art by `prototypes/m17/godot/tools/generate_m18_textures.py` and keep the
+CC BY-SA 3.0 attribution; `glass_clean` is fully procedural. The M18 runtime
+grading in `TextureLibrary` (brightness/contrast/saturation and channel tints)
+is applied in memory only — the vendored PNGs on disk are unchanged.
 
 ## Textures (block atlas + item icons)
 
