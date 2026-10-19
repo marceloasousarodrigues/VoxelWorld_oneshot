@@ -182,7 +182,7 @@ Evidence:
 | Suite | Result |
 | --- | --- |
 | Unit | **1767 assertions, exit 0** |
-| Integration | **401 assertions, exit 0** |
+| Integration | **402 assertions, exit 0** |
 | Headless smoke ×2 | exit 0, deterministic `world_hash=7821043820538758500`, 392 chunks, **174353 faces**, `faces_hash=665917304729475893` |
 
 The world hash changed by design: tree species, decoration density, steep-slope
@@ -258,7 +258,8 @@ and gameplay, not showcase-only:
   chunks.
 - `test_persistence` round-trips a `TIMBER_FRAME` edit through the save file.
 - `run_integration` drives the real lantern manager: add/remove a lantern,
-  reject a chunk unload leak, and bound the light pool.
+  reject a chunk unload leak, bound the light pool, and asserts a manual save is
+  refused while the showcase mode is active.
 - The showcase calls `StructureDB.stamp` on the same definitions the generator
   uses.
 

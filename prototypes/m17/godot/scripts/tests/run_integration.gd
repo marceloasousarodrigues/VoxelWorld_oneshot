@@ -609,6 +609,19 @@ func _lantern_lights_section() -> void:
 		"unloading a chunk removes its lanterns from the registry")
 	_check(manager.get_child_count() <= 12, "the light pool stays bounded after unload")
 
+	# The showcase must never write into a normal save.  `_save_now` is the
+	# manual path; `_save_silently` is the autosave/quit path and shares the guard.
+	var save_path: String = _game.saves.save_path()
+	var save_existed := FileAccess.file_exists(save_path)
+	var save_time := FileAccess.get_modified_time(save_path)
+	var previous_mode := str(_game._options["visual_test"])
+	_game._options["visual_test"] = "normal"
+	_game._save_now()
+	_check(FileAccess.file_exists(save_path) == save_existed
+		and FileAccess.get_modified_time(save_path) == save_time,
+		"the showcase mode refuses to write a normal save")
+	_game._options["visual_test"] = previous_mode
+
 
 ## Crafting and mining through the real scene: the station is taken from the
 ## world, the panel's own Craft button drives the craft, and the mining rule

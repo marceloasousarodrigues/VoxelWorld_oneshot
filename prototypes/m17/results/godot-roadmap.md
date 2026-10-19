@@ -48,7 +48,7 @@ Design contract: `m22-visual-design.md`; evidence: `m22-progress.md`.
       cottage, market stall, outdoor work area, pond + stream, plank bridge,
       fence/gate, lantern posts, four tree species, flower beds and rocks;
       isolated from saves/creatures/NPCs/raids
-- [x] **Tests**: unit **1767 assertions**, integration **401 assertions**, both
+- [x] **Tests**: unit **1767 assertions**, integration **402 assertions**, both
       exit 0 with empty stderr; smoke hash deterministic
       (`7821043820538758500`, 174353 faces, two identical runs); all new block,
       structure, mesh, recipe, decoration-support, persistence and light-pool
