@@ -190,6 +190,38 @@ func _planted_trees(h: TestHarness) -> void:
 			pine_logs += 1
 	h.greater(float(pine_logs), 2.0, "a planted pine has a taller trunk")
 
+	# M22 tree library: birch and blossom use their own log/leaf blocks and keep
+	# the deterministic production shapes.
+	var birch := VoxelWorld.new(17017)
+	for chunk_y in range(3, 7):
+		birch.ensure_chunk(Vector3i(0, chunk_y, 0))
+		birch.generator.plant_tree(birch, 10, 10, WorldGen.TreeType.BIRCH, 66)
+	var birch_logs := 0
+	var birch_leaves := 0
+	for y in range(67, 96):
+		var block_id := birch.get_block(Vector3i(10, y, 10))
+		if block_id == BlockDB.BIRCH_LOG:
+			birch_logs += 1
+	for dz in range(-4, 5):
+		for dx in range(-4, 5):
+			for y in range(67, 96):
+				if birch.get_block(Vector3i(10 + dx, y, 10 + dz)) == BlockDB.BIRCH_LEAVES:
+					birch_leaves += 1
+	h.greater(float(birch_logs), 2.0, "a planted birch has a pale trunk")
+	h.greater(float(birch_leaves), 5.0, "a planted birch has its own leaves")
+
+	var blossom := VoxelWorld.new(17017)
+	for chunk_y in range(3, 7):
+		blossom.ensure_chunk(Vector3i(0, chunk_y, 0))
+	blossom.generator.plant_tree(blossom, 12, 12, WorldGen.TreeType.BLOSSOM, 66)
+	var blossom_leaves := 0
+	for dz in range(-4, 5):
+		for dx in range(-4, 5):
+			for y in range(67, 96):
+				if blossom.get_block(Vector3i(12 + dx, y, 12 + dz)) == BlockDB.BLOSSOM_LEAVES:
+					blossom_leaves += 1
+	h.greater(float(blossom_leaves), 5.0, "a blossom tree uses the pink accent canopy")
+
 
 ## Boulders are sparse but present: some exposed cobble/mossy stone above the
 ## surface material in a bounded scan.
@@ -210,30 +242,43 @@ func _boulders(h: TestHarness) -> void:
 	h.greater(float(found), 0.0, "boulders appear as exposed rock above the surface (%d cells)" % found)
 
 
-## The reproducible visual test area builds from the production world and
-## contains the materials, stations and water the captures are meant to show.
+## The reproducible M22 showcase builds from the production world and contains
+## the settlement, path, bridge, lanterns and vegetation the captures must show.
 func _visual_arena(h: TestHarness) -> void:
 	h.section("visual test area")
 	var world := VoxelWorld.new(17017)
-	# The arena spans the two-by-two chunk footprint around its centre.
-	for chunk_z in range(-7, -4):
-		for chunk_x in range(3, 6):
+	# The arena spans the four-by-four chunk footprint around its centre.
+	for chunk_z in range(-8, -3):
+		for chunk_x in range(3, 7):
 			for chunk_y in range(3, 6):
 				world.ensure_chunk(Vector3i(chunk_x, chunk_y, chunk_z))
 	var report := VisualTestArena.new().build(world)
-	h.greater(float(report["blocks"]), 100.0, "the visual test area places a substantial scene")
+	h.greater(float(report["blocks"]), 1000.0, "the visual test area places a substantial scene")
 	h.greater(float(report["chunks"]), 0.0, "the visual test area touches loaded chunks")
-	var base := VisualTestArena.CENTER.y + 1
-	h.eq(world.get_block(Vector3i(VisualTestArena.CENTER.x - 2, base, VisualTestArena.CENTER.z)),
-		BlockDB.CRAFTING_TABLE, "the area contains a crafting table")
-	h.eq(world.get_block(Vector3i(VisualTestArena.CENTER.x + 2, base, VisualTestArena.CENTER.z)),
-		BlockDB.FURNACE, "the area contains a furnace")
+	h.greater(float(report["cottage"]), 200.0, "the cottage definition writes a full building")
+	h.greater(float(report["stall"]), 20.0, "the market stall definition writes a work area")
+	h.greater(float(report["path"]), 30.0, "the path is a real winding route")
+	h.greater(float(report["bridge"]), 5.0, "the bridge is placed")
+	h.greater(float(report["lanterns"]), 3.0, "several lanterns are placed")
+	h.greater(float(report["trees"]), 2.0, "several custom trees are planted")
+	h.greater(float(report["decorations"]), 10.0, "flowers and ground cover are scattered")
+	var floor_y := VisualTestArena.FLOOR_Y
+	h.eq(world.get_block(Vector3i(VisualTestArena.CENTER.x - 2, floor_y + 4, VisualTestArena.CENTER.z - 12)),
+		BlockDB.ROOF_TILE, "the cottage has a tiled roof")
+	h.eq(world.get_block(Vector3i(VisualTestArena.CENTER.x - 6, floor_y + 2, VisualTestArena.CENTER.z - 6)),
+		BlockDB.DOOR, "the cottage front has a door")
+	var lanterns := 0
+	for z in range(-14, 15, 2):
+		for x in range(-14, 15, 2):
+			if world.get_block(Vector3i(VisualTestArena.CENTER.x + x, floor_y + 2, VisualTestArena.CENTER.z + z)) == BlockDB.LANTERN:
+				lanterns += 1
+	h.greater(float(lanterns), 0.0, "lantern blocks exist in the showcase")
 	var pond := Vector3i(VisualTestArena.CENTER.x + VisualTestArena.POND_MIN.x,
 		VisualTestArena.CENTER.y, VisualTestArena.CENTER.z + VisualTestArena.POND_MIN.y)
 	h.eq(world.get_block(pond), BlockDB.WATER, "the area contains a water source")
 	h.check(world.is_water_source(pond), "the pond water is a real fluid source")
-	h.eq(world.get_block(Vector3i(VisualTestArena.CENTER.x, base, VisualTestArena.CENTER.z)), BlockDB.AIR,
-		"the clearing above the plaza is open")
+	h.eq(world.get_block(Vector3i(VisualTestArena.CENTER.x, VisualTestArena.BASE_Y + 8, VisualTestArena.CENTER.z)),
+		BlockDB.AIR, "the clearing above the path is open")
 
 
 ## The new sky curves are bounded and land where the renderer expects them.

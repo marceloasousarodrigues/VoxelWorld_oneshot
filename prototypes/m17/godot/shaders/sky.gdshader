@@ -48,7 +48,7 @@ void sky() {
 	float h = dir.y;
 
 	// Base gradient: horizon colour at the horizon, top colour at the zenith.
-	vec3 col = mix(sky_horizon, sky_top, smoothstep(-0.02, 0.55, h));
+	vec3 col = mix(sky_horizon, sky_top, smoothstep(-0.02, 0.35, h));
 
 	// Warm the horizon band in the sun's half of the sky at dawn/dusk.
 	vec3 sun_dir = normalize(LIGHT0_DIRECTION);
@@ -74,7 +74,7 @@ void sky() {
 		vec2 cloud_uv = dir.xz / max(h, 0.09) * cloud_scale;
 		float clouds = fbm(cloud_uv + vec2(TIME * cloud_speed, TIME * cloud_speed * 0.6));
 		float cover = smoothstep(0.42, 0.74, clouds) * smoothstep(0.004, 0.20, h);
-		vec3 cloud_col = mix(sky_horizon, vec3(1.0), 0.72) * (0.42 + 0.58 * day_amount);
+		vec3 cloud_col = mix(sky_horizon, vec3(1.0), 0.45) * (0.46 + 0.54 * day_amount);
 		col = mix(col, cloud_col, cover * cloud_amount);
 	}
 

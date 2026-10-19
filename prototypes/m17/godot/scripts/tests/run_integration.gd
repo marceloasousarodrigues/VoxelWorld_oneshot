@@ -534,6 +534,9 @@ func _main() -> void:
 	# --- M21 farming, cooking and persistent storage ------------------------
 	await _m21_gameplay_section()
 
+	# --- M22 bounded lantern lighting ---------------------------------------
+	await _lantern_lights_section()
+
 	# --- Inventory interface: slots, stack moves and item details ----------
 	await _inventory_section()
 
@@ -554,6 +557,57 @@ func _main() -> void:
 			print("M17_INTEGRATION_FAILURE %s" % failure)
 		print("M17_INTEGRATION_FAIL %d failures, %d passes" % [_failures.size(), _passes])
 		quit(1)
+
+
+## M22 lantern light pool: a lantern near the player is tracked and lit, removing
+## it unregisters it, and a chunk unload removes its lanterns.  The pool is always
+## bounded, so a world full of lanterns cannot create a node per lantern.
+func _lantern_lights_section() -> void:
+	var manager = _game.lantern_lights
+	_check(manager != null, "the game owns a lantern light manager")
+	if manager == null:
+		return
+	var world: VoxelWorld = _game.world
+	var player: Node = _game.player
+	var before := int(manager.stats()["tracked"])
+
+	var cell := Vector3i(12, 74, 12)
+	world.ensure_chunk(VoxelWorld.world_to_chunk(cell))
+	world.set_block(cell, BlockDB.AIR)
+	world.set_block(cell, BlockDB.LANTERN)
+	manager.refresh()
+	_check(int(manager.stats()["tracked"]) == before + 1,
+		"placing a lantern registers it with the bounded light manager")
+	_check(int(manager.stats()["assigned"]) >= 1, "the nearby lantern is assigned a pooled light")
+	_check(manager.get_child_count() <= 12, "the lantern manager never exceeds its light pool")
+	manager.set_daylight(0.0)
+	var night_energy := 0.0
+	if manager.get_child_count() > 0:
+		night_energy = (manager.get_child(0) as OmniLight3D).light_energy
+	_check(night_energy > 1.0, "the lantern light is warm and bright at night")
+	manager.set_daylight(1.0)
+	var day_energy := 0.0
+	if manager.get_child_count() > 0:
+		day_energy = (manager.get_child(0) as OmniLight3D).light_energy
+	_check(day_energy < 0.2, "the lantern light fades out in daylight")
+
+	world.set_block(cell, BlockDB.AIR)
+	manager.refresh()
+	_check(int(manager.stats()["tracked"]) == before,
+		"removing a lantern unregisters its light")
+
+	# A lantern in a chunk that unloads must not leave a light node behind.
+	var far := Vector3i(260, 74, 260)
+	world.ensure_chunk(VoxelWorld.world_to_chunk(far))
+	world.set_block(far, BlockDB.LANTERN)
+	manager.refresh()
+	var with_far := int(manager.stats()["tracked"])
+	_check(with_far == before + 1, "a far lantern is tracked while its chunk is loaded")
+	world.unload_chunk(VoxelWorld.world_to_chunk(far))
+	manager.refresh()
+	_check(int(manager.stats()["tracked"]) == before,
+		"unloading a chunk removes its lanterns from the registry")
+	_check(manager.get_child_count() <= 12, "the light pool stays bounded after unload")
 
 
 ## Crafting and mining through the real scene: the station is taken from the

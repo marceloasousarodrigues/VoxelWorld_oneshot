@@ -23,7 +23,7 @@ const SOURCES_PATH := "res://assets/texture_sources.json"
 ## source art and its attribution untouched on disk.
 const GRADE := {
 	"grass_top": [0.82, 1.04, 0.28],
-	"grass_side": [0.90, 1.02, 0.50],
+	"grass_side": [0.86, 1.02, 0.35],
 	"dry_grass_top": [0.93, 1.01, 0.58],
 	"dry_grass_side": [0.93, 1.01, 0.66],
 	"oak_leaves": [0.90, 1.01, 0.46],

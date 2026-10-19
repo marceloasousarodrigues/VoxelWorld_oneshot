@@ -66,6 +66,17 @@ func run(h: TestHarness) -> void:
 	h.eq(world.get_fluid(water_target), ChunkData.NO_FLUID, "replacing water clears its fluid")
 	h.check(not world.is_water_source(water_target), "replacing water clears the source flag")
 
+	# Removing the block under decoration removes the decoration rather than
+	# leaving a flower or tuft floating in the air.
+	var flower_ground := Vector3i(12, 64, 12)
+	world.ensure_chunk(VoxelWorld.world_to_chunk(flower_ground))
+	world.set_block(flower_ground, BlockDB.GRASS)
+	world.set_block(flower_ground + Vector3i.UP, BlockDB.FLOWER_RED)
+	h.eq(world.get_block(flower_ground + Vector3i.UP), BlockDB.FLOWER_RED, "a flower can stand on grass")
+	world.set_block(flower_ground, BlockDB.AIR)
+	h.eq(world.get_block(flower_ground + Vector3i.UP), BlockDB.AIR,
+		"breaking the supporting block clears the flower")
+
 	# Unloading and regenerating a chunk re-applies the saved edits.
 	var edited_position := Vector3i(3, 64, 3)
 	world.ensure_chunk(VoxelWorld.world_to_chunk(edited_position))
@@ -80,10 +91,19 @@ func run(h: TestHarness) -> void:
 	# empty in the generated world: trees can occupy any given column, so the
 	# topmost air cell of the column is used instead of a fixed height.
 	var fluid_position := Vector3i(2, 64, 2)
-	for y in range(79, 63, -1):
-		if world.get_block(Vector3i(2, y, 2)) == BlockDB.AIR:
-			fluid_position = Vector3i(2, y, 2)
+	var fluid_found := false
+	for local_z in range(0, 16):
+		for local_x in range(0, 16):
+			for y in range(79, 63, -1):
+				if world.get_block(Vector3i(local_x, y, local_z)) == BlockDB.AIR:
+					fluid_position = Vector3i(local_x, y, local_z)
+					fluid_found = true
+					break
+			if fluid_found:
+				break
+		if fluid_found:
 			break
+	h.check(fluid_found, "the edited chunk has an empty cell for a fluid override")
 	h.check(world.set_fluid(fluid_position, 5, false), "a fluid override can be written")
 	world.unload_chunk(coord)
 	world.ensure_chunk(coord)

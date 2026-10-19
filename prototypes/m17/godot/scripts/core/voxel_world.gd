@@ -174,6 +174,15 @@ func set_block(world_position: Vector3i, block_id: int, record_edit: bool = true
 		_record_edit(world_position, block_id, chunk)
 	_flag_neighbours(world_position)
 	block_changed.emit(world_position, previous, block_id)
+	# Decoration is supported by the block below it.  Removing that support (or
+	# replacing it with water) removes the plant too, so a mined grass block never
+	# leaves a flower or tuft floating in the air.  Generation writes chunk arrays
+	# directly, so load order is unaffected.
+	if not is_solid_now and previous != block_id:
+		var above := world_position + Vector3i.UP
+		var above_id := get_block(above)
+		if BlockDB.is_deco(above_id):
+			set_block(above, BlockDB.AIR, record_edit)
 	return true
 
 

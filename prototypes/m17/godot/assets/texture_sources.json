@@ -767,6 +767,186 @@
       "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
       "source": "prototypes/m17/godot/tools/generate_m21_textures.py",
       "width": 64
+    },
+    "birch_log_side": {
+      "description": "birch log side (pale bark)",
+      "file": "m22_birch_log_side.png",
+      "height": 128,
+      "key": "birch_log_side",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "birch_log_top": {
+      "description": "birch log top (growth rings)",
+      "file": "m22_birch_log_top.png",
+      "height": 128,
+      "key": "birch_log_top",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "birch_leaves_clean": {
+      "description": "birch leaves (light, airy canopy)",
+      "file": "m22_birch_leaves_clean.png",
+      "height": 128,
+      "key": "birch_leaves_clean",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "blossom_leaves_clean": {
+      "description": "blossom leaves (pink accent canopy)",
+      "file": "m22_blossom_leaves_clean.png",
+      "height": 128,
+      "key": "blossom_leaves_clean",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "deco_bush": {
+      "description": "bush decoration (crossed quads)",
+      "file": "m22_deco_bush.png",
+      "height": 128,
+      "key": "deco_bush",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "deco_flower_red": {
+      "description": "red wildflower",
+      "file": "m22_deco_flower_red.png",
+      "height": 128,
+      "key": "deco_flower_red",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "deco_flower_yellow": {
+      "description": "yellow wildflower",
+      "file": "m22_deco_flower_yellow.png",
+      "height": 128,
+      "key": "deco_flower_yellow",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "deco_flower_blue": {
+      "description": "blue wildflower",
+      "file": "m22_deco_flower_blue.png",
+      "height": 128,
+      "key": "deco_flower_blue",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "timber_frame": {
+      "description": "timber-framed wall (dark beams over planks)",
+      "file": "m22_timber_frame.png",
+      "height": 128,
+      "key": "timber_frame",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "roof_tile": {
+      "description": "terracotta roof tiles",
+      "file": "m22_roof_tile.png",
+      "height": 128,
+      "key": "roof_tile",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "roof_ridge": {
+      "description": "roof ridge cap",
+      "file": "m22_roof_ridge.png",
+      "height": 128,
+      "key": "roof_ridge",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "path_top": {
+      "description": "packed path top (earth and pebbles)",
+      "file": "m22_path_top.png",
+      "height": 128,
+      "key": "path_top",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "path_side": {
+      "description": "packed path side",
+      "file": "m22_path_side.png",
+      "height": 128,
+      "key": "path_side",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "lantern_side": {
+      "description": "lantern iron frame and warm pane",
+      "file": "m22_lantern_side.png",
+      "height": 128,
+      "key": "lantern_side",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "lantern_top": {
+      "description": "lantern iron cap",
+      "file": "m22_lantern_top.png",
+      "height": 128,
+      "key": "lantern_top",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "fence": {
+      "description": "fence rail timber",
+      "file": "m22_fence.png",
+      "height": 128,
+      "key": "fence",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "barrel_side": {
+      "description": "barrel staves and iron bands",
+      "file": "m22_barrel_side.png",
+      "height": 128,
+      "key": "barrel_side",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "barrel_top": {
+      "description": "barrel lid",
+      "file": "m22_barrel_top.png",
+      "height": 128,
+      "key": "barrel_top",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "door": {
+      "description": "plank door with iron hinges",
+      "file": "m22_door.png",
+      "height": 128,
+      "key": "door",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "roof_side": {
+      "description": "roof eave/edge face",
+      "file": "m22_roof_side.png",
+      "height": 128,
+      "key": "roof_side",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
+      "width": 128
     }
   },
   "version": 1

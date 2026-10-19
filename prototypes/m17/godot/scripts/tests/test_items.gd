@@ -24,7 +24,7 @@ func _setup() -> void:
 
 func _test_item_namespace(h: TestHarness) -> void:
 	h.eq(ItemDB.BLOCK_COUNT, BlockDB.COUNT, "the item namespace covers the block id space")
-	h.eq(ItemDB.COUNT, 73, "the item namespace has the expected size")
+	h.eq(ItemDB.COUNT, 88, "the item namespace has the expected size")
 	h.check(not ItemDB.is_block(ItemDB.STICK), "a material below the M21 blocks is not a block")
 	h.check(not ItemDB.is_block(ItemDB.DIAMOND_PICKAXE), "a tool below the M21 blocks is not a block")
 	h.check(ItemDB.is_block(BlockDB.FARMLAND), "farmland is a placeable block")

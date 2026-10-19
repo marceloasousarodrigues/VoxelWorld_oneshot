@@ -85,8 +85,10 @@ func run(h: TestHarness) -> void:
 	world.ensure_chunk(chunk_coord)
 	var edited := Vector3i(8, 60, 8)
 	var removed := Vector3i(9, 60, 8)
+	var built := Vector3i(10, 60, 8)
 	h.check(world.set_block(edited, BlockDB.PLANKS), "a block is placed before saving")
 	h.check(world.set_block(removed, BlockDB.AIR), "a block is broken before saving")
+	h.check(world.set_block(built, BlockDB.TIMBER_FRAME), "an M22 building block is placed before saving")
 	var fluid_cell := Vector3i(8, 60, 9)
 	world.fluid_overrides[fluid_cell] = 7
 	world.fluid_sources[fluid_cell] = true
@@ -131,7 +133,7 @@ func run(h: TestHarness) -> void:
 	var restored_health := Health.new()
 	var applied: Dictionary = saves.apply(result, restored_world, restored_player, restored_inventory, restored_clock, restored_health)
 	h.check(bool(applied["ok"]), "apply() accepts a save from the same seed")
-	h.eq(int(applied["block_edits"]), 2, "apply() reports the two block edits")
+	h.eq(int(applied["block_edits"]), 3, "apply() reports the three block edits")
 	h.eq(int(applied["fluid_edits"]), 1, "apply() reports the one fluid edit")
 	h.approx(restored_health.health, 13.0, 1e-6, "the saved health survived the round-trip")
 	h.approx(restored_health.max_health, 20.0, 1e-6, "the saved maximum health survived the round-trip")
@@ -139,6 +141,7 @@ func run(h: TestHarness) -> void:
 	h.approx(float(applied["hunger"]), 11.0, 1e-6, "the saved hunger survived the round-trip")
 
 	h.eq(restored_world.get_block(edited), BlockDB.PLANKS, "the placed block survived the round-trip")
+	h.eq(restored_world.get_block(built), BlockDB.TIMBER_FRAME, "the M22 building block survived the round-trip")
 	h.eq(restored_world.get_block(removed), BlockDB.AIR, "the broken block stayed broken")
 	h.check(restored_world.edits.has(edited), "the restored world records the edit")
 	h.eq(int(restored_world.fluid_overrides.get(fluid_cell, -1)), 7, "the fluid override survived")

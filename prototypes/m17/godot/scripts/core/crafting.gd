@@ -61,6 +61,7 @@ static func _build_catalogue() -> Array:
 		# --- Basics: the first minutes -------------------------------------
 		_shapeless("planks_oak", "Basics", STATION_HAND, {BlockDB.OAK_LOG: 1}, BlockDB.PLANKS, 4),
 		_shapeless("planks_pine", "Basics", STATION_HAND, {BlockDB.PINE_LOG: 1}, BlockDB.PLANKS, 4),
+		_shapeless("planks_birch", "Basics", STATION_HAND, {BlockDB.BIRCH_LOG: 1}, BlockDB.PLANKS, 4),
 		_shapeless("sticks", "Basics", STATION_HAND, {BlockDB.PLANKS: 2}, ItemDB.STICK, 4),
 		_shapeless("crafting_table", "Basics", STATION_HAND, {BlockDB.PLANKS: 4}, BlockDB.CRAFTING_TABLE, 1),
 		_shapeless("furnace", "Basics", STATION_TABLE, {BlockDB.COBBLESTONE: 8}, BlockDB.FURNACE, 1),
@@ -72,6 +73,20 @@ static func _build_catalogue() -> Array:
 		_shapeless("brick", "Building", STATION_TABLE, {BlockDB.CLAY: 4}, BlockDB.BRICK, 1),
 		_shaped("chest", "Building", STATION_TABLE, ["PPP", "P P", "PPP"],
 			{"P": BlockDB.PLANKS}, BlockDB.CHEST, 1),
+		# M22 medieval vocabulary: every piece is craftable from mined materials,
+		# so the showcase architecture is also a player-facing building set.
+		_shapeless("timber_frame", "Building", STATION_TABLE,
+			{BlockDB.PLANKS: 4, ItemDB.STICK: 2}, BlockDB.TIMBER_FRAME, 4),
+		_shapeless("packed_path", "Building", STATION_HAND,
+			{BlockDB.DIRT: 2, BlockDB.GRAVEL: 1}, BlockDB.PATH, 3),
+		_shaped("fence", "Building", STATION_TABLE, ["P P", "PSP", "P P"],
+			{"P": BlockDB.PLANKS, "S": ItemDB.STICK}, BlockDB.FENCE, 6),
+		_shaped("door", "Building", STATION_TABLE, ["PP", "PP", "PP"],
+			{"P": BlockDB.PLANKS}, BlockDB.DOOR, 1),
+		_shapeless("barrel", "Building", STATION_TABLE,
+			{BlockDB.PLANKS: 6, ItemDB.IRON_INGOT: 1}, BlockDB.BARREL, 1),
+		_shaped("lantern", "Building", STATION_TABLE, [" I ", "ICI", " I "],
+			{"I": ItemDB.IRON_INGOT, "C": ItemDB.COAL}, BlockDB.LANTERN, 1),
 		# --- Tools ---------------------------------------------------------
 		# Wooden: the first pickaxe, from planks and sticks.
 		_shaped("wood_pickaxe", "Tools", STATION_TABLE, ["PPP", " S ", " S "],
@@ -115,6 +130,7 @@ static func _build_catalogue() -> Array:
 		_smelting("stone_from_cobble", {BlockDB.COBBLESTONE: 1}, BlockDB.STONE, 1),
 		_smelting("brick_from_clay", {BlockDB.CLAY: 1}, BlockDB.BRICK, 1),
 		_smelting("cooked_meat", {ItemDB.RAW_MEAT: 1}, ItemDB.COOKED_MEAT, 1, 5.0),
+		_smelting("roof_tile", {BlockDB.CLAY: 2}, BlockDB.ROOF_TILE, 3, 4.0),
 		# --- Food ----------------------------------------------------------
 		_shapeless("bread", "Food", STATION_HAND, {ItemDB.WHEAT: 3}, ItemDB.BREAD, 1),
 		_shapeless("bone_meal", "Food", STATION_HAND, {ItemDB.BONE: 1}, ItemDB.BONE_MEAL, 2),

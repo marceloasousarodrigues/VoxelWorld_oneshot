@@ -31,6 +31,10 @@ func run(h: TestHarness) -> void:
 			if not library.layer_of.has(key):
 				unresolved += 1
 	h.eq(unresolved, 0, "every non-empty block face key resolves to a texture layer")
+	for key in ["timber_frame", "roof_tile", "roof_ridge", "roof_side", "path_top", "lantern_side",
+			"barrel_side", "door", "birch_log_side", "blossom_leaves_clean",
+			"deco_flower_red", "deco_flower_yellow", "deco_flower_blue", "deco_bush"]:
+		h.check(library.layer_of.has(key), "the M22 texture %s is packed into the array" % key)
 
 	var materials := VoxelMaterials.new(library)
 	var missing := 0

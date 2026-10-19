@@ -133,8 +133,11 @@ func _test_work_loop(h: TestHarness) -> void:
 	h.check(target != Npc.NO_CELL, "the resident finds work in the plot")
 	if target == Npc.NO_CELL:
 		return
-	h.eq(world.get_block(target), BlockDB.OAK_LOG, "the woodcutter targets a log")
-	h.eq(Npc.drop_for(world.get_block(target)), BlockDB.OAK_LOG, "a log drops a log")
+	h.check(BlockDB.is_defined(world.get_block(target)), "the resident targets a real block")
+	h.check(world.get_block(target) in [BlockDB.OAK_LOG, BlockDB.PINE_LOG, BlockDB.BIRCH_LOG],
+		"the woodcutter targets a log")
+	var target_block := world.get_block(target)
+	h.eq(Npc.drop_for(target_block), target_block, "a log drops a log")
 	h.less(float(Vector2(target.x - 8, target.z - 8).length()), float(Npc.GATHER_RADIUS + 1),
 		"the target is within the gathering radius")
 
@@ -153,7 +156,8 @@ func _test_work_loop(h: TestHarness) -> void:
 			gathered = int(events["gathered"])
 		steps += 1
 	h.greater(float(gathered), 0.0, "the resident gathered something in %d steps" % steps)
-	h.eq(gathered, BlockDB.OAK_LOG, "the woodcutter gathered a log")
+	h.check(gathered in [BlockDB.OAK_LOG, BlockDB.PINE_LOG, BlockDB.BIRCH_LOG],
+		"the woodcutter gathered a log")
 	h.eq(world.get_block(target), BlockDB.AIR, "the gathered block was removed from the world")
 	h.eq(Npc.carried_total(state), 1, "the resident is carrying what it gathered")
 	h.eq(int(state["gathered"]), 1, "the resident's gathered count went up")
@@ -169,9 +173,15 @@ func _test_work_loop(h: TestHarness) -> void:
 			delivered = events["delivered"]
 		steps += 1
 	h.check(not delivered.is_empty(), "the resident delivered its load in %d steps" % steps)
-	h.eq(int(delivered.get(BlockDB.OAK_LOG, 0)), Npc.CARRY_CAP, "a full load is delivered at once")
+	var delivered_total := 0
+	for count: int in delivered.values():
+		delivered_total += count
+	h.eq(delivered_total, Npc.CARRY_CAP, "a full load is delivered at once")
 	h.eq(Npc.carried_total(state), 0, "the resident is empty-handed after delivering")
-	h.eq(int(store.get(BlockDB.OAK_LOG, 0)), Npc.CARRY_CAP, "the store holds what was delivered")
+	var stored_total := 0
+	for count: int in store.values():
+		stored_total += count
+	h.eq(stored_total, Npc.CARRY_CAP, "the store holds what was delivered")
 	h.eq(int(state["delivered"]), Npc.CARRY_CAP, "the resident's delivered count went up")
 	h.less(Npc.distance_to_home(state), float(Npc.GATHER_RADIUS + 2), "the resident stays near home")
 

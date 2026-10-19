@@ -55,7 +55,7 @@ const NAMES := ["Bram", "Cora", "Dill", "Elsa", "Fern", "Gwen", "Hale", "Ines",
 	"Jori", "Kell", "Lorn", "Mabel", "Nell", "Oren", "Pia", "Quin", "Rue", "Sten",
 	"Tove", "Ulme", "Vera", "Wren", "Yara", "Zell"]
 
-const WOODCUTTER_BLOCKS := [BlockDB.OAK_LOG, BlockDB.PINE_LOG]
+const WOODCUTTER_BLOCKS := [BlockDB.OAK_LOG, BlockDB.PINE_LOG, BlockDB.BIRCH_LOG]
 const MINER_BLOCKS := [BlockDB.STONE, BlockDB.COAL_ORE, BlockDB.IRON_ORE, BlockDB.COBBLESTONE]
 
 

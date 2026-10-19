@@ -69,6 +69,7 @@ var creature_model
 var creature_nodes: Dictionary = {}
 var creature_root: Node3D
 var _creature_spawn_timer := 0.0
+var lantern_lights: Node3D
 var hostile_model
 var hostile_nodes: Dictionary = {}
 var hostile_root: Node3D
@@ -82,6 +83,7 @@ const StationPanelNode = preload("res://scripts/game/station_panel.gd")
 const StationModel = preload("res://scripts/core/station.gd")
 const StationRegistryModel = preload("res://scripts/core/station_registry.gd")
 const GameSettingsModel = preload("res://scripts/core/game_settings.gd")
+const LanternLightsNode = preload("res://scripts/game/lantern_lights.gd")
 const SETTINGS_PATH := "user://voxelworld_settings.cfg"
 
 ## Seconds of breath left; drained while the player's head is under water.
@@ -109,7 +111,7 @@ var _options := {
 	"fluid_cells_per_tick": 1024,
 	"shadow_distance": 96.0,
 	"shadows": true,
-	"fog_density": 0.0012,
+	"fog_density": 0.0009,
 	"time_of_day": 0.28,
 	"time_rate": 1.0,
 	"capture": false,
@@ -228,9 +230,18 @@ func _build_environment() -> void:
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
 	environment.tonemap_white = 1.0
 	environment.adjustment_enabled = true
-	environment.adjustment_saturation = 1.0
+	environment.adjustment_saturation = 1.05
 	environment.adjustment_contrast = 1.04
 	environment.adjustment_brightness = 1.0
+	# A restrained glow pass makes emissive lantern panes read as warm light
+	# rather than flat orange paint.  It is deliberately weak; see the M22 perf
+	# comparison before increasing it.
+	environment.glow_enabled = true
+	environment.glow_intensity = 0.55
+	environment.glow_strength = 1.0
+	environment.glow_bloom = 0.08
+	environment.glow_hdr_threshold = 1.0
+	environment.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
 	environment.fog_enabled = true
 	environment.fog_light_color = clock.fog_color()
 	# A gentle exponential haze with sun scatter: enough to give distance and
@@ -238,9 +249,9 @@ func _build_environment() -> void:
 	# disables it for comparison captures; `--fog=<density>` retunes it.
 	environment.fog_mode = Environment.FOG_MODE_EXPONENTIAL
 	environment.fog_density = float(_options["fog_density"])
-	environment.fog_sky_affect = 0.45
+	environment.fog_sky_affect = 0.30
 	environment.fog_sun_scatter = 0.22
-	environment.fog_aerial_perspective = 0.35
+	environment.fog_aerial_perspective = 0.28
 	environment.ssao_enabled = true
 	environment.ssao_radius = 0.8
 	environment.ssao_intensity = 0.5
@@ -298,6 +309,8 @@ func _update_sky() -> void:
 	var water := materials.water_material()
 	if water != null:
 		water.set_shader_parameter("water_tint", clock.water_tint())
+	if lantern_lights != null:
+		lantern_lights.set_daylight(clock.daylight())
 
 
 func _set_sun_angles(pitch: float, yaw: float) -> void:
@@ -324,6 +337,10 @@ func _build_nodes() -> void:
 	streamer.mesh_millisecond_budget = float(_options["mesh_budget_ms"])
 	streamer.focus_node = player
 	add_child(streamer)
+
+	lantern_lights = LanternLightsNode.new()
+	lantern_lights.name = "LanternLights"
+	add_child(lantern_lights)
 
 	npc_root = Node3D.new()
 	npc_root.name = "Residents"
@@ -644,6 +661,9 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	fluid.max_milliseconds_per_tick = float(_options["fluid_budget_ms"])
 	world.block_changed.connect(fluid.on_block_changed)
 	streamer.setup(world, mesher)
+	if lantern_lights != null:
+		lantern_lights.setup(world, player)
+		lantern_lights.set_daylight(clock.daylight())
 	player.world = world
 	player.inventory = inventory
 	mesher.stats["builds"] = 0
@@ -775,21 +795,38 @@ func _apply_find_structure() -> void:
 		int(placement["base_y"]), int(placement["z"]), int(placement["biome"])])
 
 
-## Fixed viewpoints for the M18 visual test area.  They are absolute so the same
+## Fixed viewpoints for the M22 visual test area.  They are absolute so the same
 ## `--visual-test` run always produces a comparable capture.
 func _apply_visual_test_view(mode: String) -> void:
 	var centre := VisualTestArena.CENTER
 	var feet := float(VisualTestArena.BASE_Y) + 1.05
 	match mode:
 		"close":
-			player.teleport_to(Vector3(centre.x + 0.5, feet, centre.z + 4.0))
-			player.look_yaw(0.0)
-			player.look_pitch(-12.0)
+			player.teleport_to(Vector3(centre.x + 0.5, feet, centre.z + 3.5))
+			player.look_yaw(12.0)
+			player.look_pitch(-14.0)
 		"wide":
 			player.flying = true
-			player.teleport_to(Vector3(centre.x + 0.5, 90.0, centre.z + 20.0))
+			player.teleport_to(Vector3(centre.x + 18.0, 80.0, centre.z + 6.0))
+			player.look_yaw(90.0)
+			player.look_pitch(-12.0)
+		"cottage":
+			player.teleport_to(Vector3(centre.x - 5.5, feet, centre.z + 3.5))
 			player.look_yaw(0.0)
-			player.look_pitch(-38.0)
+			player.look_pitch(-1.0)
+		"garden":
+			player.teleport_to(Vector3(centre.x - 5.0, feet, centre.z + 7.0))
+			player.look_yaw(8.0)
+			player.look_pitch(-6.0)
+		"bridge":
+			player.flying = true
+			player.teleport_to(Vector3(centre.x + 13.5, feet + 2.0, centre.z + 5.0))
+			player.look_yaw(90.0)
+			player.look_pitch(-14.0)
+		"dusk":
+			player.teleport_to(Vector3(centre.x - 2.0, feet, centre.z + 8.0))
+			player.look_yaw(4.0)
+			player.look_pitch(-4.0)
 		"shore":
 			# East of the pond, raised slightly, looking back across the water and
 			# the plaza so the shoreline and the water surface are both readable.
@@ -803,9 +840,9 @@ func _apply_visual_test_view(mode: String) -> void:
 			player.look_yaw(0.0)
 			player.look_pitch(32.0)
 		_:
-			player.teleport_to(Vector3(centre.x + 0.5, feet, centre.z + 8.0))
+			player.teleport_to(Vector3(centre.x - 0.5, feet, centre.z + 11.5))
 			player.look_yaw(0.0)
-			player.look_pitch(-6.0)
+			player.look_pitch(-3.0)
 	streamer.focus_at(player.global_position)
 
 

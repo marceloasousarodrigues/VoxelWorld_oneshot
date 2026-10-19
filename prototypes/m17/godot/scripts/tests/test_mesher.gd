@@ -113,6 +113,36 @@ func run(h: TestHarness) -> void:
 	h.eq(int(deco_result["faces"]), 2, "a decoration emits two crossed planes")
 	h.check(deco_result["collision"] == null, "decorations add no collision")
 
+	# 6b) Flowers use three planes and bushes four, so they keep a silhouette from
+	# an orbiting camera.  A flower keeps its colour instead of a green multiply.
+	var world6b := VoxelWorld.new(17017)
+	var chunk6b := _make_chunk(world6b, Vector3i.ZERO)
+	chunk6b.blocks[ChunkData.cell_index(4, 8, 4)] = BlockDB.FLOWER_RED
+	chunk6b.blocks[ChunkData.cell_index(8, 8, 8)] = BlockDB.BUSH
+	chunk6b.biomes[ChunkData.column_index(4, 4)] = WorldGen.Biome.FOREST
+	var deco2 := _mesher.build(chunk6b, world6b)
+	h.eq(int(deco2["faces"]), 3 + 4, "flowers emit three planes and bushes four")
+	h.check(deco2["collision"] == null, "flowers and bushes add no collision")
+
+	# 6c) Custom one-cell models (barrel/lantern/fence) emit real geometry and
+	# keep the full-cube collision of a solid block.  The non-solid lantern does
+	# not collide; the fence does.
+	var world6c := VoxelWorld.new(17017)
+	var chunk6c := _make_chunk(world6c, Vector3i.ZERO)
+	chunk6c.blocks[ChunkData.cell_index(4, 8, 4)] = BlockDB.BARREL
+	chunk6c.blocks[ChunkData.cell_index(8, 8, 8)] = BlockDB.FENCE
+	chunk6c.blocks[ChunkData.cell_index(12, 8, 12)] = BlockDB.LANTERN
+	var custom := _mesher.build(chunk6c, world6c)
+	h.greater(float(custom["faces"]), 30.0, "custom models emit more than a cube's six faces")
+	h.check(custom["collision"] != null, "solid custom models keep collision")
+	var glow_vertices := 0
+	var arrays_c: Array = custom["mesh"].surface_get_arrays(0)
+	var custom_uv2: PackedVector2Array = arrays_c[Mesh.ARRAY_TEX_UV2]
+	for value: Vector2 in custom_uv2:
+		if value.y > 0.5:
+			glow_vertices += 1
+	h.greater(float(glow_vertices), 0.0, "the lantern panes carry the emissive flag")
+
 	# 7) Biome tint reaches the vertices of tinted blocks.
 	var world7 := VoxelWorld.new(17017)
 	var chunk7 := _make_chunk(world7, Vector3i.ZERO)

@@ -109,6 +109,7 @@ func run(h: TestHarness) -> void:
 	var logs := 0
 	var leaves := 0
 	var decos := 0
+	var flowers := 0
 	for chunk_x in range(-1, 2):
 		for chunk_z in range(-1, 2):
 			for local_z in ChunkData.SIZE:
@@ -118,15 +119,19 @@ func run(h: TestHarness) -> void:
 					var column_top := world.surface_height(world_x, world_z)
 					for y in range(maxi(1, column_top - 2), mini(WorldGen.WORLD_HEIGHT - 1, column_top + 18)):
 						var block_id := world.get_block(Vector3i(world_x, y, world_z))
-						if block_id == BlockDB.OAK_LOG or block_id == BlockDB.PINE_LOG:
+						if block_id == BlockDB.OAK_LOG or block_id == BlockDB.PINE_LOG or block_id == BlockDB.BIRCH_LOG:
 							logs += 1
-						elif block_id == BlockDB.OAK_LEAVES or block_id == BlockDB.PINE_LEAVES:
+						elif block_id == BlockDB.OAK_LEAVES or block_id == BlockDB.PINE_LEAVES \
+								or block_id == BlockDB.BIRCH_LEAVES or block_id == BlockDB.BLOSSOM_LEAVES:
 							leaves += 1
 						elif BlockDB.is_deco(block_id):
 							decos += 1
+							if BlockDB.is_flower(block_id):
+								flowers += 1
 	h.greater(float(logs), 0.0, "trees grow in the world")
 	h.greater(float(leaves), float(logs), "trees have canopies")
 	h.greater(float(decos), 0.0, "vegetation decorations are placed")
+	h.greater(float(flowers), 0.0, "wildflowers are placed in grass biomes")
 
 	# Biome variety.
 	var seen := {}

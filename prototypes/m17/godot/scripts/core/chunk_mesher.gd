@@ -131,7 +131,9 @@ func _resolve_layers() -> void:
 		for face in 6:
 			face_layer[block_id * 6 + face] = library.layer_index(keys[face]) if not keys[face].is_empty() else 0
 		var occludes := not BlockDB.is_open_model(block_id) and (BlockDB.is_opaque(block_id) \
-			or block_id == BlockDB.OAK_LEAVES or block_id == BlockDB.PINE_LEAVES or block_id == BlockDB.CACTUS)
+			or block_id == BlockDB.OAK_LEAVES or block_id == BlockDB.PINE_LEAVES \
+			or block_id == BlockDB.BIRCH_LEAVES or block_id == BlockDB.BLOSSOM_LEAVES \
+			or block_id == BlockDB.CACTUS)
 		_occluder[block_id] = 1 if occludes else 0
 
 
@@ -362,14 +364,23 @@ func _emit_faces(input: Dictionary) -> void:
 		var local_z := (index / ChunkData.SIZE) % ChunkData.SIZE
 		var local_y := index / LAYER_CELLS
 		var centre := Vector3(local_x + 0.5, local_y + 0.5, local_z + 0.5)
-		var is_deco := solid[block_id] == 0 and liquid[block_id] == 0
+		var is_custom := BlockDB.custom_model[block_id] == 1
+		var is_deco := not is_custom and solid[block_id] == 0 and liquid[block_id] == 0
 		var tint := Color.WHITE
 		var tinted := block_id == BlockDB.GRASS or block_id == BlockDB.DRY_GRASS or block_id == BlockDB.OAK_LEAVES \
-				or block_id == BlockDB.PINE_LEAVES or is_deco
+				or block_id == BlockDB.PINE_LEAVES or block_id == BlockDB.BIRCH_LEAVES \
+				or block_id == BlockDB.BLOSSOM_LEAVES or is_deco
 		if tinted:
 			tint = WorldGen.BIOME_TINTS[biomes[ChunkData.column_index(local_x, local_z)]]
 		var variation := _cell_variation(origin + Vector3i(local_x, local_y, local_z))
 		var body_tint := Color(tint.r * variation, tint.g * variation, tint.b * variation, 1.0)
+		if tinted:
+			var macro := _macro_tint(origin + Vector3i(local_x, local_y, local_z))
+			body_tint = Color(body_tint.r * macro.r, body_tint.g * macro.g, body_tint.b * macro.b, 1.0)
+		if BlockDB.is_flower(block_id):
+			# Flower petals are a deliberate colour accent; a green biome multiply
+			# would turn red and blue blossoms muddy.
+			body_tint = Color(variation, variation, variation, 1.0)
 		if is_deco:
 			_emit_deco(block_id, centre, body_tint)
 			continue
@@ -378,11 +389,9 @@ func _emit_faces(input: Dictionary) -> void:
 		if is_water:
 			layer = BlockDB.LAYER_WATER
 		var surface: Dictionary = _buffers[layer]
-		var is_station := block_id == BlockDB.CRAFTING_TABLE or block_id == BlockDB.FURNACE \
-			or block_id == BlockDB.CHEST
-		if is_station:
-			_emit_station(surface, centre, block_id)
 		var padded_centre := padded_index(local_x, local_y, local_z)
+		if is_custom:
+			_emit_custom(surface, centre, block_id, padded_centre)
 		var surface_height := 1.0
 		if is_water:
 			var above := int(padded[padded_centre + stride[BlockDB.FACE_PY]])
@@ -413,7 +422,7 @@ func _emit_faces(input: Dictionary) -> void:
 						continue
 				elif neighbour == block_id and culls:
 					continue
-			if is_station:
+			if is_custom:
 				# The custom model is not a cube, but its collision and logical
 				# identity still are: keep the full-cube collision on every
 				# exposed face and skip the cube's own render face.
@@ -500,6 +509,34 @@ func _cell_variation(cell: Vector3i) -> float:
 	return VARIATION_MIN + float(roll) / 1000.0 * VARIATION_RANGE
 
 
+## Low-frequency hue/tone variation for grass and foliage.  A 24-block lattice
+## gives large soft patches (the world reads as meadows and glades rather than one
+## flat green), while the per-cell term above still breaks up individual blocks.
+func _macro_tint(cell: Vector3i) -> Color:
+	const SCALE := 24
+	var fx := float(posmod(cell.x, SCALE)) / float(SCALE)
+	var fz := float(posmod(cell.z, SCALE)) / float(SCALE)
+	fx = fx * fx * (3.0 - 2.0 * fx)
+	fz = fz * fz * (3.0 - 2.0 * fz)
+	var x0 := floori(float(cell.x) / float(SCALE))
+	var z0 := floori(float(cell.z) / float(SCALE))
+	var a := _macro_hash(x0, z0)
+	var b := _macro_hash(x0 + 1, z0)
+	var c := _macro_hash(x0, z0 + 1)
+	var d := _macro_hash(x0 + 1, z0 + 1)
+	var value := lerpf(lerpf(a, b, fx), lerpf(c, d, fx), fz)
+	# Cool deep green through warm yellow-green, kept close to neutral so the
+	# biome tint still decides the overall hue.
+	return Color(0.90 + 0.13 * value, 0.97 + 0.05 * value, 0.90 + 0.08 * (1.0 - value))
+
+
+func _macro_hash(x: int, z: int) -> float:
+	var h: int = x * 668265263 + z * 374761393 + 0x51ed270b
+	h = (h ^ (h >> 13)) * 1274126177
+	h = h ^ (h >> 16)
+	return float(absi(h) % 1000) / 1000.0
+
+
 ## Water faces are emitted in chunk-local space like every other layer (the chunk
 ## node carries the world offset), but their UVs are derived from the *world*
 ## position so the animated surface tiles seamlessly across chunk borders.
@@ -547,7 +584,9 @@ func _emit_collision(centre: Vector3, face: int) -> void:
 		indices.append(base_index + quad_index)
 
 
-## Crossed quads for flowers, grass tufts and other non-cube decoration.
+## Crossed quads for flowers, bushes, grass tufts and other non-cube decoration.
+## Grass/ferns use two planes; flowers use three and bushes four so they still
+## read as an object when the camera orbits them, without a mesh per plant.
 func _emit_deco(block_id: int, centre: Vector3, tint: Color) -> void:
 	var surface: Dictionary = _buffers[BlockDB.LAYER_DECO]
 	var vertices: PackedVector3Array = surface["vertex"]
@@ -560,21 +599,27 @@ func _emit_deco(block_id: int, centre: Vector3, tint: Color) -> void:
 	var uv2 := Vector2(float(layer), 0.0)
 	var tone := Color(tint.r, tint.g, tint.b, 1.0)
 	var half := 0.5 - 0.06
+	if BlockDB.is_flower(block_id):
+		half = 0.28
+	elif block_id == BlockDB.BUSH:
+		half = 0.44
 	var bottom := centre + Vector3(0.0, -0.5, 0.0)
 	# Crops are crossed quads too, but their height grows with the stage.  The
 	# bottom stays on the farmland surface; only the top edge moves up.
 	var height := BlockDB.deco_height[block_id] if block_id < BlockDB.deco_height.size() else 1.0
-	var top := bottom + Vector3(0.0, height, 0.0)
-	var plane_a := [
-		bottom + Vector3(-half, 0.0, -half), top + Vector3(-half, 0.0, -half),
-		top + Vector3(half, 0.0, half), bottom + Vector3(half, 0.0, half),
-	]
-	var plane_b := [
-		bottom + Vector3(half, 0.0, -half), top + Vector3(half, 0.0, -half),
-		top + Vector3(-half, 0.0, half), bottom + Vector3(-half, 0.0, half),
-	]
+	var up := Vector3(0.0, height, 0.0)
+	var plane_count := 2
+	if block_id == BlockDB.BUSH:
+		plane_count = 4
+	elif BlockDB.is_flower(block_id):
+		plane_count = 3
 	var quad_uvs: Array = [Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1)]
-	for plane: Array in [plane_a, plane_b]:
+	for plane_index in plane_count:
+		var angle := PI * float(plane_index) / float(plane_count)
+		var direction := Vector3(cos(angle), 0.0, sin(angle))
+		var left := bottom - direction * half
+		var right := bottom + direction * half
+		var plane := [left, left + up, right + up, right]
 		var base_index := vertices.size()
 		for corner_index in 4:
 			vertices.append(plane[corner_index])
@@ -587,20 +632,27 @@ func _emit_deco(block_id: int, centre: Vector3, tint: Color) -> void:
 		surface["faces"] = int(surface["faces"]) + 1
 
 
-## Custom station models.  They are ordinary opaque geometry emitted into the
+## Custom one-cell models.  They are ordinary opaque geometry emitted into the
 ## chunk mesh (no per-block scene nodes) and stay inside the one-metre cell, so
 ## placement, save/load, collision and chunk streaming are unchanged.
-func _emit_station(surface: Dictionary, centre: Vector3, block_id: int) -> void:
-	# A tiny lift keeps the station's bottom faces off the coplanar top face of
-	# the block below it, which otherwise z-fights and reads as a translucent
-	# slab underneath the model.  5 mm is invisible at gameplay distance.
+func _emit_custom(surface: Dictionary, centre: Vector3, block_id: int, padded_centre: int) -> void:
+	# A tiny lift keeps the model's bottom faces off the coplanar top face of the
+	# block below it, which otherwise z-fights and reads as a translucent slab
+	# underneath the model.  5 mm is invisible at gameplay distance.
 	var lifted := centre + Vector3(0.0, 0.005, 0.0)
-	if block_id == BlockDB.CRAFTING_TABLE:
-		_emit_crafting_table(surface, lifted)
-	elif block_id == BlockDB.FURNACE:
-		_emit_furnace(surface, lifted)
-	elif block_id == BlockDB.CHEST:
-		_emit_chest(surface, lifted)
+	match block_id:
+		BlockDB.CRAFTING_TABLE:
+			_emit_crafting_table(surface, lifted)
+		BlockDB.FURNACE:
+			_emit_furnace(surface, lifted)
+		BlockDB.CHEST:
+			_emit_chest(surface, lifted)
+		BlockDB.BARREL:
+			_emit_barrel(surface, lifted)
+		BlockDB.LANTERN:
+			_emit_lantern(surface, lifted)
+		BlockDB.FENCE:
+			_emit_fence(surface, lifted, padded_centre)
 
 
 func _emit_crafting_table(surface: Dictionary, centre: Vector3) -> void:
@@ -695,6 +747,83 @@ func _emit_chest(surface: Dictionary, centre: Vector3) -> void:
 				band_top, band, band_top)
 
 
+## A barrel: staved body with two proud iron bands and a lid.  One-cell model,
+## full-cube collision, ordinary block identity.
+func _emit_barrel(surface: Dictionary, centre: Vector3) -> void:
+	var side := library.layer_index("barrel_side")
+	var top := library.layer_index("barrel_top")
+	var planks := library.layer_index("planks")
+	_emit_box(surface, centre, Vector3(-0.38, -0.5, -0.38), Vector3(0.38, 0.36, 0.38),
+		top, side, planks)
+	# Two bands sit slightly proud of the staves.
+	for y in [-0.36, 0.22]:
+		_emit_box(surface, centre, Vector3(-0.41, y, -0.41), Vector3(0.41, y + 0.08, 0.41),
+			planks, planks, planks)
+	# A slight chime/lip at the top.
+	_emit_box(surface, centre, Vector3(-0.42, 0.36, -0.42), Vector3(0.42, 0.44, 0.42),
+		top, planks, planks)
+
+
+## A hanging lantern: dark iron cap/base, four corner posts and a warm emissive
+## core.  Non-solid, so a player can walk under it; the light itself is provided
+## by the bounded `LanternLights` pool, not by a node per block.
+func _emit_lantern(surface: Dictionary, centre: Vector3) -> void:
+	var side := library.layer_index("lantern_side")
+	var cap := library.layer_index("lantern_top")
+	var iron := library.layer_index("stone")
+	# Thin top and bottom plates, leaving the panes visible between them.  The
+	# model is deliberately smaller than a full block: a lantern is a detail hung
+	# on a fence post, not a glowing crate.
+	_emit_box(surface, centre, Vector3(-0.22, 0.28, -0.22), Vector3(0.22, 0.38, 0.22),
+		cap, cap, cap)
+	_emit_box(surface, centre, Vector3(-0.19, -0.36, -0.19), Vector3(0.19, -0.28, 0.19),
+		side, side, side)
+	# Four posts.
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			var x0: float = 0.16 if sx > 0 else -0.22
+			var z0: float = 0.16 if sz > 0 else -0.22
+			_emit_box(surface, centre, Vector3(x0, -0.30, z0), Vector3(x0 + 0.06, 0.30, z0 + 0.06),
+				iron, iron, iron)
+	# Warm core; every side face carries the emissive flag.
+	_emit_box(surface, centre, Vector3(-0.17, -0.29, -0.17), Vector3(0.17, 0.29, 0.17),
+		cap, side, cap, -2)
+	# Hanging ring, so a lantern on a post reads as hung rather than floating.
+	_emit_box(surface, centre, Vector3(-0.03, 0.38, -0.03), Vector3(0.03, 0.46, 0.03),
+		iron, iron, iron)
+
+
+## A fence post with rails only toward neighbouring fence blocks, so a line of
+## fences connects and a standalone post does not sprout crossbars into the air.
+func _emit_fence(surface: Dictionary, centre: Vector3, padded_centre: int) -> void:
+	var rail := library.layer_index("fence")
+	var post_side := library.layer_index("oak_log_side")
+	var post_top := library.layer_index("oak_log_top")
+	# Post.  The rail texture is designed for the horizontal rails only; using it
+	# on a narrow post made the post read as three stacked boards.
+	_emit_box(surface, centre, Vector3(-0.10, -0.5, -0.10), Vector3(0.10, 0.46, 0.10),
+		post_top, post_side, post_top)
+	# Post cap.
+	_emit_box(surface, centre, Vector3(-0.14, 0.46, -0.14), Vector3(0.14, 0.50, 0.14),
+		post_side, post_side, post_side)
+	var connects_x := _is_fence_neighbour(padded_centre, BlockDB.FACE_PX) \
+		or _is_fence_neighbour(padded_centre, BlockDB.FACE_NX)
+	var connects_z := _is_fence_neighbour(padded_centre, BlockDB.FACE_PZ) \
+		or _is_fence_neighbour(padded_centre, BlockDB.FACE_NZ)
+	if connects_x:
+		for y in [-0.12, 0.24]:
+			_emit_box(surface, centre, Vector3(-0.5, y, -0.06), Vector3(0.5, y + 0.10, 0.06),
+				rail, rail, rail)
+	if connects_z:
+		for y in [-0.12, 0.24]:
+			_emit_box(surface, centre, Vector3(-0.06, y, -0.5), Vector3(0.06, y + 0.10, 0.5),
+				rail, rail, rail)
+
+
+func _is_fence_neighbour(padded_centre: int, face: int) -> bool:
+	return int(_padded[padded_centre + int(FACE_STRIDE[face])]) == BlockDB.FENCE
+
+
 ## Adds an axis-aligned box to a surface.  Textures are mapped 0..1 per face;
 ## this is intentionally simple and only used for small station details.
 func _emit_box(surface: Dictionary, centre: Vector3, box_min: Vector3, box_max: Vector3,
@@ -719,7 +848,8 @@ func _emit_box(surface: Dictionary, centre: Vector3, box_min: Vector3, box_max: 
 		var normal: Vector3 = FACE_NORMALS[face]
 		var shade: float = FACE_SHADE[face]
 		var tone := Color(shade, shade, shade, 1.0)
-		var uv2 := Vector2(float(layer), 1.0 if face == glow_face else 0.0)
+		var glow := face == glow_face or (glow_face == -2 and face != BlockDB.FACE_PY and face != BlockDB.FACE_NY)
+		var uv2 := Vector2(float(layer), 1.0 if glow else 0.0)
 		var base_index := vertices.size()
 		for corner_index in 4:
 			var unit: Vector3 = corners[corner_index]

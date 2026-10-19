@@ -40,6 +40,8 @@ static func _static_init() -> void:
 		_watchtower(),
 		_well(),
 		_ore_outcrop(),
+		_timber_cottage(),
+		_market_stall(),
 	]
 	_by_id.clear()
 	_max_extent = 0
@@ -145,6 +147,82 @@ static func _well() -> Dictionary:
 	}
 
 
+## A timber-framed cottage: stone foundation and floor, dark-beamed walls with
+## plank infill, glass windows, a two-block door, a stepped tiled hip roof with
+## eaves and a ridge, and a furnished interior (table, furnace, chest, barrel,
+## hanging lantern).  The showcase stamps this same definition.
+static func _timber_cottage() -> Dictionary:
+	var t := BlockDB.TIMBER_FRAME
+	var p := BlockDB.PLANKS
+	var g := BlockDB.GLASS
+	var r := BlockDB.ROOF_TILE
+	var k := BlockDB.ROOF_RIDGE
+	return {
+		"id": "timber_cottage",
+		"name": "Timber Cottage",
+		"biomes": [WorldGen.Biome.PLAINS, WorldGen.Biome.FOREST, WorldGen.Biome.SAVANNA],
+		"min_floor_above_sea": 1,
+		"max_slope": 3,
+		"layers": [
+			{"dy": 0, "key": {"F": BlockDB.COBBLESTONE, "B": BlockDB.STONE_BRICK},
+				"rows": ["FFFFFFFFF", "FBBBBBBBF", "FBBBBBBBF", "FBBBBBBBF",
+					"FBBBBBBBF", "FBBBBBBBF", "FFFFFFFFF"]},
+			{"dy": 1, "key": {"T": t, "C": BlockDB.CRAFTING_TABLE, "R": BlockDB.BARREL,
+				"U": BlockDB.FURNACE, "H": BlockDB.CHEST, "D": BlockDB.DOOR},
+				"rows": ["TTTTTTTTT", "T_______T", "T_C___R_T", "T_______T",
+					"T_____U_T", "T_____H_T", "TTTTDTTTT"]},
+			{"dy": 2, "key": {"T": t, "G": g, "P": p, "D": BlockDB.DOOR,
+				"L": BlockDB.LANTERN},
+				"rows": ["TGTTPTTGT", "G_______G", "G___L___G", "G_______G",
+					"G_______G", "G_______G", "TGTTDTTGT"]},
+			{"dy": 3, "key": {"T": t},
+				"rows": ["TTTTTTTTT", "T_______T", "T_______T", "T_______T",
+					"T_______T", "T_______T", "TTTTTTTTT"]},
+			{"dy": 4, "key": {"R": r},
+				"rows": ["RRRRRRRRR", "RRRRRRRRR", "RRRRRRRRR", "RRRRRRRRR",
+					"RRRRRRRRR", "RRRRRRRRR", "RRRRRRRRR"]},
+			{"dy": 5, "key": {"R": r, "C": BlockDB.STONE_BRICK},
+				"rows": [".RRRRRRR.", ".RRRRRRR.", ".RRRRRRR.", ".RRRRRRR.",
+					".RRRRRRC.", ".RRRRRRR.", ".RRRRRRR."]},
+			{"dy": 6, "key": {"R": r, "C": BlockDB.STONE_BRICK},
+				"rows": [".........", "..RRRRR..", "..RRRRR..", "..RRRRR..",
+					"..RRRRC..", "..RRRRR..", "........."]},
+			{"dy": 7, "key": {"K": k, "C": BlockDB.STONE_BRICK},
+				"rows": [".........", ".........", ".........", "...KKK...",
+					"......C..", ".........", "........."]},
+			{"dy": 8, "key": {"C": BlockDB.STONE_BRICK},
+				"rows": [".........", ".........", ".........", ".........",
+					"......C..", ".........", "........."]},
+		],
+	}
+
+
+## A market stall: path apron, log posts, a timber counter, a barrel, and a
+## tiled roof with a ridge cap.  Small enough to read from a distance and built
+## entirely from the shared block vocabulary.
+static func _market_stall() -> Dictionary:
+	return {
+		"id": "market_stall",
+		"name": "Market Stall",
+		"biomes": [WorldGen.Biome.PLAINS, WorldGen.Biome.FOREST, WorldGen.Biome.SAVANNA],
+		"min_floor_above_sea": 1,
+		"max_slope": 2,
+		"layers": [
+			{"dy": 0, "key": {"P": BlockDB.PATH},
+				"rows": ["PPPPP", "PPPPP", "PPPPP"]},
+			{"dy": 1, "key": {"O": BlockDB.OAK_LOG, "T": BlockDB.TIMBER_FRAME,
+				"R": BlockDB.BARREL, "C": BlockDB.CRAFTING_TABLE},
+				"rows": ["O___O", "O_C_O", "OTTTO"]},
+			{"dy": 2, "key": {"O": BlockDB.OAK_LOG},
+				"rows": ["O___O", "_____", "_____"]},
+			{"dy": 3, "key": {"R": BlockDB.ROOF_TILE},
+				"rows": ["RRRRR", "RRRRR", "RRRRR"]},
+			{"dy": 4, "key": {"K": BlockDB.ROOF_RIDGE},
+				"rows": [".....", "..K..", "....."]},
+		],
+	}
+
+
 ## A surface ore outcrop: a cobble patch with coal and iron visible and a little
 ## more in the ground.  The reward is gated behind a pickaxe, so finding it early
 ## is a goal rather than a shortcut.
@@ -232,6 +310,40 @@ static func allows_biome(definition: Dictionary, biome: int) -> bool:
 	return biomes.has(biome)
 
 
+## Writes a definition into a live world at a fixed anchor (the footprint centre)
+## and base height.  Used by the deterministic showcase and available to gameplay
+## code that spawns a structure at runtime; generated structures are written by
+## `WorldGen` for cross-chunk completeness.  Returns the number of changed cells.
+static func stamp(world: VoxelWorld, id: String, anchor: Vector2i, base_y: int) -> int:
+	var definition := definition(id)
+	if definition.is_empty():
+		return 0
+	var size := footprint(definition)
+	var origin_x := anchor.x - (size.x - 1) / 2
+	var origin_z := anchor.y - (size.z - 1) / 2
+	var placed := 0
+	for layer: Dictionary in definition.get("layers", []):
+		var world_y := base_y + int(layer.get("dy", 0))
+		if not world.in_world_vertical(world_y):
+			continue
+		var rows: Array = layer.get("rows", [])
+		for row_index in rows.size():
+			var row := str(rows[row_index])
+			for column in row.length():
+				var block_id := symbol_block(layer, row[column])
+				if block_id == BlockDB.NO_DROP:
+					continue
+				var cell := Vector3i(origin_x + column, world_y, origin_z + row_index)
+				var coord := VoxelWorld.world_to_chunk(cell)
+				if not world.has_chunk(coord):
+					world.ensure_chunk(coord)
+				if world.get_block(cell) == block_id:
+					continue
+				if world.set_block(cell, block_id, false):
+					placed += 1
+	return placed
+
+
 # --- validation -----------------------------------------------------------
 
 ## Returns "" when the definition is well formed, otherwise why it is not.
@@ -279,8 +391,8 @@ static func validate(definition: Dictionary) -> String:
 					return "Row symbol '%s' has no key entry" % symbol
 	if width <= 0 or depth <= 0:
 		return "Structure has no cells"
-	if width > 8 or depth > 8:
-		return "A structure footprint must fit in 8x8 (got %dx%d)" % [width, depth]
+	if width > 12 or depth > 12:
+		return "A structure footprint must fit in 12x12 (got %dx%d)" % [width, depth]
 	if float(definition.get("min_floor_above_sea", 0.0)) < 0.0:
 		return "min_floor_above_sea must not be negative"
 	if int(definition.get("max_slope", 0)) < 0:

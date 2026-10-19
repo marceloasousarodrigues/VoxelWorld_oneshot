@@ -52,6 +52,27 @@ func _test_definitions(h: TestHarness) -> void:
 	h.check(StructureDB.has("hut"), "a definition can be looked up by id")
 	h.check((StructureDB.definition("nope") as Dictionary).is_empty(), "an unknown id resolves to nothing")
 
+	# M22 architecture vocabulary: both new definitions are valid, fit the raised
+	# footprint limit, and use the shared blocks rather than bespoke ids.
+	for id: String in ["timber_cottage", "market_stall"]:
+		var definition := StructureDB.definition(id)
+		h.eq(StructureDB.validate(definition), "", "%s is a valid definition" % id)
+	var cottage := StructureDB.footprint(StructureDB.definition("timber_cottage"))
+	h.eq(cottage, Vector3i(9, 9, 7), "the cottage footprint is 9x7 with nine layers (including the chimney)")
+	var stall := StructureDB.footprint(StructureDB.definition("market_stall"))
+	h.eq(stall, Vector3i(5, 5, 3), "the market stall footprint is 5x3 with five layers")
+	h.check(str(StructureDB.definition("timber_cottage")["name"]) == "Timber Cottage",
+		"the cottage has a readable name")
+	# Stamping the shared definition at runtime produces the same blocks as the
+	# generator's cross-chunk writer.
+	var stamped_world := VoxelWorld.new(17017)
+	var placed := StructureDB.stamp(stamped_world, "timber_cottage", Vector2i(8, 8), 70)
+	h.greater(float(placed), 200.0, "the cottage stamps a complete building")
+	h.eq(stamped_world.get_block(Vector3i(8, 71, 11)), BlockDB.DOOR,
+		"the stamped cottage has its door on the south face")
+	h.eq(stamped_world.get_block(Vector3i(6, 74, 6)), BlockDB.ROOF_TILE,
+		"the stamped cottage has its tiled roof")
+
 	# Every kind must be *placeable*: a non-empty biome list of land biomes and a
 	# reachable floor height.
 	var unplaceable: Array[String] = []
@@ -74,7 +95,7 @@ func _test_definitions(h: TestHarness) -> void:
 		[{"id": "x", "name": "X", "layers": []}, "no layers"],
 		[{"id": "x", "name": "X", "layers": [{"dy": 0, "key": {}, "rows": ["S"]}]}, "an empty key"],
 		[{"id": "x", "name": "X", "layers": [{"dy": 0, "key": {"S": BlockDB.STONE}, "rows": []}]}, "a layer with no rows"],
-		[{"id": "x", "name": "X", "layers": [{"dy": 0, "key": {"S": BlockDB.STONE}, "rows": ["SSSSSSSSS"]}]},
+		[{"id": "x", "name": "X", "layers": [{"dy": 0, "key": {"S": BlockDB.STONE}, "rows": ["SSSSSSSSSSSSS"]}]},
 			"a footprint wider than the limit"],
 		[{"id": "x", "name": "X", "layers": [{"dy": 0, "key": {"S": BlockDB.STONE}, "rows": ["Z"]}]},
 			"a row symbol with no key entry"],
@@ -150,6 +171,8 @@ func _test_siting(h: TestHarness) -> void:
 			bad_siting.append("%s does not sit on the highest footprint column" % placement["id"])
 	h.eq(bad_siting, [], "every placement respects its siting rules")
 	h.greater(float(kinds.size()), 2.0, "a bounded scan finds several kinds (%s)" % ", ".join(kinds.keys()))
+	h.check(kinds.has("timber_cottage"), "the timber cottage appears in normal generation")
+	h.check(kinds.has("market_stall"), "the market stall appears in normal generation")
 
 
 ## The important one: a structure that straddles a chunk boundary is complete when

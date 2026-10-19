@@ -44,10 +44,11 @@ static var BIOME_TINTS := [
 # Blocks that receive the biome tint on their mesh vertices.
 const TINTED_BLOCKS := [
 	BlockDB.GRASS, BlockDB.DRY_GRASS, BlockDB.OAK_LEAVES, BlockDB.PINE_LEAVES,
+	BlockDB.BIRCH_LEAVES, BlockDB.BLOSSOM_LEAVES,
 	BlockDB.GRASS_TUFT, BlockDB.TALL_GRASS, BlockDB.JUNGLE_GRASS, BlockDB.FERN, BlockDB.DRY_SHRUB,
 ]
 
-enum TreeType { NONE, OAK, PINE, CACTUS }
+enum TreeType { NONE, OAK, PINE, CACTUS, BIRCH, BLOSSOM }
 
 var world_seed: int = 17017
 
@@ -119,6 +120,17 @@ func _world_biome(x: int, z: int) -> int:
 	return _column(_column_chunk(x), _column_chunk(z)).biomes[
 		ChunkData.column_index(posmod(x, ChunkData.SIZE), posmod(z, ChunkData.SIZE))
 	]
+
+
+## Largest height difference to the four orthogonal neighbours.  Used to decide
+## whether a surface reads as a walkable meadow or a rock face.
+func _column_slope(x: int, z: int, height: int) -> int:
+	var slope := 0
+	slope = maxi(slope, absi(_world_height(x + 1, z) - height))
+	slope = maxi(slope, absi(_world_height(x - 1, z) - height))
+	slope = maxi(slope, absi(_world_height(x, z + 1) - height))
+	slope = maxi(slope, absi(_world_height(x, z - 1) - height))
+	return slope
 
 
 static func _column_chunk(value: int) -> int:
@@ -281,11 +293,17 @@ func tree_at(x: int, z: int) -> Dictionary:
 	var roll := _hash2(x, z, 31337) % 1000
 	match biome:
 		Biome.FOREST:
+			if roll < 8:
+				return _birch(x, z, height)
+			if roll < 11:
+				return _blossom(x, z, height)
 			if roll < 70:
 				return _oak(x, z, height)
 		Biome.PLAINS:
-			if roll < 5:
+			if roll < 4:
 				return _oak(x, z, height)
+			if roll < 5:
+				return _birch(x, z, height)
 		Biome.SAVANNA:
 			if roll < 9:
 				return _oak(x, z, height)
@@ -306,6 +324,17 @@ func _oak(x: int, z: int, ground: int) -> Dictionary:
 	return {"type": TreeType.OAK, "base": ground + 1, "height": trunk, "canopy": 2 + _hash2(x, z, 555) % 2}
 
 
+func _birch(x: int, z: int, ground: int) -> Dictionary:
+	# Taller and slimmer than an oak, with a lighter, airier crown.
+	var trunk := 6 + _hash2(x, z, 4455) % 3
+	return {"type": TreeType.BIRCH, "base": ground + 1, "height": trunk, "canopy": 2}
+
+
+func _blossom(x: int, z: int, ground: int) -> Dictionary:
+	var trunk := 5 + _hash2(x, z, 4666) % 2
+	return {"type": TreeType.BLOSSOM, "base": ground + 1, "height": trunk, "canopy": 3}
+
+
 func _pine(x: int, z: int, ground: int) -> Dictionary:
 	var trunk := 8 + _hash2(x, z, 8888) % 4
 	return {"type": TreeType.PINE, "base": ground + 1, "height": trunk}
@@ -320,22 +349,40 @@ func decoration_at(x: int, z: int, surface_height: int, surface_block: int, biom
 	var roll := _hash2(x, z, 6151) % 1000
 	match biome:
 		Biome.FOREST:
-			if roll < 150:
+			if roll < 140:
 				return BlockDB.GRASS_TUFT
-			if roll < 195:
+			if roll < 185:
 				return BlockDB.FERN
-			if roll < 225:
+			if roll < 212:
 				return BlockDB.JUNGLE_GRASS
-			if roll < 240:
+			if roll < 226:
 				return BlockDB.TALL_GRASS
+			if roll < 236:
+				return BlockDB.BUSH
+			if roll < 244:
+				return BlockDB.FLOWER_RED
+			if roll < 251:
+				return BlockDB.FLOWER_YELLOW
+			if roll < 258:
+				return BlockDB.FLOWER_BLUE
 		Biome.PLAINS:
-			if roll < 110:
+			if roll < 100:
 				return BlockDB.GRASS_TUFT
-			if roll < 130:
+			if roll < 118:
 				return BlockDB.TALL_GRASS
+			if roll < 128:
+				return BlockDB.BUSH
+			if roll < 136:
+				return BlockDB.FLOWER_RED
+			if roll < 144:
+				return BlockDB.FLOWER_YELLOW
+			if roll < 152:
+				return BlockDB.FLOWER_BLUE
 		Biome.SAVANNA:
-			if roll < 60:
+			if roll < 55:
 				return BlockDB.DRY_SHRUB
+			if roll < 62:
+				return BlockDB.FLOWER_YELLOW
 		Biome.SNOW:
 			if roll < 40:
 				return BlockDB.GRASS_TUFT
@@ -379,6 +426,17 @@ func generate_chunk(chunk: ChunkData) -> void:
 			var world_x := base_x + local_x
 			var world_z := base_z + local_z
 			var surface_block := _surface_block(biome, height)
+			# Steep terrain exposes rock instead of a green carpet draped down a
+			# cliff.  This is the layered / rocky silhouette the visual direction
+			# asks for, and it removes the harsh grass-side striping on mountains.
+			if height > SEA_LEVEL + 2:
+				var slope := _column_slope(world_x, world_z, height)
+				if slope >= 4:
+					surface_block = BlockDB.STONE
+				elif slope >= 2 and (surface_block == BlockDB.GRASS or surface_block == BlockDB.DRY_GRASS):
+					# A hillside face reads as earth, not as a stack of green
+					# ribbons; the grass top stays on the walkable steps.
+					surface_block = BlockDB.DIRT
 			var subsurface := _subsurface_block(biome)
 			var underwater := height < SEA_LEVEL
 			for local_y in ChunkData.SIZE:
@@ -430,12 +488,16 @@ func generate_chunk(chunk: ChunkData) -> void:
 ## Writes directly into the affected chunks, marks them dirty, and returns the
 ## number of chunks touched.  It is a pure function of the seed and the column,
 ## so planting the same tree twice produces the same voxels.
-func plant_tree(world: VoxelWorld, x: int, z: int, tree_type: int) -> int:
-	var ground := _world_height(x, z)
+func plant_tree(world: VoxelWorld, x: int, z: int, tree_type: int, ground_y: int = -1) -> int:
+	var ground := ground_y if ground_y >= 0 else _world_height(x, z)
 	var tree: Dictionary
 	match tree_type:
 		TreeType.OAK:
 			tree = _oak(x, z, ground)
+		TreeType.BIRCH:
+			tree = _birch(x, z, ground)
+		TreeType.BLOSSOM:
+			tree = _blossom(x, z, ground)
 		TreeType.PINE:
 			tree = _pine(x, z, ground)
 		TreeType.CACTUS:
@@ -468,6 +530,10 @@ func plant_tree(world: VoxelWorld, x: int, z: int, tree_type: int) -> int:
 						_place_single_column(chunk, x - base_x, base, z - base_z, int(tree["height"]), BlockDB.CACTUS, base_y)
 					TreeType.PINE:
 						_place_pine(chunk, x - base_x, base, z - base_z, int(tree["height"]), base_y)
+					TreeType.BIRCH:
+						_place_birch(chunk, x - base_x, base, z - base_z, int(tree["height"]), int(tree["canopy"]), base_y)
+					TreeType.BLOSSOM:
+						_place_blossom(chunk, x - base_x, base, z - base_z, int(tree["height"]), int(tree["canopy"]), base_y)
 					_:
 						_place_oak(chunk, x - base_x, base, z - base_z, int(tree["height"]), int(tree["canopy"]), base_y)
 				chunk.mark_dirty()
@@ -492,6 +558,10 @@ func _generate_trees(chunk: ChunkData) -> void:
 				_place_single_column(chunk, world_x - base_x, int(tree["base"]), world_z - base_z, int(tree["height"]), BlockDB.CACTUS, base_y)
 			elif type == TreeType.OAK:
 				_place_oak(chunk, world_x - base_x, int(tree["base"]), world_z - base_z, int(tree["height"]), int(tree["canopy"]), base_y)
+			elif type == TreeType.BIRCH:
+				_place_birch(chunk, world_x - base_x, int(tree["base"]), world_z - base_z, int(tree["height"]), int(tree["canopy"]), base_y)
+			elif type == TreeType.BLOSSOM:
+				_place_blossom(chunk, world_x - base_x, int(tree["base"]), world_z - base_z, int(tree["height"]), int(tree["canopy"]), base_y)
 			else:
 				_place_pine(chunk, world_x - base_x, int(tree["base"]), world_z - base_z, int(tree["height"]), base_y)
 
@@ -517,8 +587,24 @@ func _place_single_column(chunk: ChunkData, local_x: int, world_y: int, local_z:
 
 
 func _place_oak(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk: int, canopy_radius: int, base_y: int) -> void:
+	_place_broadleaf(chunk, local_x, base, local_z, trunk, canopy_radius, base_y,
+		BlockDB.OAK_LOG, BlockDB.OAK_LEAVES)
+
+
+func _place_birch(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk: int, canopy_radius: int, base_y: int) -> void:
+	_place_broadleaf(chunk, local_x, base, local_z, trunk, canopy_radius, base_y,
+		BlockDB.BIRCH_LOG, BlockDB.BIRCH_LEAVES)
+
+
+func _place_blossom(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk: int, canopy_radius: int, base_y: int) -> void:
+	_place_broadleaf(chunk, local_x, base, local_z, trunk, canopy_radius, base_y,
+		BlockDB.OAK_LOG, BlockDB.BLOSSOM_LEAVES)
+
+
+func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk: int,
+		canopy_radius: int, base_y: int, log_block: int, leaf_block: int) -> void:
 	for offset in trunk:
-		_place_block(chunk, local_x, base + offset, local_z, BlockDB.OAK_LOG, base_y, false)
+		_place_block(chunk, local_x, base + offset, local_z, log_block, base_y, false)
 	var top := base + trunk
 	var radius := clampi(canopy_radius, 2, 3)
 	# Rounded crown: seven layers from a narrow underside through the widest
@@ -535,13 +621,13 @@ func _place_oak(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk: 
 					# Trim only the outer corners, and not every one of them.
 					if _hash3(local_x + dx, top + dy, local_z + dz, 5) % 3 != 0:
 						continue
-				_place_block(chunk, local_x + dx, top + dy, local_z + dz, BlockDB.OAK_LEAVES, base_y, true)
+				_place_block(chunk, local_x + dx, top + dy, local_z + dz, leaf_block, base_y, true)
 	# A short branch on each side of the upper trunk gives the silhouette a
-	# recognizable oak shape instead of a single green blob.
+	# recognizable broadleaf shape instead of a single green blob.
 	if trunk >= 6:
-		_place_block(chunk, local_x + 1, top - 2, local_z, BlockDB.OAK_LOG, base_y, false)
-		_place_block(chunk, local_x - 1, top - 1, local_z, BlockDB.OAK_LOG, base_y, false)
-	_place_block(chunk, local_x, top + 2, local_z, BlockDB.OAK_LEAVES, base_y, true)
+		_place_block(chunk, local_x + 1, top - 2, local_z, log_block, base_y, false)
+		_place_block(chunk, local_x - 1, top - 1, local_z, log_block, base_y, false)
+	_place_block(chunk, local_x, top + 2, local_z, leaf_block, base_y, true)
 
 
 func _place_pine(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk: int, base_y: int) -> void:

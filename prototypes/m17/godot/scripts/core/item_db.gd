@@ -58,7 +58,7 @@ const BONE := 70
 const WHEAT_SEEDS := 71
 const BONE_MEAL := 72
 
-const COUNT := 73
+const COUNT := BlockDB.COUNT
 
 ## `BlockDB.AIR` as an item id: "no item".
 const AIR := BlockDB.AIR
@@ -168,13 +168,17 @@ static func _static_init() -> void:
 	# Glass is soft and drops nothing either way, so a pickaxe only speeds it up.
 	_effective_tool[BlockDB.GLASS] = Tool.PICKAXE
 	# Wood family: an axe speeds it up; the drop never needs the axe.
-	for block_id: int in [BlockDB.OAK_LOG, BlockDB.PINE_LOG, BlockDB.PLANKS,
-			BlockDB.CRAFTING_TABLE, BlockDB.CACTUS]:
+	for block_id: int in [BlockDB.OAK_LOG, BlockDB.PINE_LOG, BlockDB.BIRCH_LOG, BlockDB.PLANKS,
+			BlockDB.CRAFTING_TABLE, BlockDB.CACTUS, BlockDB.TIMBER_FRAME, BlockDB.FENCE,
+			BlockDB.BARREL, BlockDB.DOOR]:
 		_effective_tool[block_id] = Tool.AXE
 	# Soft ground: a shovel speeds it up, hand is always good enough.
 	for block_id: int in [BlockDB.GRASS, BlockDB.DIRT, BlockDB.SAND, BlockDB.GRAVEL,
-			BlockDB.SNOW, BlockDB.DRY_GRASS, BlockDB.CLAY]:
+			BlockDB.SNOW, BlockDB.DRY_GRASS, BlockDB.CLAY, BlockDB.PATH]:
 		_effective_tool[block_id] = Tool.SHOVEL
+	# Fired roof tiles are masonry.
+	for block_id: int in [BlockDB.ROOF_TILE, BlockDB.ROOF_RIDGE]:
+		_effective_tool[block_id] = Tool.PICKAXE
 	# Ores and obsidian need a better pick than the minimum.
 	_required_tier[BlockDB.IRON_ORE] = Tier.STONE
 	_required_tier[BlockDB.GOLD_ORE] = Tier.IRON
@@ -375,7 +379,7 @@ static func drop_for_block(block_id: int) -> int:
 static func bonus_drop(block_id: int, x: int, y: int, z: int) -> int:
 	var roll := _hash3(x, y, z, 9173) % 100
 	match block_id:
-		BlockDB.OAK_LEAVES, BlockDB.PINE_LEAVES:
+		BlockDB.OAK_LEAVES, BlockDB.PINE_LEAVES, BlockDB.BIRCH_LEAVES, BlockDB.BLOSSOM_LEAVES:
 			return APPLE if roll < 5 else BlockDB.NO_DROP
 		BlockDB.TALL_GRASS, BlockDB.FERN, BlockDB.JUNGLE_GRASS, BlockDB.GRASS_TUFT:
 			return WHEAT_SEEDS if roll < 18 else BlockDB.NO_DROP

@@ -61,10 +61,30 @@ const WHEAT_2 := 64
 const WHEAT_3 := 65
 const CHEST := 66
 
-const COUNT := 67
-## Number of ids in 0..COUNT-1 that are real blocks (the item-id range 35..60 is
-## deliberately undefined here).
-const DEFINED_COUNT := 41
+# --- M22 vegetation and medieval architecture ------------------------------
+# Ids 67..72 are the M21 animal/farming item ids in `ItemDB`, so the new block
+# ids start after the whole non-block item range.  Keeping that gap is what lets
+# existing saves resolve every item unchanged.
+const BIRCH_LOG := 73
+const BIRCH_LEAVES := 74
+const BLOSSOM_LEAVES := 75
+const BUSH := 76
+const FLOWER_RED := 77
+const FLOWER_YELLOW := 78
+const FLOWER_BLUE := 79
+const TIMBER_FRAME := 80
+const ROOF_TILE := 81
+const ROOF_RIDGE := 82
+const PATH := 83
+const LANTERN := 84
+const FENCE := 85
+const BARREL := 86
+const DOOR := 87
+
+const COUNT := 88
+## Number of ids in 0..COUNT-1 that are real blocks (the item-id ranges 35..60
+## and 67..72 are deliberately undefined here).
+const DEFINED_COUNT := 56
 
 # --- render layers ---------------------------------------------------------
 const LAYER_OPAQUE := 0
@@ -97,6 +117,9 @@ static var opaque: PackedByteArray = PackedByteArray()
 static var open_model: PackedByteArray = PackedByteArray()
 static var cull_same: PackedByteArray = PackedByteArray()
 static var liquid: PackedByteArray = PackedByteArray()
+## Blocks whose visible model is built by a custom one-cell emitter (stations,
+## barrel, lantern, fence) rather than the cube / crossed-quad paths.
+static var custom_model: PackedByteArray = PackedByteArray()
 static var hardness: PackedFloat32Array = PackedFloat32Array()
 static var face_keys: Array = []
 static var drops: PackedInt32Array = PackedInt32Array()
@@ -164,6 +187,43 @@ static func _static_init() -> void:
 		["Storage Chest", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.CHEST,
 			["planks", "planks", "planks"]],
 	])
+	# Ids 67..72 are non-block item ids (raw meat, hide, seeds, ...).  Leave those
+	# slots undefined in the block table, exactly like the 35..60 tool range.
+	while definitions.size() < BIRCH_LOG:
+		definitions.append(["", BlockDB.LAYER_OPAQUE, 0, 0, 0, 0, 0.0, BlockDB.NO_DROP, ["", "", ""]])
+	definitions.append_array([
+		# name, layer, solid, opaque, cull, liquid, hardness, drop, faces
+		["Birch Log", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.BIRCH_LOG,
+			["birch_log_top", "birch_log_side", "birch_log_top"]],
+		["Birch Leaves", BlockDB.LAYER_CUTOUT, 1, 0, 1, 0, 0.2, BlockDB.BIRCH_LEAVES,
+			["birch_leaves_clean", "birch_leaves_clean", "birch_leaves_clean"]],
+		["Blossom Leaves", BlockDB.LAYER_CUTOUT, 1, 0, 1, 0, 0.2, BlockDB.BLOSSOM_LEAVES,
+			["blossom_leaves_clean", "blossom_leaves_clean", "blossom_leaves_clean"]],
+		["Bush", BlockDB.LAYER_DECO, 0, 0, 0, 0, 0.1, BlockDB.BUSH,
+			["deco_bush", "deco_bush", "deco_bush"]],
+		["Red Flower", BlockDB.LAYER_DECO, 0, 0, 0, 0, 0.05, BlockDB.FLOWER_RED,
+			["deco_flower_red", "deco_flower_red", "deco_flower_red"]],
+		["Yellow Flower", BlockDB.LAYER_DECO, 0, 0, 0, 0, 0.05, BlockDB.FLOWER_YELLOW,
+			["deco_flower_yellow", "deco_flower_yellow", "deco_flower_yellow"]],
+		["Blue Flower", BlockDB.LAYER_DECO, 0, 0, 0, 0, 0.05, BlockDB.FLOWER_BLUE,
+			["deco_flower_blue", "deco_flower_blue", "deco_flower_blue"]],
+		["Timber Frame", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.TIMBER_FRAME,
+			["timber_frame", "timber_frame", "timber_frame"]],
+		["Roof Tile", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.ROOF_TILE,
+			["roof_tile", "roof_side", "roof_side"]],
+		["Roof Ridge", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.ROOF_RIDGE,
+			["roof_ridge", "roof_side", "roof_side"]],
+		["Packed Path", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 0.6, BlockDB.PATH,
+			["path_top", "path_side", "dirt"]],
+		["Lantern", BlockDB.LAYER_OPAQUE, 0, 0, 0, 0, 0.3, BlockDB.LANTERN,
+			["lantern_top", "lantern_side", "lantern_top"]],
+		["Fence", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 1.4, BlockDB.FENCE,
+			["fence", "fence", "fence"]],
+		["Barrel", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 1.4, BlockDB.BARREL,
+			["barrel_top", "barrel_side", "barrel_top"]],
+		["Door", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 1.8, BlockDB.DOOR,
+			["door", "door", "door"]],
+	])
 	if definitions.size() != COUNT:
 		push_error("BlockDB: definition table has %d rows, expected %d" % [definitions.size(), COUNT])
 	for definition: Array in definitions:
@@ -179,15 +239,25 @@ static func _static_init() -> void:
 		drops.append(int(definition[7]))
 		face_keys.append(_expand_faces(definition[8]))
 		open_model.append(0)
+		custom_model.append(0)
 		deco_height.append(1.0)
 	open_model[CRAFTING_TABLE] = 1
 	open_model[FURNACE] = 1
 	open_model[CHEST] = 1
+	for block_id: int in [CRAFTING_TABLE, FURNACE, CHEST, LANTERN, FENCE, BARREL]:
+		custom_model[block_id] = 1
+		# A one-cell detail model does not fill the cube: the block it sits on
+		# must keep its top face.
+		open_model[block_id] = 1
 	# Crop stages visibly grow inside the voxel cell.
 	deco_height[WHEAT_0] = 0.34
 	deco_height[WHEAT_1] = 0.56
 	deco_height[WHEAT_2] = 0.78
 	deco_height[WHEAT_3] = 1.0
+	deco_height[BUSH] = 0.92
+	deco_height[FLOWER_RED] = 0.60
+	deco_height[FLOWER_YELLOW] = 0.60
+	deco_height[FLOWER_BLUE] = 0.60
 	if defined.size() != COUNT or _defined_total() != DEFINED_COUNT:
 		push_error("BlockDB: defined block count is %d, expected %d" % [_defined_total(), DEFINED_COUNT])
 
@@ -221,6 +291,17 @@ static func is_opaque(block_id: int) -> bool:
 ## occlude for gameplay/collision, but their neighbours' faces stay visible.
 static func is_open_model(block_id: int) -> bool:
 	return is_defined(block_id) and open_model[block_id] == 1
+
+
+## True for a block whose visible geometry is emitted by a custom one-cell model
+## (stations, barrel, lantern, fence) instead of the cube/crossed-quad paths.
+static func is_custom_model(block_id: int) -> bool:
+	return is_defined(block_id) and custom_model[block_id] == 1
+
+
+## Flowers keep their own colour; biome tint applies to green vegetation only.
+static func is_flower(block_id: int) -> bool:
+	return block_id == FLOWER_RED or block_id == FLOWER_YELLOW or block_id == FLOWER_BLUE
 
 
 static func is_liquid(block_id: int) -> bool:
