@@ -552,11 +552,11 @@ Shadows were confirmed to be the dark patches in the earlier `diag-shore.png`
 ## 9. Resume
 
 Read this file and `godot-roadmap.md`, then run the baseline commands at the end of this
-section. The current baseline is **1238 unit + 184 integration assertions**, both exit 0 with
-0 bytes of stderr, and a spawn-region smoke of `world_hash=441363152919021799`,
-`faces=166074`, `faces_hash=6977993294663025454`, `edits=0` (this has been stable through the
-inventory, structure, settlement and raid increments because none of them touch the terrain
-inside the streamed spawn region; the *earlier* hashes in this file are historical).
+section. The current baseline is **1273 unit + 184 integration assertions**, both exit 0 with
+0 bytes of stderr. The M18 content pass (denser trees, boulders) changed the generated world,
+so the spawn-region smoke is now `world_hash=7995773462820745781`, `faces=170492`,
+`faces_hash=6834793821708419232`, `edits=0`, `meshed=392` at radius 4. All hashes quoted
+earlier in this file are historical (pre-M18 generation); only this one is current.
 
 Phases A, B and C are complete and phase D is well under way. What is implemented and verified
 is listed in `godot-roadmap.md`; the honest remaining gaps are:
