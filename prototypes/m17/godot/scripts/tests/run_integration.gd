@@ -533,6 +533,9 @@ func _main() -> void:
 	# --- Settlements and residents -----------------------------------------
 	await _residents_section()
 
+	# --- Persistence must not duplicate a cursor stack ---------------------
+	await _persistence_cursor_section()
+
 	if _failures.is_empty():
 		print("M17_INTEGRATION_PASS %d assertions" % _passes)
 		quit(0)
@@ -1549,3 +1552,56 @@ func _stations_section() -> void:
 	player.look_pitch(-20.0)
 	for i in range(2):
 		await process_frame
+
+
+## A save or a reload must never leave the temporary cursor stack as a second
+## copy, and must never drop it either.  This is the real-scene regression for
+## "duplicate items through persistence": before the fix, a reload while the
+## inventory was open restored the stack into its slot while the cursor kept its
+## copy, doubling the item.
+func _persistence_cursor_section() -> void:
+	var inventory: Inventory = _game.inventory
+	var panel = _game.inventory_panel
+	panel.close()
+	await process_frame
+
+	# A stack in a storage slot is the reference the duplicates were measured
+	# against.
+	inventory.clear_slot(20)
+	inventory.put_stack(20, {"item": BlockDB.COBBLESTONE, "count": 9})
+	var cobble_total := inventory.count_of(BlockDB.COBBLESTONE)
+	_game._save_now()
+	await process_frame
+	_check(FileAccess.file_exists(_game.saves.save_path()), "the cursor regression save is written")
+
+	# Saving while a stack is held must put it in the model first.
+	_game._open_inventory()
+	await process_frame
+	_check(panel.pick_up(20), "a storage stack is picked up before the save")
+	_check(not panel.carried().is_empty(), "the stack sits on the cursor before the save")
+	_game._save_now()
+	await process_frame
+	_check(panel.carried().is_empty(), "saving returns the cursor stack to the model")
+	_check(inventory.count_of(BlockDB.COBBLESTONE) == cobble_total,
+		"saving a held stack conserves the cobblestone total")
+
+	# A reload while the interface is open must return the cursor first.
+	inventory.clear_slot(21)
+	inventory.put_stack(21, {"item": ItemDB.IRON_LUMP, "count": 4})
+	var iron_total := inventory.count_of(ItemDB.IRON_LUMP)
+	_game._save_now()
+	await process_frame
+	var iron_origin: int = inventory.slots.find(ItemDB.IRON_LUMP)
+	_check(panel.pick_up(iron_origin), "the iron stack is picked up before the reload")
+	var cobble_before := inventory.count_of(BlockDB.COBBLESTONE)
+	_game._reload_now()
+	await process_frame
+	_check(not panel.is_open(), "the inventory interface closes before a reload")
+	_check(panel.carried().is_empty(), "the cursor stack is returned before the reload")
+	_check(inventory.count_of(ItemDB.IRON_LUMP) == iron_total,
+		"reloading with an open inventory does not duplicate the iron")
+	_check(inventory.count_of(BlockDB.COBBLESTONE) == cobble_before,
+		"reloading with an open inventory does not duplicate the cobblestone")
+
+	_game.saves.delete_save()
+	await process_frame

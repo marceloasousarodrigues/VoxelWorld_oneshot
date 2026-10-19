@@ -429,6 +429,33 @@ func open() -> void:
 	visible = true
 
 
+## Puts the cursor stack back into the inventory model, preferring its origin
+## slot.  Returns whatever could not be stored.  `_carried` still owns it.
+func _recover_cursor() -> Dictionary:
+	var leftover := _carried
+	if _carry_origin >= 0 and _carry_origin < Inventory.SIZE:
+		if inventory.is_empty(_carry_origin) \
+				or inventory.item_at(_carry_origin) == int(_carried["item"]):
+			leftover = inventory.put_stack(_carry_origin, leftover)
+	if not leftover.is_empty():
+		leftover = inventory.add_stack(leftover)
+	return leftover
+
+
+## Returns the temporary cursor stack to the model *without* closing the panel,
+## so a save always contains every owned item.  Returns false when there is
+## genuinely no room; the stack stays on the cursor (nothing is destroyed), and
+## the caller must not treat the model as complete.
+func flush_cursor() -> bool:
+	if _carried.is_empty() or inventory == null:
+		return true
+	_carried = _recover_cursor()
+	if _carried.is_empty():
+		_carry_origin = -1
+	_cursor.set_stack(_carried)
+	return _carried.is_empty()
+
+
 ## Closes the interface, recovering a cursor stack:
 ##   1. back into its original slot when that slot is still available,
 ##   2. otherwise into any matching/empty slot,
@@ -436,21 +463,10 @@ func open() -> void:
 ## Returns true when the panel actually closed.
 func close() -> bool:
 	if not _carried.is_empty() and inventory != null:
-		var leftover := _carried
-		if _carry_origin >= 0 and _carry_origin < Inventory.SIZE:
-			if inventory.is_empty(_carry_origin) \
-					or inventory.item_at(_carry_origin) == int(_carried["item"]):
-				leftover = inventory.put_stack(_carry_origin, leftover)
-		if not leftover.is_empty():
-			leftover = inventory.add_stack(leftover)
-		if not leftover.is_empty():
-			_carried = leftover
-			_cursor.set_stack(_carried)
+		if not flush_cursor():
 			message.emit("No room for %d %s — make space before closing" % [
 				int(_carried["count"]), ItemDB.name_of(int(_carried["item"]))])
 			return false
-		_carried = {}
-		_carry_origin = -1
 	_cursor.set_stack({})
 	visible = false
 	return true

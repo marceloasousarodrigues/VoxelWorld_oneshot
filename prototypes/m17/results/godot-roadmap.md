@@ -54,7 +54,13 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       exact station→player shift-click and incompatible right-click regressions,
       a take-result-close-reopen check, 800 randomized inventory-panel operations
       and 600 randomized station transfers, plus real-scene integration coverage
-- [x] Tests: unit **1554** / integration **344** assertions, exit 0, 0 bytes
+- [x] **Persistence/cursor integrity**: a temporary cursor stack is not part of
+      either `Inventory` model, so a save flushes it back first and a reload closes
+      the inventory interface before applying (the second pass reproduced a reload
+      that duplicated a held stack, 25 → 34 cobblestone). `flush_cursor()` on both
+      panels plus `run_integration.gd::_persistence_cursor_section` and
+      `test_m20_stabilization.gd::_test_cursor_flush` pin the invariant
+- [x] Tests: unit **1569** / integration **354** assertions, exit 0, 0 bytes
       stderr; smoke world hash unchanged; `m20-inventory.png`,
       `m20-table.png`, `m20-furnace.png`, `m20-recipes.png` and
       `m20-table-ground.png` inspected
@@ -182,11 +188,13 @@ Design contract: `prototypes/m17/results/m18-visual-design.md`.
       meta-test proves every recipe output is reachable from mining drops and other recipes
       (2026-10-19)
 - [x] Crafting interface — `game/crafting_panel.gd`, opened with C: category filters, a
-      scrollable list, output icons, have/need ingredient counts and per-row status.  **M20**
-      makes this a recipe reference plus hand-crafting entry point: hand recipes carry
-      Craft/x5 buttons; table/furnace recipes show missing ingredients and “use … (E)” but
-      cannot be crafted here, so the station grid/timed furnace is the only station crafting
-      model.  `m20-recipes.png` inspected
+      scrollable list, output icons, have/need ingredient counts and per-row status.  **M20
+      stabilization** makes the catalogue station-gated: a recipe is craftable in the
+      catalogue only when its station (table/furnace) exists in the world and every
+      ingredient/fuel/output check passes, otherwise the row names the missing station or
+      item.  Hand, table and smelting rows all consume through the same atomic
+      `Crafting` transaction as the world-object grids, so `m20-recipes.png` shows the
+      furnace row ready with 8/8 cobblestone at a nearby table
 - [x] Crafting stations: the recipe's `station` must exist **in the world**
       (`Crafting.best_station` scans loaded voxels within interaction reach); a furnace also
       serves table recipes, and smelting needs the furnace plus fuel. New `FURNACE` block id 34
@@ -194,8 +202,8 @@ Design contract: `prototypes/m17/results/m18-visual-design.md`.
       full player inventory, makes grid cells take one ingredient per click/drag/shift-click,
       supports shaped mirroring, and fixes the old four-block station-detection radius that
       could hide table/furnace recipes. Tables/furnaces are targeted with E and keep their
-      contents across close/save/chunk reload; the C-key catalogue is now a reference/hand
-      crafting interface over the same `Crafting` model
+      contents across close/save/chunk reload; the C-key catalogue is now station-gated over
+      the same `Crafting` model
 - [x] Items, tools, tool tiers and durability (2026-10-19) — new `core/item_db.gd` extends the
       id space with 26 non-block items (materials, food, 16 tools in four tiers) while keeping
       block ids unchanged; `Inventory` gained per-slot durability, `wear()` that clears broken

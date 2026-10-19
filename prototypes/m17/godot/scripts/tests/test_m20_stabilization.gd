@@ -298,6 +298,67 @@ func _check_same(h: TestHarness, before: Dictionary, after: Dictionary, label: S
 
 
 # =========================================================================
+# Cursor flush before persistence
+# =========================================================================
+
+## A save or load must not leave a temporary cursor stack as a second copy, and
+## must not drop it either.  Both panels must be able to return the cursor to
+## their models without closing, and refuse to when there is genuinely no room.
+func _test_cursor_flush(h: TestHarness) -> void:
+	h.section("cursor flush before persistence")
+	var inventory := Inventory.new()
+	inventory.give_starter_kit()
+	inventory.add(ItemDB.IRON_LUMP, 10)
+	var panel := InventoryPanel.new()
+	panel.setup(inventory, null)
+	_root().add_child(panel)
+	panel.open()
+	var before := _owned(inventory, panel.carried())
+	panel.pick_up(inventory.slots.find(ItemDB.IRON_LUMP))
+	h.check(not panel.carried().is_empty(), "the stack is on the cursor")
+	h.check(panel.flush_cursor(), "flush_cursor succeeds with room to spare")
+	h.check(panel.carried().is_empty(), "flush_cursor empties the cursor")
+	h.check(panel.is_open(), "flush_cursor keeps the panel open")
+	_check_same(h, before, _owned(inventory, panel.carried()), "flush_cursor conserves the items")
+	panel.free()
+
+	# A genuinely full inventory refuses to flush: nothing may be destroyed.
+	var full := Inventory.new()
+	for index in Inventory.SIZE:
+		full.put_stack(index, {"item": BlockDB.STONE, "count": 64})
+	full.clear_slot(20)
+	full.put_stack(20, {"item": BlockDB.GRAVEL, "count": 5})
+	var full_panel := InventoryPanel.new()
+	full_panel.setup(full, null)
+	_root().add_child(full_panel)
+	full_panel.open()
+	h.check(full_panel.pick_up(20), "the gravel stack is picked up")
+	full.put_stack(20, {"item": BlockDB.DIRT, "count": 64})
+	h.check(not full_panel.flush_cursor(), "a full inventory refuses the flush")
+	h.eq(int(full_panel.carried().get("count", 0)), 5, "the refused cursor stack is preserved")
+	h.eq(full.count_of(BlockDB.GRAVEL), 0, "the refused gravel is not destroyed")
+	full_panel.free()
+
+	# The station interface keeps the same contract.
+	var station_inventory := Inventory.new()
+	station_inventory.give_starter_kit()
+	var table := StationModel.new(StationModel.TABLE)
+	table.inventory.insert(0, {"item": BlockDB.PLANKS, "count": 4})
+	var station_panel := StationPanel.new()
+	station_panel.setup(station_inventory, null)
+	_root().add_child(station_panel)
+	station_panel.open_station(table)
+	var station_before := _owned(station_inventory, station_panel.carried(), table)
+	station_panel.pick_up("station", 0)
+	h.check(not station_panel.carried().is_empty(), "the station stack is on the cursor")
+	h.check(station_panel.flush_cursor(), "the station flush succeeds")
+	h.check(station_panel.carried().is_empty(), "the station cursor is emptied")
+	_check_same(h, station_before, _owned(station_inventory, station_panel.carried(), table),
+		"the station flush conserves the items")
+	station_panel.free()
+
+
+# =========================================================================
 # Ground face under the open station model
 # =========================================================================
 
@@ -319,6 +380,9 @@ func _test_station_ground_face(h: TestHarness) -> void:
 	var station := Vector3i(4, 9, 4)
 	chunk.blocks[ChunkData.cell_index(ground.x, ground.y, ground.z)] = BlockDB.STONE
 	chunk.blocks[ChunkData.cell_index(station.x, station.y, station.z)] = BlockDB.CRAFTING_TABLE
+	# Terrain beside and above the open model must stay visible too.
+	chunk.blocks[ChunkData.cell_index(5, 9, 4)] = BlockDB.STONE
+	chunk.blocks[ChunkData.cell_index(4, 10, 4)] = BlockDB.STONE
 	var result := mesher.build(chunk, world)
 	var arrays: Array = _opaque_arrays(result)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -335,6 +399,10 @@ func _test_station_ground_face(h: TestHarness) -> void:
 			break
 	h.check(ground_top,
 		"the stone top face is emitted under the open-legged crafting table")
+	h.check(_has_face(vertices, normals, 0, 5.0, 0, -1.0),
+		"the stone face beside the table is emitted")
+	h.check(_has_face(vertices, normals, 1, 10.0, 1, -1.0),
+		"the stone face above the table is emitted")
 	h.check(not BlockDB.hides_neighbour_face(BlockDB.STONE, BlockDB.CRAFTING_TABLE),
 		"a station does not cull the ground face below it")
 	h.check(not BlockDB.hides_neighbour_face(BlockDB.STONE, BlockDB.FURNACE),
@@ -366,6 +434,18 @@ func _opaque_arrays(result: Dictionary) -> Array:
 		if (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() > 0:
 			return arrays
 	return []
+
+
+## True when the mesh has a vertex on the given plane with a normal pointing the
+## required way: a compact "is this face emitted" check.
+func _has_face(vertices: PackedVector3Array, normals: PackedVector3Array,
+		plane_axis: int, plane_value: float, normal_axis: int, normal_dir: float) -> bool:
+	for index in vertices.size():
+		if absf(vertices[index][plane_axis] - plane_value) > 0.001:
+			continue
+		if normals[index][normal_axis] * normal_dir > 0.9:
+			return true
+	return false
 
 
 func _test_random_conservation(h: TestHarness) -> void:
@@ -480,5 +560,6 @@ func run(h: TestHarness) -> void:
 	_test_inventory_panel_conservation(h)
 	_test_station_panel_conservation(h)
 	_test_crafting_result_conservation(h)
+	_test_cursor_flush(h)
 	_test_random_conservation(h)
 	h.finish()

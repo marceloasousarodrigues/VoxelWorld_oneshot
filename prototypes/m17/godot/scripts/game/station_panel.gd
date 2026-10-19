@@ -212,6 +212,21 @@ func refresh() -> void:
 	_refresh()
 
 
+## Returns the temporary cursor stack to its origin, then the player, then the
+## station, *without* closing the panel, so a save always contains every owned
+## item.  Returns false when there is genuinely no room; the stack stays on the
+## cursor (nothing is destroyed).
+func flush_cursor() -> bool:
+	if _carried.is_empty() or inventory == null:
+		return true
+	_carried = _recover_cursor()
+	if _carried.is_empty():
+		_carry_origin_side = ""
+		_carry_origin_index = -1
+	_cursor.set_stack(_carried)
+	return _carried.is_empty()
+
+
 ## Closes the interface.  A cursor stack is returned to its origin, then to the
 ## player, then to the station; if every container is full the panel stays open
 ## and explains why, so nothing is silently deleted.  Returns true when closed.

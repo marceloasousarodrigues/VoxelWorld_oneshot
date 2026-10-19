@@ -1973,6 +1973,9 @@ func _on_fly_changed(enabled: bool) -> void:
 # =========================================================================
 
 func _save_now() -> void:
+	if not _flush_cursor_stacks():
+		hud.flash("Make space first — a stack held by the cursor cannot be saved yet", 5.0)
+		return
 	var written := saves.write(world, player, inventory, clock, health, breath, hunger,
 		_npcs_to_dictionary(), _stations_payload())
 	if written:
@@ -1987,11 +1990,32 @@ func _save_now() -> void:
 
 
 func _save_silently(reason: String) -> void:
+	# An interface may hold a temporary cursor stack that is not part of either
+	# inventory model.  Return it before writing, or the save (and the load after
+	# it) would silently drop the item.  An autosave that cannot do so is skipped
+	# and retried after the next interval.
+	if not _flush_cursor_stacks():
+		return
 	if saves.write(world, player, inventory, clock, health, breath, hunger,
 			_npcs_to_dictionary(), _stations_payload()):
 		print("M17_GAME_AUTOSAVE reason=%s block_edits=%d" % [reason, world.edits.size()])
 	else:
 		push_error("M17_GAME_AUTOSAVE_FAILED %s" % saves.last_error)
+
+
+## Returns every open interface's temporary cursor stack to its model so that a
+## save contains all owned items and a load cannot resurrect a stack the cursor
+## still holds (which duplicated it).  Returns false when a stack has nowhere to
+## go; the caller must then leave the live state untouched.
+func _flush_cursor_stacks() -> bool:
+	var ok := true
+	if inventory_panel != null and inventory_panel.is_open() \
+			and not inventory_panel.flush_cursor():
+		ok = false
+	if station_panel != null and station_panel.is_open() \
+			and not station_panel.flush_cursor():
+		ok = false
+	return ok
 
 
 func _stations_payload() -> Array:
@@ -2019,6 +2043,14 @@ func _reload_now() -> void:
 		# The panel holds a reference to a Station from the registry that is
 		# about to be replaced, so close it before applying the save.
 		_close_station()
+	if inventory_panel != null and inventory_panel.is_open():
+		# The temporary cursor stack is not part of the inventory model, so a
+		# reload would restore the same item into its slot while the cursor kept
+		# its copy, duplicating it.  Return the cursor first (and refuse the
+		# reload when it has nowhere to go) so the load is safe.
+		if not inventory_panel.close():
+			hud.flash("Make space first — a held stack must return before loading", 5.0)
+			return
 	var result := saves.read()
 	if not result["ok"]:
 		hud.flash("Load failed: %s" % result["error"], 5.0)

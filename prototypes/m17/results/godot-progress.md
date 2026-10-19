@@ -1,5 +1,70 @@
 # M17 Godot — Progress and Resume Point
 
+## M20 Stabilization — persistence duplication and cursor integrity (2026-10-19, continuation)
+
+Second stabilization pass.  The five reported defects were re-verified against the
+running game rather than assumed fixed; one further inventory-integrity defect was
+reproduced and fixed.
+
+### Reproduced and fixed — save/load duplicated a cursor-held stack
+
+A temporary cursor stack (the M20 replacement for the carry slot) lives in the
+panel, not in either `Inventory` model.  `_reload_now` closed the station panel
+but left the inventory panel open, and a save (`F5`/autosave) wrote only the
+models.  Reproduced in the real scene: put 9 cobblestone in a storage slot, save,
+open the inventory, pick the stack up and press F9 — the model was restored from
+disk while the cursor kept its copy, and the cobblestone total went **25 → 34**.
+The same gap silently *lost* a held stack if a save happened while it was carried.
+
+Fix:
+
+- `InventoryPanel.flush_cursor()` / `StationPanel.flush_cursor()` return the
+  cursor stack to the models without closing (origin slot → matching/empty slot →
+  station) and return false when there is genuinely no room; `close()` now uses
+  the same recovery.
+- `game.gd::_flush_cursor_stacks()` flushes both panels before any save;
+  `_save_now` refuses with a message and `_save_silently` skips when a stack has
+  nowhere to go, so nothing is dropped.
+- `_reload_now()` closes the inventory panel before applying a save (and refuses
+  the load when the cursor cannot return), matching the existing station-panel
+  handling, so a surviving cursor can no longer duplicate the loaded item.
+
+Regression coverage: `test_m20_stabilization.gd::_test_cursor_flush` (flush
+conserves the items; a full inventory refuses and keeps the stack) and
+`run_integration.gd::_persistence_cursor_section` (the exact save → open → pick up
+→ reload sequence, asserting no duplication and that the interface closes).
+
+### Re-verified directly (not assumed) — the five reported defects
+
+- Mining cobblestone, iron ore and coal ore through the real controller adds
+  exactly one drop; the HUD hotbar count and the inventory-panel count match the
+  model; and the counts survive save/reload (scripted real-scene traces plus the
+  existing integration assertions).
+- The furnace recipe is 8 Cobblestone → 1 Furnace at a crafting table.  Away from
+  a table the catalogue row correctly reads “needs Crafting Table”; with a table
+  present it crafts and consumes exactly eight (unit + integration).
+- The ground, side and above faces of terrain under and around the open
+  table/furnace model are emitted; asserted in `test_m20_stabilization.gd`
+  (top, side and above the station) and visible in `m20-table-ground.png`.
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows)
+
+- Unit: **1569 assertions**, exit 0, 0 bytes stderr.
+- Integration: **354 assertions**, exit 0, 0 bytes stderr.
+- Headless smoke: exit 0, 0 bytes stderr, `world_hash=7995773462820745781`,
+  `faces=170492`, `faces_hash=6834793821708419232`, `inventory_used_slots=9`
+  (unchanged world content; only game-layer code changed).
+
+### Limitations
+
+- No human keyboard/mouse play-through; runtime evidence is scripted real-scene
+  probes, integration tests and inspected captures.
+- Returning the cursor before a save means a player holding a stack across an
+  autosave sees it snap back into the inventory; this is the deliberate trade for
+  never dropping it.
+
+---
+
 ## M20 Stabilization — crafting, duplication and station mesh defects (2026-10-19)
 
 Correctness pass over the M20 inventory/station work.  No new gameplay was added;
