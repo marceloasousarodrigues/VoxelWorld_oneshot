@@ -43,8 +43,7 @@ full evidence: `m22-progress.md`.
 
 ### Verification
 
-- Unit **1767 assertions**, integration **402 assertions**, both exit 0 with
-  empty stderr.
+- Unit **1767 assertions**, integration **402 assertions**, both exit 0 with no script errors or assertion failures.
 - Headless smoke twice: `world_hash=7821043820538758500`, 392 chunks,
   **174353 faces**, `faces_hash=665917304729475893` (identical both runs).
   Baseline was 7995773462820745781 / 170492 faces; the change is the intended

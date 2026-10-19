@@ -49,7 +49,7 @@ Design contract: `m22-visual-design.md`; evidence: `m22-progress.md`.
       fence/gate, lantern posts, four tree species, flower beds and rocks;
       isolated from saves/creatures/NPCs/raids
 - [x] **Tests**: unit **1767 assertions**, integration **402 assertions**, both
-      exit 0 with empty stderr; smoke hash deterministic
+      exit 0 with no script errors or assertion failures; smoke hash deterministic
       (`7821043820538758500`, 174353 faces, two identical runs); all new block,
       structure, mesh, recipe, decoration-support, persistence and light-pool
       paths covered
@@ -108,7 +108,7 @@ Design contract: `m22-visual-design.md`; evidence: `m22-progress.md`.
       scene integration for boar loot, planting → save/reload → growth →
       harvest, timed cooking, chest UI, chest persistence and chest recovery
 - [x] Verification: unit **1693 assertions**, integration **391 assertions**,
-      both exit 0 with empty stderr; headless smoke starts and reports
+      both exit 0 with no script errors or assertion failures; headless smoke starts and reports
       `world_hash=7995773462820745781` (untouched generation unchanged);
       inspected `m21-farming.png` (four crop stages, farmland, chest model) and
       `m21-chest.png` (27-slot storage UI); look p95 2.32 ms / settle p95 6.18 ms
