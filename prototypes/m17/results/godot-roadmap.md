@@ -60,7 +60,7 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
       that duplicated a held stack, 25 → 34 cobblestone). `flush_cursor()` on both
       panels plus `run_integration.gd::_persistence_cursor_section` and
       `test_m20_stabilization.gd::_test_cursor_flush` pin the invariant
-- [x] Tests: unit **1569** / integration **354** assertions, exit 0, 0 bytes
+- [x] Tests: unit **1569** / integration **357** assertions, exit 0, 0 bytes
       stderr; smoke world hash unchanged; `m20-inventory.png`,
       `m20-table.png`, `m20-furnace.png`, `m20-recipes.png` and
       `m20-table-ground.png` inspected

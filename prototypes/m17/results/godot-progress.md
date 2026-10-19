@@ -38,8 +38,8 @@ conserves the items; a full inventory refuses and keeps the stack) and
 
 - Mining cobblestone, iron ore and coal ore through the real controller adds
   exactly one drop; the HUD hotbar count and the inventory-panel count match the
-  model; and the counts survive save/reload (scripted real-scene traces plus the
-  existing integration assertions).
+  model (now asserted through `hotbar_count_text` / `slot_count_text` in
+  `run_integration.gd`); and the counts survive save/reload.
 - The furnace recipe is 8 Cobblestone → 1 Furnace at a crafting table.  Away from
   a table the catalogue row correctly reads “needs Crafting Table”; with a table
   present it crafts and consumes exactly eight (unit + integration).
@@ -50,7 +50,7 @@ conserves the items; a full inventory refuses and keeps the stack) and
 ### Verification actually run (Godot 4.7.2 stable mono, Windows)
 
 - Unit: **1569 assertions**, exit 0, 0 bytes stderr.
-- Integration: **354 assertions**, exit 0, 0 bytes stderr.
+- Integration: **357 assertions**, exit 0, 0 bytes stderr.
 - Headless smoke: exit 0, 0 bytes stderr, `world_hash=7995773462820745781`,
   `faces=170492`, `faces_hash=6834793821708419232`, `inventory_used_slots=9`
   (unchanged world content; only game-layer code changed).

@@ -307,6 +307,15 @@ func slot_count() -> int:
 	return _slots.size()
 
 
+## Text of a slot's count badge (empty when the count is 1 or the slot is empty).
+## Diagnostic accessor for the runtime test.
+func slot_count_text(index: int) -> String:
+	for slot: InventorySlot in _slots:
+		if slot.index == index:
+			return (slot._count as Label).text
+	return ""
+
+
 ## Text of the item facts pane, for diagnostics.
 func detail_text() -> String:
 	return _detail.text

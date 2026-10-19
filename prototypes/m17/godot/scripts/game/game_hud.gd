@@ -496,6 +496,14 @@ func debug_visible() -> bool:
 	return _debug_visible
 
 
+## Text of a hotbar slot's count badge (empty when the count is 1 or the slot is
+## empty).  Diagnostic accessor for the runtime test.
+func hotbar_count_text(index: int) -> String:
+	if index < 0 or index >= _counts.size():
+		return ""
+	return (_counts[index] as Label).text
+
+
 func flash(text: String, seconds: float = 2.4) -> void:
 	_message.text = text
 	_message.visible = true

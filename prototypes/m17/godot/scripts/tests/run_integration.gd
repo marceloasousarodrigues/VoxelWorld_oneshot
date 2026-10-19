@@ -763,6 +763,25 @@ func _crafting_and_mining_section() -> void:
 	_check(inventory.count_of(ItemDB.COAL) == coal_before + 1,
 		"the mined coal reached the inventory")
 
+	# The UI must show the authoritative count: the HUD hotbar badge and the
+	# inventory-panel badge both read the same model slot that mining updated.
+	var ui_cobble_slot: int = inventory.slots.find(BlockDB.COBBLESTONE)
+	if ui_cobble_slot >= Inventory.HOTBAR_SIZE:
+		ui_cobble_slot = -1
+	_check(ui_cobble_slot >= 0, "cobblestone is in a hotbar slot for the UI count check")
+	if ui_cobble_slot >= 0:
+		var ui_model_count := inventory.count_at(ui_cobble_slot)
+		var ui_expected := "" if ui_model_count <= 1 else str(ui_model_count)
+		_game.hud.refresh()
+		_check(_game.hud.hotbar_count_text(ui_cobble_slot) == ui_expected,
+			"the HUD hotbar badge matches the mined cobblestone count")
+		_game._open_inventory()
+		await process_frame
+		_check(_game.inventory_panel.slot_count_text(ui_cobble_slot) == ui_expected,
+			"the inventory panel badge matches the mined cobblestone count")
+		_game._close_inventory()
+		await process_frame
+
 	player.look_pitch(0.0)
 	player.teleport_to(Vector3(8.5, 74.0, 8.5))
 	for i in range(2):
