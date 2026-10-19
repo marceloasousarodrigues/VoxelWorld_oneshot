@@ -230,6 +230,12 @@ static func icon_key(item_id: int) -> String:
 		return str(_definitions[item_id].get("icon", ""))
 	if item_id == BlockDB.AIR or not BlockDB.is_defined(item_id):
 		return ""
+	# A few custom models read better as their side texture in the HUD than as
+	# their top face.
+	if item_id == BlockDB.LANTERN:
+		return "lantern_side"
+	if item_id == BlockDB.FENCE:
+		return "fence"
 	return (BlockDB.face_keys[item_id] as PackedStringArray)[BlockDB.FACE_PY]
 
 
