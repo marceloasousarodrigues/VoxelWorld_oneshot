@@ -1,10 +1,12 @@
 # M22 — Lush fantasy wilderness and medieval settlements
 
-Status: active. This is the visual and behavioural contract for the M22 Godot
-work under `prototypes/m17/godot/`. It defines what the milestone means by
-"convincing", how it is reproduced, and what evidence must exist before the
-work is called complete. It does not replace `m18-visual-design.md`; it extends
-that material/geometry contract with a second, architectural vocabulary.
+Status: **implemented and verified** (2026-10-19). This is the visual and
+behavioural contract for the M22 Godot work under `prototypes/m17/godot/`. It
+defines what the milestone means by "convincing", how it is reproduced, and what
+evidence must exist before the work is called complete. It does not replace
+`m18-visual-design.md`; it extends that material/geometry contract with a
+second, architectural vocabulary. Implementation evidence is recorded in
+`m22-progress.md`.
 
 ## 1. Art direction
 
@@ -110,9 +112,11 @@ Required contents:
 8. Wide, close material, vegetation, architecture and dusk viewpoints.
 
 Fixed viewpoints are added to `--visual-test`:
-`normal` (default approach), `wide` (terrain/vegetation/atmosphere),
-`close` (materials/station area), `cottage` (architecture), `garden`
-(vegetation/flowers), `bridge`, and `dusk` (lanterns).
+`normal` (default approach through the south gate), `wide` (east 3/4 view of
+the clearing, forest and sky; capture at render distance 5), `close` (path,
+flowers and cottage materials), `cottage` (front facade), `garden` (flower bed
+and path), `bridge` (deck, water and rails), and `dusk` (lanterns; use
+`--time=0.50`). `--time=0.75` reuses `dusk` for the night capture.
 
 ## 7. Procedural integration
 

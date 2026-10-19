@@ -1,5 +1,80 @@
 # M17 Godot — Progress and Resume Point
 
+## M22 — Stylized voxel world: lush fantasy and medieval settlements (2026-10-19)
+
+Mission: turn the existing Godot world into one coherent stylized voxel place —
+bright, handcrafted fantasy wilderness plus reusable medieval architecture —
+without replacing the voxel architecture.  Contract: `m22-visual-design.md`;
+full evidence: `m22-progress.md`.
+
+### What actually changed
+
+- **New material vocabulary (20 procedural textures)**: birch bark/leaves,
+  blossom leaves, bush, three wildflowers, timber frame, roof tile/ridge/eave,
+  packed path, lantern, fence, barrel and door.  `tools/generate_m22_textures.py`
+  is the reproducible source; no external asset was downloaded.
+- **Block table**: ids 73–87 add the M22 blocks after the M21 item range (67–72),
+  so old item ids/saves are unchanged.  New `is_custom_model` / `is_flower`
+  helpers; `ItemDB.COUNT` tracks the widened block space.
+- **Terrain**: steep columns now expose stone (slope ≥4) or dirt (≥2) instead of
+  grass-side striping; this is the layered/rocky silhouette the brief asks for.
+- **Vegetation**: birch and rare blossom trees join oak/pine; three flower
+  colours and bushes join the grass/fern set.  Flowers use three crossed
+  planes, bushes four, and keep their own hue.  Breaking a support clears the
+  plant above it, so no floating decoration survives harvesting.
+- **Architecture**: `timber_cottage` (stone foundation, timber walls, windows,
+  two-block door, stepped tiled roof with eaves/ridge/chimney, furnished
+  interior) and `market_stall` are reusable `StructureDB` definitions and appear
+  in normal generation.  `StructureDB.stamp()` writes the same data into the
+  showcase.  Craft recipes exist for timber frame, path, fence, door, barrel,
+  lantern and fired roof tiles.
+- **Custom one-cell models**: barrel, lantern with emissive panes, and a
+  neighbour-aware fence (log post + fence rails).  Existing table/furnace/chest
+  unchanged.
+- **Bounded lantern light**: `game/lantern_lights.gd` tracks lantern cells from
+  chunk/edit signals and reuses at most 12 `OmniLight3D`s, fading them out by
+  day and dropping a chunk's entries on unload.
+- **Showcase** (`--visual-test`): 31×31 clearing at (72, 65, −88) with a winding
+  path, cottage, stall/work area, pond + stream, plank bridge, fence/gate,
+  lantern posts, four tree species, flower beds, bushes and boulders.  New fixed
+  views: `wide`, `close`, `cottage`, `garden`, `bridge`, `dusk`.
+- **Atmosphere**: brighter blue sky, lighter horizon/ground-sky, weaker cloud
+  cover, softer fog and a subtle emissive glow pass for lanterns.
+
+### Verification
+
+- Unit **1767 assertions**, integration **401 assertions**, both exit 0 with
+  empty stderr.
+- Headless smoke twice: `world_hash=7821043820538758500`, 392 chunks,
+  **174353 faces**, `faces_hash=665917304729475893` (identical both runs).
+  Baseline was 7995773462820745781 / 170492 faces; the change is the intended
+  new tree/decor/slope/structure content.
+- Performance at radius 4, seed 17017, vsync off (before → after):
+  look p95 3.50 → 3.40 ms, settle p95 5.90 → 5.30 ms, walk p95 5.11 → 4.86 ms;
+  p99 6.67 → 6.48, 11.46 → 10.64, 8.72 → 8.50.  Draw calls ~unchanged.
+  Cross phase p99 5.81 ms, worst 24.1 ms.
+- Windowed captures inspected: `m22-wide-noon.png`, `m22-normal-noon.png`,
+  `m22-close-noon.png`, `m22-cottage-noon.png`, `m22-garden-noon.png`,
+  `m22-bridge-noon.png`, `m22-dusk.png`, `m22-night.png`, and
+  `m22-tour-0..3.png`.
+- Visual checks: no texture swimming, atlas bleed, inverted/missing faces,
+  z-fighting, floating showcase props or chunk seams observed.  The only known
+  visual compromises are the stepped (not smooth) hip roof and a distant
+  background canopy block above the roofline in some eye-level frames; both are
+  listed with the next-step work in `m22-progress.md`.
+
+### Limitations / next tasks
+
+- No human keyboard/mouse play-through; movement was inspected via the scripted
+  four-frame camera tour and automated integration.
+- Roof stairs/slabs would materially improve the roof silhouette.
+- Procedural villages (clustered buildings + path network) and clock-driven
+  window emission are follow-up work; the materials and definitions to build
+  them now exist.
+- `results/godot/game-capture.json` was overwritten by the capture harness while
+  already carrying pre-existing uncommitted changes; it is not committed.  The
+  separate `tests/test_m16_streaming_budget.py` change was not touched.
+
 ## M21 follow-up — harvest-required blocks cannot be broken without the tool (2026-10-19)
 
 User-reported defect: a coal/stone block could be broken with a bare hand and
