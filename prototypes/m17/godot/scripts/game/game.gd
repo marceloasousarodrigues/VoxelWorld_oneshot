@@ -1521,11 +1521,10 @@ func _update_status() -> void:
 			if bool(preview["valid"]):
 				build_text = "RMB place %s on the %s  ·  %d left" % [
 					item_name, VoxelPlayer.face_name(preview["normal"]), count]
-				if int(preview["block"]) == BlockDB.STAIR:
+				if BlockDB.is_orientable(int(preview["block"])):
 					var orientation := int(preview["orientation"])
-					build_text += "  ·  R rotate (%s%s)" % [
-						VoxelPlayer.facing_name(orientation % 4),
-						" upside down" if orientation >= 4 else ""]
+					build_text += "  ·  R rotate (%s)" % VoxelPlayer.orientation_label(
+						int(preview["block"]), orientation)
 			else:
 				build_text = "Cannot place %s: %s" % [item_name, str(preview["reason"])]
 				build_valid = false
@@ -1592,9 +1591,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.is_action_pressed("rotate_placement"):
 			var facing := player.rotate_placement()
 			if facing >= 0:
-				hud.flash("Stair facing %s — RMB places it" % VoxelPlayer.facing_name(facing), 1.6)
+				var held := ItemDB.placeable_block(inventory.selected_item())
+				hud.flash("R: %s - RMB places it" % VoxelPlayer.orientation_label(held, facing), 1.6)
 			else:
-				hud.flash("Hold a stair block to rotate it", 1.4)
+				hud.flash("Hold a stair, slab or ridge block to rotate it", 1.4)
 		elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
 				and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

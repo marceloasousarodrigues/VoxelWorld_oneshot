@@ -947,6 +947,132 @@
       "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
       "source": "prototypes/m17/godot/tools/generate_m22_textures.py",
       "width": 128
+    },
+    "plaster": {
+      "description": "warm lime-plaster infill",
+      "file": "m29_plaster.png",
+      "height": 128,
+      "key": "plaster",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "dark_timber": {
+      "description": "dark structural oak",
+      "file": "m29_dark_timber.png",
+      "height": 128,
+      "key": "dark_timber",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "stone_wall": {
+      "description": "coursed warm-grey medieval stone",
+      "file": "m29_stone_wall.png",
+      "height": 128,
+      "key": "stone_wall",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "timber_brace": {
+      "description": "plaster panel with a diagonal dark brace",
+      "file": "m29_timber_brace.png",
+      "height": 128,
+      "key": "timber_brace",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "slate_tile": {
+      "description": "grey-blue slate shingles",
+      "file": "m29_slate_tile.png",
+      "height": 128,
+      "key": "slate_tile",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "slate_ridge": {
+      "description": "slate ridge cap with warm shadow",
+      "file": "m29_slate_ridge.png",
+      "height": 128,
+      "key": "slate_ridge",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "slate_side": {
+      "description": "exposed slate roof edge and eave underside",
+      "file": "m29_slate_side.png",
+      "height": 128,
+      "key": "slate_side",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "window": {
+      "description": "framed window with glass and mullion",
+      "file": "m29_window.png",
+      "height": 128,
+      "key": "window",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "shutter": {
+      "description": "louvered timber shutter",
+      "file": "m29_shutter.png",
+      "height": 128,
+      "key": "shutter",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "chimney_side": {
+      "description": "sooted chimney masonry",
+      "file": "m29_chimney_side.png",
+      "height": 128,
+      "key": "chimney_side",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "chimney_top": {
+      "description": "chimney cap with a dark flue",
+      "file": "m29_chimney_top.png",
+      "height": 128,
+      "key": "chimney_top",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "finial": {
+      "description": "dark iron ridge finial",
+      "file": "m29_finial.png",
+      "height": 128,
+      "key": "finial",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "flower_box": {
+      "description": "wooden flower-box planter",
+      "file": "m29_flower_box.png",
+      "height": 128,
+      "key": "flower_box",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "flower_box_bloom": {
+      "description": "flower-box leaves and blooms",
+      "file": "m29_flower_box_bloom.png",
+      "height": 128,
+      "key": "flower_box_bloom",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "prototypes/m17/godot/tools/generate_m29_textures.py",
+      "width": 128
     }
   },
   "version": 1

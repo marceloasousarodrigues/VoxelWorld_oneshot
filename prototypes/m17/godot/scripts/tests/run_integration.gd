@@ -541,6 +541,9 @@ func _main() -> void:
 	# --- M23 roof stairs through the real scene -----------------------------
 	await _stairs_section()
 
+	# --- M29 slate roof pieces through the real scene ----------------------
+	await _m29_section()
+
 	# --- Inventory interface: slots, stack moves and item details ----------
 	await _inventory_section()
 
@@ -746,6 +749,112 @@ func _stairs_section() -> void:
 			"stair roof block %d survives unload and regeneration" % index)
 		_check(world.get_orientation(roof + Vector3i(index, 0, 0)) == index,
 			"stair roof orientation %d survives unload and regeneration" % index)
+
+
+## M29 roof pieces through the real scene: the recipe exists, a slate roof stair
+## and ridge are placed from the hotbar with their orientation, the live HUD
+## prompt reports the rotation, and both are mined back for their drop.
+func _m29_section() -> void:
+	var player: VoxelPlayer = _game.player
+	var world: VoxelWorld = _game.world
+	var inventory: Inventory = _game.inventory
+
+	var recipe: Dictionary = Crafting.recipe("slate_roof_stair")
+	_check(not recipe.is_empty(), "the slate roof stair recipe is in the catalogue")
+	_check(int(recipe.get("output", -1)) == BlockDB.SLATE_STAIR,
+		"the roof stair recipe outputs the slate stair")
+	_check(str(recipe.get("station", "")) == Crafting.STATION_TABLE,
+		"the slate roof stair needs a crafting table")
+	var ridge_recipe: Dictionary = Crafting.recipe("slate_ridge")
+	_check(not ridge_recipe.is_empty(), "the slate ridge recipe is in the catalogue")
+	_check(int(ridge_recipe.get("output", -1)) == BlockDB.SLATE_RIDGE,
+		"the ridge recipe outputs the slate ridge")
+
+	var base := Vector3i(30, 90, 30)
+	world.ensure_chunk(VoxelWorld.world_to_chunk(base))
+	for dz in range(2):
+		for dx in range(2):
+			for y in range(base.y, base.y + 6):
+				world.set_block(base + Vector3i(dx, y, dz), BlockDB.AIR, false)
+			world.set_block(base + Vector3i(dx, 0, dz), BlockDB.STONE, false)
+	var stair_cell := base + Vector3i.UP
+	inventory.clear_slot(0)
+	inventory.clear_slot(1)
+	inventory.clear_slot(2)
+	inventory.put_stack(0, {"item": BlockDB.SLATE_STAIR, "count": 4})
+	inventory.select(0)
+	player.placement_facing = -1
+	_check(inventory.selected_item() == BlockDB.SLATE_STAIR, "the slate roof stair is selectable")
+	player.flying = true
+	player.teleport_to(Vector3(stair_cell.x + 0.5, stair_cell.y + 2.0, stair_cell.z + 0.5))
+	player.look_yaw(-90.0)
+	player.look_pitch(-89.0)
+	for i in range(3):
+		await process_frame
+	var aimed: Dictionary = player.target()
+	_check(aimed.get("hit", false) and aimed.get("block", Vector3i.ZERO) == base,
+		"the player aims at the platform before placing the slate roof stair")
+	var before := inventory.count_of(BlockDB.SLATE_STAIR)
+	_check(player.place_selected(), "the player places a slate roof stair from the hotbar")
+	await process_frame
+	_check(world.get_block(stair_cell) == BlockDB.SLATE_STAIR, "the placed cell holds a slate roof stair")
+	_check(world.get_orientation(stair_cell) == 1, "the slate roof stair follows the player's look")
+	_check(inventory.count_of(BlockDB.SLATE_STAIR) == before - 1, "placing consumes one slate stair item")
+	var prompt: String = _game.hud.build_prompt_text()
+	_check(prompt.contains("Slate Stair") and prompt.contains("rotate"),
+		"the HUD prompt offers to rotate the slate roof stair")
+	player.rotate_placement()
+	await process_frame
+	_check(_game.hud.build_prompt_text().contains("+Z"),
+		"the HUD prompt shows the explicit slate stair facing")
+
+	inventory.put_stack(2, {"item": ItemDB.STONE_PICKAXE, "count": 1, "durability": 100})
+	inventory.select(2)
+	player.teleport_to(Vector3(stair_cell.x + 0.5, stair_cell.y + 2.0, stair_cell.z + 0.5))
+	player.look_yaw(-90.0)
+	player.look_pitch(-89.0)
+	for i in range(3):
+		await process_frame
+	var stair_target: Dictionary = player.target()
+	if stair_target.get("hit", false):
+		_check(player.break_target(), "the player mines the slate roof stair")
+		_check(world.get_block(stair_cell) == BlockDB.AIR, "mining removes the slate roof stair")
+		_check(inventory.count_of(BlockDB.SLATE_STAIR) == before, "mining returns the slate stair item")
+
+	var ridge_cell := base + Vector3i(1, 1, 1)
+	inventory.put_stack(1, {"item": BlockDB.SLATE_RIDGE, "count": 2})
+	inventory.select(1)
+	player.placement_facing = -1
+	_check(player.rotate_placement() == 0, "R starts the ridge on its X axis")
+	player.teleport_to(Vector3(ridge_cell.x + 0.5, ridge_cell.y + 2.0, ridge_cell.z + 0.5))
+	player.look_yaw(-90.0)
+	player.look_pitch(-89.0)
+	for i in range(3):
+		await process_frame
+	var ridge_target: Dictionary = player.target()
+	_check(ridge_target.get("hit", false), "the player aims at the platform before placing the ridge")
+	_check(player.place_selected(), "the player places a slate ridge from the hotbar")
+	await process_frame
+	_check(world.get_block(ridge_cell) == BlockDB.SLATE_RIDGE, "the placed cell holds a slate ridge")
+	_check(world.get_orientation(ridge_cell) == 0, "the slate ridge keeps its X axis")
+	var ridge_prompt: String = _game.hud.build_prompt_text()
+	_check(ridge_prompt.contains("long axis X"), "the HUD prompt names the ridge's long axis")
+	player.rotate_placement()
+	await process_frame
+	_check(_game.hud.build_prompt_text().contains("long axis Z"),
+		"rotating the ridge switches its long axis to Z")
+
+	player.teleport_to(Vector3(ridge_cell.x + 0.5, ridge_cell.y + 2.0, ridge_cell.z + 0.5))
+	player.look_yaw(-90.0)
+	player.look_pitch(-89.0)
+	inventory.select(2)
+	for i in range(3):
+		await process_frame
+	var ridge_mine: Dictionary = player.target()
+	if ridge_mine.get("hit", false):
+		_check(player.break_target(), "the player mines the slate ridge")
+		_check(world.get_block(ridge_cell) == BlockDB.AIR, "mining removes the slate ridge")
+	player.flying = false
 
 
 ## Crafting and mining through the real scene: the station is taken from the

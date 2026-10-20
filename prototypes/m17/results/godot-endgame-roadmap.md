@@ -3,8 +3,8 @@
 **Purpose:** Continue the Godot prototype from M23 to a complete, playable, resource-driven voxel building game whose visual language is guided by the supplied Dragon Quest Builders-style references.
 
 **Project:** `prototypes/m17/godot/`  
-**Current handoff:** **M22–M28 are implemented and verified**, plus the post-endgame user request for a **complete starter house near spawn** (M29 in the progress/roadmap docs). The final showcase is a player-authored village + castle built block-by-block on a normal generated world, saved/reloaded through the real `SaveManager`, and captured at day/dusk/night. The final definition of done is met for this roadmap, with the documented caveats that the journey is scripted through the real systems (no human play-through) and the M27 visual gaps remain.  
-**Reference images:** `prototypes/m17/references/visual/dragon-quest-builders/` (see image workflow below).
+**Current handoff:** **M22-M28 and the post-endgame M29 medieval architecture pass are implemented and verified.** M29 replaced the stepped plank roofs with continuous slate ramp roofs, added a 14-block timber/stone/window/shutter/chimney/detail palette, and upgraded the starter cottage plus the longhouse, market stalls and keep. The final showcase remains a player-authored village and castle built block-by-block and saved/reloaded through the real `SaveManager`. Evidence is scripted through the real systems (no human play-through); M27 and M29 visual limitations are documented.
+**Reference images:** `prototypes/m17/references/visual/dragon-quest-builders/` and the M29 architecture targets in `prototypes/m17/references/m29-architecture/` (see image workflow below).
 
 This roadmap complements the existing `prototypes/m17/results/godot-roadmap.md`, `GODOT_MISSION.md`, `AGENTS.md`, and `ARCHITECTURE.md`. It does not replace their rules or change the production Python/Ursina game. Treat this as the playable endgame plan and keep milestone work scoped to one milestone at a time.
 
@@ -151,6 +151,23 @@ If the images are not yet in the repository folder, copy the supplied originals 
 
 **Evidence:** end-to-end route notes, final player-built-world screenshots (broad village/castle, close material/building details, daytime and dusk/night), test/runtime logs, save-reload result, final updated roadmap/progress docs.
 
+### M29 - Medieval Architectural Building System (post-endgame user request) - **COMPLETE 2026-10-20**
+
+**Goal:** Replace the bulky stepped roof and flat M22 building vocabulary with a grounded European-medieval palette: timber-framed cottages, stone foundations, continuous slate roof planes with proper eaves/ridges/gables, chimneys, framed windows, shutters, doors and small details, used by the normal starter house and the player-authored showcase.
+
+**Status:** Delivered. Appended block ids 89-102 (no existing id changed) for plaster, dark timber, stone wall, timber brace, the slate roof family (tile/stair/slab/ridge/ramp), window, shutter, chimney, finial and flower box. A reusable `MedievalKit.build_gable_roof` writes thin slab eaves, continuous 45-degree `SLATE_RAMP` planes, a triangular ridge cap, gable infill, finials and a masonry chimney as ordinary player edits. Orientation/save validation, player rotation/preview/HUD, crafting recipes, tool rules and chunk-mesh collision were extended. The starter cottage, M25 cottage and M28 longhouse/market/keep now use the new palette. Gate: unit **2457 assertions** / integration **463 assertions**, both exit 0; smoke twice `world_hash=2477724327783931144`, `edits=535`; before/after captures `m29-before-cottage.png`, `m29-after-cottage.png`, `m29-after-roof.png`, `m29-build-wide.png`, `m29-final-{wide,village,castle}.png` inspected. Evidence: `godot-progress.md` M29 section.
+
+**Dependencies:** M23 stairs, M24 economy, M25 construction, M26 persistence, M27 materials/visual language, M28 showcase.
+
+**Acceptance criteria (verified):**
+
+- The roof silhouette is continuous rather than stepped; eaves overhang thinly, the ridge is a triangular cap, and the gable/chimney read coherently.
+- A compact reusable set covers timber framing, stonework, window frames, shutters, doors and decorative details; every piece is craftable, placeable, rotatable where meaningful, mineable, collidable, streamed, and save/load safe.
+- Materials are internally consistent (warm plaster, dark timber, warm-grey stone, mid-dark slate, muted glass) and visibly improved over the old plank/terracotta roof.
+- The normal-game starter cottage and the larger showcase are built from ordinary blocks through the real world/player APIs, not a stamped prefab.
+- M23-M28 behavior and existing save ids remain intact; unit, integration, smoke and windowed captures were run and the known limits are reported honestly.
+
+**Evidence:** `godot-progress.md` M29 section, `tools/generate_m29_textures.py`, `scripts/game/medieval_kit.gd`, `scripts/tests/test_m29_architecture.gd`, and the `m29-*.png` captures under `prototypes/m17/results/godot/`.
 ## Dependencies at a glance
 
 `M23 stairs` → `M24 reachable resource/building economy` → `M25 expressive reliable construction` → `M26 durable saves and streaming` → `M27 normal-world visual refinement` → `M28 complete end-to-end playable proof`.

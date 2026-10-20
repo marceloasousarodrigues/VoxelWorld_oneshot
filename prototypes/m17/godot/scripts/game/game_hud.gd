@@ -390,7 +390,7 @@ func refresh() -> void:
 			text += "   %d / %d" % [inventory.durability_of(inventory.selected), max_wear]
 		_selected_label.text = "%s   (slot %d)" % [text, inventory.selected + 1]
 	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  hold LMB mine  ·  RMB build/eat  ·  E use  ·  C recipes  ·  I inventory  ·  O settings\n" \
-		+ "1-9 or mouse wheel select  ·  R rotate stair  ·  F fly  ·  F5 save  ·  F9 load  ·  F3 debug  ·  Esc pause"
+		+ "1-9 or mouse wheel select  ·  R rotate piece  ·  F fly  ·  F5 save  ·  F9 load  ·  F3 debug  ·  Esc pause"
 
 
 func _refresh_durability(index: int, item_id: int) -> void:

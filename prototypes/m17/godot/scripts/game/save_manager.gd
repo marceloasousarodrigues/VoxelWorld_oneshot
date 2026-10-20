@@ -409,8 +409,11 @@ func _sanitise_block_rows(candidate: Variant, version: int) -> Variant:
 		if orientation < 0 or orientation > 7:
 			last_error = "a block edit row has an invalid orientation"
 			return null
-		if block_id != BlockDB.STAIR and orientation != 0:
-			last_error = "orientation is only supported for stair blocks"
+		if not BlockDB.is_orientable(block_id) and orientation != 0:
+			last_error = "orientation is only supported for orientable blocks"
+			return null
+		if orientation > BlockDB.orientation_limit(block_id):
+			last_error = "a block edit row has an orientation this block does not support"
 			return null
 		rows.append(cleaned)
 	return rows

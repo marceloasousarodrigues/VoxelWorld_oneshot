@@ -43,7 +43,13 @@ static func orientation_for_placement(horizontal_forward: Vector3, hit_normal: V
 
 
 static func is_shaped(block_id: int) -> bool:
-	return block_id == BlockDB.STAIR
+	return block_id == BlockDB.STAIR or block_id == BlockDB.SLATE_STAIR \
+		or block_id == BlockDB.SLATE_SLAB
+
+
+## True for the half-height slab family (bottom at orientation 0, top at 4).
+static func is_slab(block_id: int) -> bool:
+	return block_id == BlockDB.SLATE_SLAB
 
 
 ## Orientation values: 0=+Z, 1=+X, 2=-Z, 3=-X; add four for upside-down.
@@ -53,6 +59,9 @@ static func mask_for(block_id: int, orientation: int) -> int:
 		return 0
 	if not is_shaped(block_id):
 		return 0xFF if BlockDB.is_solid(block_id) else 0
+	if is_slab(block_id):
+		# A slab has only two meaningful states: the bottom or the top half.
+		return 0x0F if orientation < 4 else 0xF0
 	var result := 0
 	for y in RESOLUTION:
 		for z in RESOLUTION:

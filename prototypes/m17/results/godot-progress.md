@@ -1,6 +1,125 @@
 # M17 Godot — Progress and Resume Point
 
-## M29 — Starter house near spawn (post-endgame user request, 2026-10-20)
+## M29 — Medieval Architectural Building System (post-endgame user request, 2026-10-20)
+
+Request: replace the bulky, stepped roof and the flat M22 building vocabulary with
+a grounded European-medieval set: timber-framed cottages, stone foundations,
+slate/shingle roofs with proper slopes, eaves, ridges, gable ends and chimneys,
+framed windows, shutters and doors. The supplied reference images
+(`prototypes/m17/references/m29-architecture/01-world-style.png`,
+`02-village-style.png`, `03-castle-style.png`) are the visual target, not a
+block-for-block specification. The normal-game starter house and the existing
+player-authored showcase had to show the improvement, not just a test arena.
+
+### Reference observations used for the design
+
+- Roofs are the dominant silhouette: steep planes with a clear ridge, thin
+  overhanging eaves, visible rafter/edge shadow, and no thick stepped slab.
+- Dark structural timber contrasts with pale plaster infill; stone is a warm
+  grey-brown, not a saturated blue cartoon stone.
+- Windows are small, dark and leaded, framed by timber; shutters and flower
+  boxes add scale. Chimneys are masonry stacks that break the ridge line.
+- Ridge-end finials must visibly grow out of the ridge; an early pass placed
+  them one cell above the apex and left a half-block gap, which the final pass
+  fixed and covered with a mesh-vertex assertion.
+- Villages read as clustered, coherent buildings; castle stonework stays heavy
+  and crenellated while the keep's roof uses the same slate language.
+
+### What was actually changed
+
+- **Append-only block palette (ids 89–102; no existing id changed):** `PLASTER`,
+  `DARK_TIMBER`, `STONE_WALL`, `TIMBER_BRACE`, `SLATE_TILE`, `SLATE_STAIR`,
+  `SLATE_SLAB`, `SLATE_RIDGE`, `WINDOW`, `SHUTTER`, `CHIMNEY`, `FINIAL`,
+  `FLOWER_BOX`, and `SLATE_RAMP` (id 102). `BlockDB.COUNT` is 103 and
+  `DEFINED_COUNT` is 71.
+- **`scripts/game/medieval_kit.gd`:** reusable `build_gable_roof` writes a thin
+  upper-half slab eave, continuous 45° ramp planes, a triangular ridge cap,
+  plaster/timber gable infill, optional finials and an optional masonry chimney.
+  Every cell goes through `world.set_block` / `set_block_state` and is recorded
+  as a player edit.
+- **`scripts/core/chunk_mesher.gd`:** `SLATE_RAMP` is a one-cell custom wedge
+  with a continuous top plane, correct normals/winding and matching wedge
+  collision (supported bottoms and adjacent end caps are culled). `SLATE_RIDGE`
+  is a triangular prism; `WINDOW`, `CHIMNEY`, `FINIAL` and `FLOWER_BOX` are
+  in-chunk custom models. No per-block scene nodes were added.
+- **`scripts/core/block_shape.gd`:** slab support (bottom half at orientations
+  0–3, top half at 4–7); slate stairs reuse the existing stair mask.
+- **Orientation integration:** `set_block_state`, `SaveManager` row validation,
+  `VoxelWorld.load_edits`, `VoxelPlayer` placement/rotation and the HUD now use
+  `BlockDB.is_orientable` / `orientation_limit` instead of a stair-only check.
+  Ramps use four horizontal orientations; stairs/slabs/ridges keep 0–7.
+- **Crafting and mining:** 14 new crafting-table recipes (plaster, dark timber,
+  stone wall, brace, slate family including the ramp, window, shutter, chimney,
+  finial, flower box) using existing reachable materials; slate/masonry are
+  pickaxe-worked, timber is axe-worked, plaster is shovel-worked. All drop
+  themselves and are placeable from the normal inventory/hotbar.
+- **Textures:** `tools/generate_m29_textures.py` procedurally generates fourteen
+  textures (no downloaded art), with `texture_sources.json` entries and
+  `TextureLibrary` grades. Slate was tuned twice: the first pass read near-black,
+  the second read pastel; the final pass is a mid-dark warm grey-blue with
+  visible courses and rafter/eave detail. Window glass is muted blue-grey.
+- **Buildings:** the starter cottage, M25 build-demo cottage and the M28
+  longhouse, market stalls and castle keep now use the M29 palette and roof kit.
+  The castle keeps its crenellated stone identity and the home remains an
+  ordinary editable building near spawn.
+- **Tests:** new `test_m29_architecture.gd` plus M29 integration coverage for
+  slate stair/ridge placement, HUD rotation and mining; existing build/final/
+  starter-house tests updated for the intentional roof replacement.
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows, RTX 3080)
+
+- Unit: **`M17_TESTS_PASS 2457 assertions`**, exit **0** (2042 before M29).
+- Integration: **`M17_INTEGRATION_PASS 463 assertions`**, exit **0**
+  (438 before M29).
+- Headless smoke, twice: exit **0**, 0 bytes stderr, **`edits=535`**,
+  `world_hash=2477724327783931144` and `faces_hash=6970802888693636978`,
+  identical both runs.
+- Windowed capture, exact command:
+  ```powershell
+  & $godot --path prototypes/m17/godot -- --capture --capture-name=m29-after-cottage.png --look=38,-8 --settle=16 --render-distance=5 --hide-hud --time=0.28
+  ```
+  exit **0**, `M29_STARTER_HOUSE ... house=273`, screenshot saved 1280×720.
+- Captures directly inspected by the Plan agent:
+  `m29-before-cottage.png` (pre-change), `m29-after-cottage.png`,
+  `m29-after-roof.png`, `m29-cottage-build-demo.png`, `m29-build-wide.png`,
+  `m29-final-wide.png`, `m29-final-village.png`, `m29-final-castle.png`.
+- Existing deterministic/streaming/save tests remained in the unit and
+  integration suites; no M23–M28 save format or block id changed.
+
+### Visual comparison (directly inspected, not inferred from tests)
+
+- **Before:** the cottage roof was a stack of plank-textured stair blocks with a
+  full-cube ridge, a thick dark eave and a visibly stepped silhouette; walls
+  were mostly planks/old timber frame.
+- **After:** the roof is a continuous 45° slate plane with a thin overhanging
+  eave, visible slate courses and rafter shadow, a triangular ridge, a framed
+  plaster/timber gable and a masonry chimney. Windows are framed with dark
+  timber and muted glass, shutters and flower boxes add facade scale, and the
+  stone plinth grounds the building.
+- **Larger structure:** the longhouse, market stalls and keep use the same slate
+  roof language; the castle remains stone/crenellated with a slate keep roof.
+- The result is still explicitly voxel-scaled, not a pixel match to the
+  references. The stepped silhouette is gone on the roof planes; block-scale
+  walls, windows and chimneys remain.
+
+### Limitations (stated, not hidden)
+
+- No human keyboard/mouse play-through; runtime evidence is the scripted capture
+  path, integration tests through the real player/world APIs, and fixed cameras.
+- Ramp shingle UVs repeat per block rather than mapping one continuous roof
+  atlas; seams are visible on very close inspection.
+- Ray targeting for custom solid models remains full-cell while physics
+  collision for the ramp is the actual wedge. Mining/placement works, but
+  sub-cell targeting is not implemented.
+- No dormers or hip/valley/corner ridge pieces yet; the set is a compact gable
+  kit. Existing M22/`StructureDB` landmarks still use the old terracotta/plank
+  palette unless rebuilt.
+- The extra wedge/custom geometry was not benchmarked against a saved frame-time
+  baseline beyond the headless smoke/streaming counts; draw calls in the cottage
+  capture were 477.
+- The starter house is still a fixed template; terrain around it is levelled.
+
+## M28.1 — Starter house near spawn (post-endgame user request, 2026-10-20)
 
 Request: place a fully built house close to the player spawn at the start of the
 game.
@@ -14,7 +133,9 @@ game.
 - The house reuses `BuildDemo._build_cottage`: stone foundation, timber frame,
   plank infill, glass windows, a real door, a stepped tiled stair roof with ridge
   and chimney, table/furnace/chest/barrel inside, a hanging lantern and a lit
-  lantern post beside the door.
+  lantern post beside the door. **Historical note:** this describes the original
+  M28.1-era cottage; the M29 pass rebuilt the same house with plaster/timber
+  framing, framed windows, shutters and a continuous slate ramp roof.
 - The footprint is levelled to the spawn's ground level (hills cut down, dips
   filled) and cleared above, so the door, path and player feet line up.
 - **Every cell is recorded as a player edit** through the normal

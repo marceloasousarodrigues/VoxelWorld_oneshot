@@ -24,14 +24,14 @@ func run(h: TestHarness) -> void:
 
 	# Cottage: door, glass, stair roof, ridge and furnishing.
 	h.eq(world.get_block(cottage + Vector3i(0, 1, 3)), BlockDB.DOOR, "the cottage has a door")
-	h.eq(world.get_block(cottage + Vector3i(3, 2, 3)), BlockDB.GLASS, "the cottage has a glass window")
-	h.eq(world.get_block(cottage + Vector3i(0, 4, 3)), BlockDB.STAIR, "the cottage roof starts with stairs")
+	h.eq(world.get_block(cottage + Vector3i(3, 2, 3)), BlockDB.WINDOW, "the cottage has a framed window")
+	h.eq(world.get_block(cottage + Vector3i(0, 4, 3)), BlockDB.SLATE_RAMP, "the cottage roof starts with slate ramps")
 	h.eq(world.get_orientation(cottage + Vector3i(0, 4, 3)), 0,
 		"the south roof slope rises toward the ridge")
 	h.eq(world.get_orientation(cottage + Vector3i(0, 4, -3)), 2,
 		"the north roof slope is mirrored")
-	h.eq(world.get_block(cottage + Vector3i(0, 6, 0)), BlockDB.ROOF_RIDGE,
-		"the cottage roof is closed by a ridge")
+	h.eq(world.get_block(cottage + Vector3i(0, 7, 0)), BlockDB.SLATE_RIDGE,
+		"the cottage roof is closed by a slate ridge")
 	h.eq(world.get_block(cottage + Vector3i(-3, 1, -2)), BlockDB.CRAFTING_TABLE,
 		"the cottage is furnished with a crafting table")
 	h.eq(world.get_block(cottage + Vector3i(0, 3, 0)), BlockDB.LANTERN,

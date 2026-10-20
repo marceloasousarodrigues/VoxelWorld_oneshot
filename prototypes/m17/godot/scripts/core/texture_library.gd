@@ -54,6 +54,23 @@ const GRADE := {
 	"deco_dry_grass": [0.95, 1.0, 0.72],
 	"cactus_side": [0.94, 1.01, 0.66],
 	"cactus_top": [0.94, 1.01, 0.66],
+	# M29 medieval palette: the procedural art is already drawn for the world
+	# palette, so these grades only pull the new materials a little closer to the
+	# existing grass/stone/plank tones instead of restyling them.
+	"plaster": [1.0, 1.0, 0.94],
+	"dark_timber": [0.96, 1.02, 0.88],
+	"stone_wall": [0.96, 1.0, 0.92],
+	"timber_brace": [0.98, 1.0, 0.92],
+	"slate_tile": [1.0, 1.02, 0.72],
+	"slate_ridge": [1.0, 1.02, 0.72],
+	"slate_side": [1.0, 1.02, 0.72],
+	"window": [0.98, 1.0, 0.90],
+	"shutter": [0.96, 1.0, 0.9],
+	"chimney_side": [0.94, 1.0, 0.9],
+	"chimney_top": [0.94, 1.0, 0.9],
+	"finial": [1.0, 1.0, 0.94],
+	"flower_box": [1.0, 1.0, 0.94],
+	"flower_box_bloom": [0.98, 1.02, 0.92],
 }
 
 ## Small channel multipliers applied after `adjust_bcs` to warm soil and foliage

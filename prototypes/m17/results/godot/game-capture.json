@@ -1,19 +1,19 @@
 {
-	"biome": "Forest",
+	"biome": "Plains",
 	"evidence": "offscreen Godot viewport PNG written from inside the running game scene; not a human visual inspection",
 	"eye": [
-		72.5,
-		67.6201095581055,
-		-84.0
+		8.5,
+		71.6203002929688,
+		8.5
 	],
 	"fluid": {
 		"changes": 0,
-		"evaluations": 4678,
-		"observed_edits": 2678,
+		"evaluations": 1252,
+		"observed_edits": 609,
 		"pending": 0,
 		"seeded_chunks": 0
 	},
-	"fps_last_sample": 38.4678440879961,
+	"fps_last_sample": 60.0,
 	"godot_version": {
 		"build": "official",
 		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
@@ -26,36 +26,36 @@
 		"timestamp": 0
 	},
 	"look": [
-		0.0,
-		-12.0
+		38.0,
+		-8.0
 	],
 	"mesher": {
-		"assemble_ms": 129.853,
-		"builds": 670,
-		"emit_ms": 4936.218,
-		"faces": 311844,
-		"fill_ms": 670.027,
-		"ms": 5621.309,
-		"triangles": 623688
+		"assemble_ms": 128.83,
+		"builds": 653,
+		"emit_ms": 10156.955,
+		"faces": 283139,
+		"fill_ms": 786.917999999998,
+		"ms": 10960.028,
+		"triangles": 566278
 	},
 	"player": [
-		72.5,
-		66.0001068115234,
-		-84.0
+		8.5,
+		70.0002975463867,
+		8.5
 	],
 	"seed": 17017,
 	"streaming": {
-		"attach_ms_total": 5391.36,
-		"center": "(4, 4, -6)",
-		"faces": 311844,
-		"faces_hash": 624043163758989185,
+		"attach_ms_total": 6564.299,
+		"center": "(0, 4, 0)",
+		"faces": 283139,
+		"faces_hash": 1455457955110840562,
 		"generated": 648,
 		"generation_in_flight": 0,
-		"generation_ms_total": 822.552000000001,
-		"generation_worker_ms": 4923.87799999999,
+		"generation_ms_total": 1730.928,
+		"generation_worker_ms": 6058.813,
 		"loaded": 648,
-		"mesh_ms_total": 5621.309,
-		"meshed": 670,
+		"mesh_ms_total": 10960.028,
+		"meshed": 653,
 		"meshes_in_flight": 0,
 		"queued": 0,
 		"render_radius": 5,
@@ -63,11 +63,11 @@
 		"vertical_radius": 4,
 		"views": 648,
 		"wanted": 648,
-		"worst_mesh_ms": 25.692
+		"worst_mesh_ms": 44.021
 	},
 	"window_size": [
 		1280,
 		720
 	],
-	"world_hash": 6578015106849129457
+	"world_hash": 6659916210433596253
 }

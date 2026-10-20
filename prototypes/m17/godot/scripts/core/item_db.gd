@@ -179,6 +179,21 @@ static func _static_init() -> void:
 	# Fired roof tiles are masonry.
 	for block_id: int in [BlockDB.ROOF_TILE, BlockDB.ROOF_RIDGE]:
 		_effective_tool[block_id] = Tool.PICKAXE
+	# M29 palette.  Slate and masonry need a pickaxe for their drop, while the
+	# timber family is axe-worked and plaster is soft shovel work.
+	for block_id: int in [BlockDB.STONE_WALL, BlockDB.CHIMNEY]:
+		_effective_tool[block_id] = Tool.PICKAXE
+		_required_tool[block_id] = Tool.PICKAXE
+	for block_id: int in [BlockDB.SLATE_TILE, BlockDB.SLATE_STAIR, BlockDB.SLATE_SLAB,
+			BlockDB.SLATE_RIDGE, BlockDB.SLATE_RAMP]:
+		_effective_tool[block_id] = Tool.PICKAXE
+		_required_tool[block_id] = Tool.PICKAXE
+	# A window is pickaxe-worked like glass, but it drops its own frame.
+	_effective_tool[BlockDB.WINDOW] = Tool.PICKAXE
+	for block_id: int in [BlockDB.DARK_TIMBER, BlockDB.TIMBER_BRACE, BlockDB.SHUTTER,
+			BlockDB.FLOWER_BOX]:
+		_effective_tool[block_id] = Tool.AXE
+	_effective_tool[BlockDB.PLASTER] = Tool.SHOVEL
 	# Ores and obsidian need a better pick than the minimum.
 	_required_tier[BlockDB.IRON_ORE] = Tier.STONE
 	_required_tier[BlockDB.GOLD_ORE] = Tier.IRON

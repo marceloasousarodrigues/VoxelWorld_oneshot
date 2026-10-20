@@ -25,10 +25,10 @@ func run(h: TestHarness) -> void:
 
 	var anchor := Vector3i(spawn.x + StarterHouse.OFFSET.x, height, spawn.y + StarterHouse.OFFSET.y)
 	h.eq(world.get_block(anchor + Vector3i(0, 1, 3)), BlockDB.DOOR, "the house has a door facing the spawn")
-	h.eq(world.get_block(anchor + Vector3i(3, 2, 3)), BlockDB.GLASS, "the house has a glass window")
-	h.eq(world.get_block(anchor + Vector3i(0, 4, 3)), BlockDB.STAIR, "the house has a stair roof")
+	h.eq(world.get_block(anchor + Vector3i(3, 2, 3)), BlockDB.WINDOW, "the house has a framed window")
+	h.eq(world.get_block(anchor + Vector3i(0, 4, 3)), BlockDB.SLATE_RAMP, "the house has a slate roof")
 	h.eq(world.get_orientation(anchor + Vector3i(0, 4, 3)), 0, "the roof slope rises toward the ridge")
-	h.eq(world.get_block(anchor + Vector3i(0, 6, 0)), BlockDB.ROOF_RIDGE, "the roof is closed by a ridge")
+	h.eq(world.get_block(anchor + Vector3i(0, 7, 0)), BlockDB.SLATE_RIDGE, "the roof is closed by a slate ridge")
 	h.eq(world.get_block(anchor + Vector3i(-3, 1, -2)), BlockDB.CRAFTING_TABLE, "the house is furnished")
 	h.eq(world.get_block(anchor + Vector3i(0, 3, 0)), BlockDB.LANTERN, "the house has a hanging lantern")
 

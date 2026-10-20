@@ -82,10 +82,28 @@ const BARREL := 86
 const DOOR := 87
 const STAIR := 88
 
-const COUNT := 89
+# --- M29 medieval architectural palette -----------------------------------
+# Appended after the M23 stair.  Existing ids above are never renumbered, so
+# every save written before M29 keeps loading unchanged.
+const PLASTER := 89
+const DARK_TIMBER := 90
+const STONE_WALL := 91
+const TIMBER_BRACE := 92
+const SLATE_TILE := 93
+const SLATE_STAIR := 94
+const SLATE_SLAB := 95
+const SLATE_RIDGE := 96
+const WINDOW := 97
+const SHUTTER := 98
+const CHIMNEY := 99
+const FINIAL := 100
+const FLOWER_BOX := 101
+const SLATE_RAMP := 102
+
+const COUNT := 103
 ## Number of ids in 0..COUNT-1 that are real blocks (the item-id ranges 35..60
 ## and 67..72 are deliberately undefined here).
-const DEFINED_COUNT := 57
+const DEFINED_COUNT := 71
 
 # --- render layers ---------------------------------------------------------
 const LAYER_OPAQUE := 0
@@ -226,6 +244,36 @@ static func _static_init() -> void:
 			["door", "door", "door"]],
 		["Stair", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 1.8, BlockDB.STAIR,
 			["planks", "planks", "planks"]],
+		# M29 medieval architectural palette.  The roof family uses slate faces
+		# (grey-blue tile, shadowed edge) instead of the old plank stairs.
+		["Plaster", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 0.6, BlockDB.PLASTER,
+			["plaster", "plaster", "plaster"]],
+		["Dark Timber", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.DARK_TIMBER,
+			["dark_timber", "dark_timber", "dark_timber"]],
+		["Stone Wall", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.2, BlockDB.STONE_WALL,
+			["stone_wall", "stone_wall", "stone_wall"]],
+		["Timber Brace", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 1.8, BlockDB.TIMBER_BRACE,
+			["timber_brace", "timber_brace", "timber_brace"]],
+		["Slate Tile", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.SLATE_TILE,
+			["slate_tile", "slate_side", "slate_side"]],
+		["Slate Stair", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.SLATE_STAIR,
+			["slate_tile", "slate_side", "slate_side"]],
+		["Slate Slab", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.SLATE_SLAB,
+			["slate_tile", "slate_side", "slate_side"]],
+		["Slate Ridge", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.SLATE_RIDGE,
+			["slate_ridge", "slate_side", "slate_side"]],
+		["Window", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 0.3, BlockDB.WINDOW,
+			["window", "window", "window"]],
+		["Shutter", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 1.6, BlockDB.SHUTTER,
+			["shutter", "shutter", "shutter"]],
+		["Chimney", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.4, BlockDB.CHIMNEY,
+			["chimney_top", "chimney_side", "chimney_top"]],
+		["Finial", BlockDB.LAYER_OPAQUE, 0, 0, 0, 0, 0.3, BlockDB.FINIAL,
+			["finial", "finial", "finial"]],
+		["Flower Box", BlockDB.LAYER_CUTOUT, 0, 0, 0, 0, 0.4, BlockDB.FLOWER_BOX,
+			["flower_box", "flower_box", "flower_box"]],
+		["Slate Ramp", BlockDB.LAYER_OPAQUE, 1, 1, 0, 0, 2.0, BlockDB.SLATE_RAMP,
+			["slate_tile", "slate_side", "slate_side"]],
 	])
 	if definitions.size() != COUNT:
 		push_error("BlockDB: definition table has %d rows, expected %d" % [definitions.size(), COUNT])
@@ -252,6 +300,11 @@ static func _static_init() -> void:
 		# A one-cell detail model does not fill the cube: the block it sits on
 		# must keep its top face.
 		open_model[block_id] = 1
+	# M29 custom models: the ridge prism, framed window, masonry chimney, ridge
+	# finial and flower box are all built inside the chunk mesh, never as nodes.
+	for block_id: int in [SLATE_RIDGE, WINDOW, CHIMNEY, FINIAL, FLOWER_BOX, SLATE_RAMP]:
+		custom_model[block_id] = 1
+		open_model[block_id] = 1
 	# Crop stages visibly grow inside the voxel cell.
 	deco_height[WHEAT_0] = 0.34
 	deco_height[WHEAT_1] = 0.56
@@ -270,6 +323,22 @@ static func _expand_faces(triple: Array) -> PackedStringArray:
 	var side := str(triple[1])
 	var bottom := str(triple[2])
 	return PackedStringArray([side, side, top, bottom, side, side])
+
+
+## Blocks that store a placement/shape orientation in the chunk's orientation
+## byte.  The M23 stair and the M29 roof pieces share the 0..7 convention;
+## orientation 4..7 means upside-down for stairs/slabs.
+static func is_orientable(block_id: int) -> bool:
+	return block_id == STAIR or block_id == SLATE_STAIR or block_id == SLATE_SLAB \
+		or block_id == SLATE_RIDGE or block_id == SLATE_RAMP
+
+
+## Highest valid orientation for an orientable block.  Ramps only have the four
+## horizontal 45-degree states; stairs, slabs and ridges also use 4..7.
+static func orientation_limit(block_id: int) -> int:
+	if block_id == SLATE_RAMP:
+		return 3
+	return 7
 
 
 static func is_air(block_id: int) -> bool:

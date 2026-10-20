@@ -169,7 +169,9 @@ func set_block_state(world_position: Vector3i, block_id: int, orientation: int,
 		return false
 	if not BlockShape.is_valid_orientation(orientation):
 		return false
-	if block_id != BlockDB.STAIR and orientation != 0:
+	if not BlockDB.is_orientable(block_id) and orientation != 0:
+		return false
+	if orientation > BlockDB.orientation_limit(block_id):
 		return false
 	var coord := world_to_chunk(world_position)
 	var chunk: ChunkData = chunks.get(coord, null)
@@ -269,7 +271,9 @@ func load_edits(block_edits: Dictionary, fluid_edits: Dictionary, fluid_source_p
 		var orientation := int(orientation_edits.get(position, 0))
 		if not BlockShape.is_valid_orientation(orientation):
 			orientation = 0
-		if int(block_edits[position]) != BlockDB.STAIR:
+		if not BlockDB.is_orientable(int(block_edits[position])):
+			orientation = 0
+		elif orientation > BlockDB.orientation_limit(int(block_edits[position])):
 			orientation = 0
 		edit_orientations[position] = orientation
 	edit_orientations_by_chunk = group_by_chunk(edit_orientations)

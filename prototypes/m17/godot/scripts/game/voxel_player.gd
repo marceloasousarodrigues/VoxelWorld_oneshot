@@ -525,7 +525,7 @@ func place_selected() -> bool:
 		interaction_failed.emit("Outside the buildable height")
 		return false
 	var orientation := 0
-	if block_id == BlockDB.STAIR:
+	if BlockDB.is_orientable(block_id):
 		orientation = placement_orientation(normal)
 	var existing := world.get_block(cell)
 	if existing != BlockDB.AIR and not BlockDB.is_liquid(existing):
@@ -542,21 +542,48 @@ func place_selected() -> bool:
 	return true
 
 
-## Advances the explicit stair facing (R).  Returns the new facing, or -1 when
-## the held item is not a stair.
+## Advances the explicit facing (R).  Returns the new facing, or -1 when the
+## held item is not an orientable piece.  Stairs and slabs cycle the four
+## facings (0..3); the ridge only has two meaningful axes (0 = X, 1 = Z).
 func rotate_placement() -> int:
-	if inventory == null or ItemDB.placeable_block(inventory.selected_item()) != BlockDB.STAIR:
+	if inventory == null:
 		return -1
-	placement_facing = 0 if placement_facing < 0 else (placement_facing + 1) % 4
+	var block_id := ItemDB.placeable_block(inventory.selected_item())
+	if not BlockDB.is_orientable(block_id):
+		return -1
+	if block_id == BlockDB.SLATE_RIDGE:
+		placement_facing = 0 if placement_facing < 0 else (placement_facing + 1) % 2
+	else:
+		placement_facing = 0 if placement_facing < 0 else (placement_facing + 1) % 4
 	return placement_facing
 
 
-## Orientation a stair receives for a hit normal, honouring the explicit R
-## rotation when it has been set and otherwise following the camera.
+## Orientation a shaped piece receives for a hit normal, honouring the explicit
+## R rotation when it has been set and otherwise following the camera.  Stairs
+## and slabs add four on a downward hit (upside-down); the ridge only rotates
+## its long axis.
 func placement_orientation(normal: Vector3i) -> int:
+	var block_id := BlockDB.AIR
+	if inventory != null:
+		block_id = ItemDB.placeable_block(inventory.selected_item())
+	if block_id == BlockDB.SLATE_RIDGE:
+		if placement_facing < 0:
+			return BlockShape.orientation_for_placement(-camera.global_basis.z, normal) % 2
+		return placement_facing % 2
+	if block_id == BlockDB.SLATE_RAMP:
+		if placement_facing < 0:
+			return BlockShape.orientation_for_placement(-camera.global_basis.z, normal) % 4
+		return placement_facing % 4
 	if placement_facing < 0:
 		return BlockShape.orientation_for_placement(-camera.global_basis.z, normal)
 	return placement_facing + (4 if normal == Vector3i.DOWN else 0)
+
+
+## Human-readable state for the HUD/R-rotate prompt.
+static func orientation_label(block_id: int, orientation: int) -> String:
+	if block_id == BlockDB.SLATE_RIDGE:
+		return "long axis %s" % ("X" if orientation % 2 == 0 else "Z")
+	return facing_name(orientation % 4) + (" upside down" if orientation >= 4 else "")
 
 
 ## Live build feedback used by the HUD: what the held block would do on the
@@ -575,7 +602,7 @@ func placement_preview() -> Dictionary:
 	var normal: Vector3i = hit["normal"]
 	var cell: Vector3i = hit["block"] + normal
 	var orientation := 0
-	if block_id == BlockDB.STAIR:
+	if BlockDB.is_orientable(block_id):
 		orientation = placement_orientation(normal)
 	var preview := {
 		"item": item_id, "block": block_id, "cell": cell, "normal": normal,

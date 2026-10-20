@@ -422,7 +422,7 @@ func _emit_faces(input: Dictionary) -> void:
 		var surface: Dictionary = _buffers[layer]
 		var padded_centre := padded_index(local_x, local_y, local_z)
 		if is_custom:
-			_emit_custom(surface, centre, block_id, padded_centre)
+			_emit_custom(surface, centre, block_id, padded_centre, int(orientations[index]))
 		var surface_height := 1.0
 		if is_water:
 			var above := int(padded[padded_centre + stride[BlockDB.FACE_PY]])
@@ -478,8 +478,9 @@ func _emit_faces(input: Dictionary) -> void:
 			if is_custom:
 				# The custom model is not a cube, but its collision and logical
 				# identity still are: keep the full-cube collision on every
-				# exposed face and skip the cube's own render face.
-				if solid[block_id] == 1:
+				# exposed face and skip the cube's own render face.  The slate
+				# ramp emits its own wedge collision in `_emit_custom`.
+				if solid[block_id] == 1 and block_id != BlockDB.SLATE_RAMP:
 					_emit_collision(centre, face)
 			elif is_water:
 				_emit_water_face(surface, centre, base + centre, face, FACE_NORMAL_I[face], surface_height, block_id, world_cell)
@@ -560,6 +561,11 @@ func _emit_half_face(surface: Dictionary, face_centre: Vector3, face: int,
 	var normal: Vector3 = FACE_NORMALS[face]
 	var layer := face_layer[block_id * 6 + face]
 	var shade: float = FACE_SHADE[face]
+	# The slab family is used for thin roof eaves.  Its exposed soffit and edges
+	# are seen from below in shadow, so use a gentler shade than a full cube's
+	# bottom/side; otherwise the eave reads as a near-black band.
+	if block_id == BlockDB.SLATE_SLAB and face != BlockDB.FACE_PY:
+		shade = 0.82 if face == BlockDB.FACE_NY else 0.88
 	var tone := Color(tint.r * shade, tint.g * shade, tint.b * shade, 1.0)
 	var uv2 := Vector2(float(layer), 0.0)
 	var base_index := vertices.size()
@@ -791,7 +797,8 @@ func _emit_deco(block_id: int, centre: Vector3, tint: Color) -> void:
 ## Custom one-cell models.  They are ordinary opaque geometry emitted into the
 ## chunk mesh (no per-block scene nodes) and stay inside the one-metre cell, so
 ## placement, save/load, collision and chunk streaming are unchanged.
-func _emit_custom(surface: Dictionary, centre: Vector3, block_id: int, padded_centre: int) -> void:
+func _emit_custom(surface: Dictionary, centre: Vector3, block_id: int, padded_centre: int,
+		orientation: int) -> void:
 	# A tiny lift keeps the model's bottom faces off the coplanar top face of the
 	# block below it, which otherwise z-fights and reads as a translucent slab
 	# underneath the model.  5 mm is invisible at gameplay distance.
@@ -809,6 +816,20 @@ func _emit_custom(surface: Dictionary, centre: Vector3, block_id: int, padded_ce
 			_emit_lantern(surface, lifted)
 		BlockDB.FENCE:
 			_emit_fence(surface, lifted, padded_centre)
+		BlockDB.SLATE_RIDGE:
+			# Orientation 0/2 runs the ridge along X; 1/3 runs it along Z.  The
+			# upside-down half of the 0..7 space keeps the same axis.
+			_emit_slate_ridge(surface, lifted, (orientation % 4) % 2 == 0)
+		BlockDB.SLATE_RAMP:
+			_emit_slate_ramp(surface, lifted, orientation % 4, padded_centre)
+		BlockDB.WINDOW:
+			_emit_window(surface, lifted)
+		BlockDB.CHIMNEY:
+			_emit_chimney(surface, lifted)
+		BlockDB.FINIAL:
+			_emit_finial(surface, lifted)
+		BlockDB.FLOWER_BOX:
+			_emit_flower_box(surface, lifted)
 
 
 func _emit_crafting_table(surface: Dictionary, centre: Vector3) -> void:
@@ -978,6 +999,337 @@ func _emit_fence(surface: Dictionary, centre: Vector3, padded_centre: int) -> vo
 
 func _is_fence_neighbour(padded_centre: int, face: int) -> bool:
 	return int(_padded[padded_centre + int(FACE_STRIDE[face])]) == BlockDB.FENCE
+
+
+## A continuous 45-degree roof wedge.  The canonical orientation (0) has its
+## high edge toward -Z and its low edge toward +Z, matching the stair convention.
+## The solid is the triangular prism under the top plane, so a row of ramps forms
+## one continuous roof plane.  Collision is the same five-face wedge, emitted here
+## instead of the full-cell cube collision used by other custom models.
+func _emit_slate_ramp(surface: Dictionary, centre: Vector3, orientation: int,
+		padded_centre: int) -> void:
+	var basis := Basis(Vector3.UP, PI * 0.5 * float(orientation))
+	var tile := library.layer_index("slate_tile")
+	var side := library.layer_index("slate_side")
+	var l0 := Vector3(-0.5, -0.5, 0.5)
+	var l1 := Vector3(0.5, -0.5, 0.5)
+	var h0b := Vector3(-0.5, -0.5, -0.5)
+	var h1b := Vector3(0.5, -0.5, -0.5)
+	var h0t := Vector3(-0.5, 0.5, -0.5)
+	var h1t := Vector3(0.5, 0.5, -0.5)
+
+	var below := int(_padded[padded_centre + int(FACE_STRIDE[BlockDB.FACE_NY])])
+	var skip_bottom := BlockDB.is_solid(below) and not BlockDB.is_open_model(below) \
+		and not BlockShape.is_shaped(below)
+	var skip_neg := _ramp_cap_hidden(padded_centre, basis * Vector3(-1, 0, 0), orientation)
+	var skip_pos := _ramp_cap_hidden(padded_centre, basis * Vector3(1, 0, 0), orientation)
+
+	if not skip_bottom:
+		_ramp_quad(surface, centre, [l0, l1, h1b, h0b], Vector3(0, -1, 0), side, basis,
+			[Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
+		_ramp_collision_quad(centre, [l0, l1, h1b, h0b], basis)
+	_ramp_quad(surface, centre, [h0b, h1b, h1t, h0t], Vector3(0, 0, -1), side, basis,
+		[Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)])
+	_ramp_collision_quad(centre, [h0b, h1b, h1t, h0t], basis)
+	_ramp_quad(surface, centre, [l0, h0t, h1t, l1], Vector3(0, 1, 1).normalized(), tile, basis,
+		[Vector2(0, 0), Vector2(0, 1), Vector2(1, 1), Vector2(1, 0)])
+	_ramp_collision_quad(centre, [l0, h0t, h1t, l1], basis)
+	if not skip_neg:
+		_ramp_triangle(surface, centre, [l0, h0b, h0t], Vector3(-1, 0, 0), side, basis,
+			[Vector2(0, 0), Vector2(0, 1), Vector2(1, 0)])
+		_ramp_collision_triangle(centre, [l0, h0b, h0t], basis)
+	if not skip_pos:
+		_ramp_triangle(surface, centre, [l1, h1t, h1b], Vector3(1, 0, 0), side, basis,
+			[Vector2(0, 0), Vector2(0, 1), Vector2(1, 0)])
+		_ramp_collision_triangle(centre, [l1, h1t, h1b], basis)
+
+
+## True when a ramp end cap is buried inside a full neighbour or a ramp that
+## continues the same row, so emitting it would only create coplanar z-fighting.
+func _ramp_cap_hidden(padded_centre: int, direction: Vector3, orientation: int) -> bool:
+	var face := -1
+	if direction.x > 0.5:
+		face = BlockDB.FACE_PX
+	elif direction.x < -0.5:
+		face = BlockDB.FACE_NX
+	elif direction.z > 0.5:
+		face = BlockDB.FACE_PZ
+	elif direction.z < -0.5:
+		face = BlockDB.FACE_NZ
+	if face < 0:
+		return false
+	var index := padded_centre + int(FACE_STRIDE[face])
+	var neighbour := int(_padded[index])
+	if neighbour == BlockDB.AIR or not BlockDB.is_solid(neighbour):
+		return false
+	if BlockDB.is_open_model(neighbour):
+		return neighbour == BlockDB.SLATE_RAMP and int(_padded_orientation[index]) == orientation
+	return true
+
+
+func _ramp_shade(normal: Vector3) -> float:
+	if normal.y > 0.5:
+		return 0.96
+	if normal.y < -0.5:
+		return FACE_SHADE[BlockDB.FACE_NY]
+	return 0.72
+
+
+func _ramp_quad(surface: Dictionary, centre: Vector3, points: Array, normal: Vector3,
+		layer: int, basis: Basis, uvs: Array) -> void:
+	var out_normal := (basis * normal).normalized()
+	var vertices: PackedVector3Array = surface["vertex"]
+	var normals: PackedVector3Array = surface["normal"]
+	var out_uvs: PackedVector2Array = surface["uv"]
+	var uv2s: PackedVector2Array = surface["uv2"]
+	var colors: PackedColorArray = surface["color"]
+	var indices: PackedInt32Array = surface["index"]
+	var shade := _ramp_shade(out_normal)
+	var tone := Color(shade, shade, shade, 1.0)
+	var uv2 := Vector2(float(layer), 0.0)
+	var base_index := vertices.size()
+	for corner_index in 4:
+		vertices.append(centre + basis * (points[corner_index] as Vector3))
+		normals.append(out_normal)
+		out_uvs.append(uvs[corner_index])
+		uv2s.append(uv2)
+		colors.append(tone)
+	for quad_index in [0, 1, 2, 0, 2, 3]:
+		indices.append(base_index + quad_index)
+	surface["faces"] = int(surface["faces"]) + 1
+
+
+func _ramp_triangle(surface: Dictionary, centre: Vector3, points: Array, normal: Vector3,
+		layer: int, basis: Basis, uvs: Array) -> void:
+	var out_normal := (basis * normal).normalized()
+	var vertices: PackedVector3Array = surface["vertex"]
+	var normals: PackedVector3Array = surface["normal"]
+	var out_uvs: PackedVector2Array = surface["uv"]
+	var uv2s: PackedVector2Array = surface["uv2"]
+	var colors: PackedColorArray = surface["color"]
+	var indices: PackedInt32Array = surface["index"]
+	var shade := _ramp_shade(out_normal)
+	var tone := Color(shade, shade, shade, 1.0)
+	var uv2 := Vector2(float(layer), 0.0)
+	var base_index := vertices.size()
+	for corner_index in 3:
+		vertices.append(centre + basis * (points[corner_index] as Vector3))
+		normals.append(out_normal)
+		out_uvs.append(uvs[corner_index])
+		uv2s.append(uv2)
+		colors.append(tone)
+	for corner_index in [0, 1, 2]:
+		indices.append(base_index + corner_index)
+	surface["faces"] = int(surface["faces"]) + 1
+
+
+func _ramp_collision_quad(centre: Vector3, points: Array, basis: Basis) -> void:
+	var vertices: PackedVector3Array = _collision["vertex"]
+	var indices: PackedInt32Array = _collision["index"]
+	var base_index := vertices.size()
+	for corner_index in 4:
+		vertices.append(centre + basis * (points[corner_index] as Vector3))
+	for quad_index in [0, 1, 2, 0, 2, 3]:
+		indices.append(base_index + quad_index)
+
+
+func _ramp_collision_triangle(centre: Vector3, points: Array, basis: Basis) -> void:
+	var vertices: PackedVector3Array = _collision["vertex"]
+	var indices: PackedInt32Array = _collision["index"]
+	var base_index := vertices.size()
+	for corner_index in 3:
+		vertices.append(centre + basis * (points[corner_index] as Vector3))
+	for corner_index in [0, 1, 2]:
+		indices.append(base_index + corner_index)
+
+
+## A triangular ridge prism.  The local profile is a half-height triangle in the
+## across/y plane with its base at y=-0.5 and apex at y=0.0; the ridge runs
+## along X (orientation 0/2) or Z (orientation 1/3).  It sits on the two ramp
+## apexes, so the roof plane is continuous into a small triangular cap.  Winding
+## follows the same inward convention as the cube faces while the stored normals
+## point outward.
+func _emit_slate_ridge(surface: Dictionary, centre: Vector3, axis_x: bool) -> void:
+	var ridge := library.layer_index("slate_ridge")
+	var side := library.layer_index("slate_side")
+	var a0 := -0.5
+	var a1 := 0.5
+	var b0 := -0.5
+	var b1 := 0.5
+	var base := -0.5
+	var apex := 0.0
+	var a := Vector3(a0, base, b0)
+	var b := Vector3(a1, base, b0)
+	var c := Vector3(a1, base, b1)
+	var d := Vector3(a0, base, b1)
+	var e := Vector3(a0, apex, 0.0)
+	var f := Vector3(a1, apex, 0.0)
+	_ridge_quad(surface, centre, [a, d, c, b], Vector3(0, -1, 0), side, axis_x,
+		[Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1)])
+	_ridge_triangle(surface, centre, [a, e, d], Vector3(-1, 0, 0), side, axis_x,
+		[Vector2(0, 0), Vector2(0.5, 1), Vector2(1, 0)])
+	_ridge_triangle(surface, centre, [b, c, f], Vector3(1, 0, 0), side, axis_x,
+		[Vector2(0, 0), Vector2(1, 0), Vector2(0.5, 1)])
+	_ridge_quad(surface, centre, [a, b, f, e], Vector3(0, 1, -1).normalized(), ridge, axis_x,
+		[Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
+	_ridge_quad(surface, centre, [c, d, e, f], Vector3(0, 1, 1).normalized(), ridge, axis_x,
+		[Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
+
+
+func _ridge_point(point: Vector3, axis_x: bool) -> Vector3:
+	if axis_x:
+		return point
+	return Vector3(point.z, point.y, point.x)
+
+
+func _ridge_normal(normal: Vector3, axis_x: bool) -> Vector3:
+	if axis_x:
+		return normal
+	return Vector3(normal.z, normal.y, normal.x)
+
+
+func _ridge_shade(normal: Vector3) -> float:
+	if normal.y < -0.5:
+		return FACE_SHADE[BlockDB.FACE_NY]
+	if normal.y > 0.5:
+		return 0.94
+	return 0.78
+
+
+func _ridge_quad(surface: Dictionary, centre: Vector3, points: Array, normal: Vector3,
+		layer: int, axis_x: bool, uvs: Array) -> void:
+	var ordered := points.duplicate()
+	var ordered_uvs := uvs.duplicate()
+	if not axis_x:
+		ordered.reverse()
+		ordered_uvs.reverse()
+	var out_normal := _ridge_normal(normal, axis_x)
+	var vertices: PackedVector3Array = surface["vertex"]
+	var normals: PackedVector3Array = surface["normal"]
+	var out_uvs: PackedVector2Array = surface["uv"]
+	var uv2s: PackedVector2Array = surface["uv2"]
+	var colors: PackedColorArray = surface["color"]
+	var indices: PackedInt32Array = surface["index"]
+	var shade := _ridge_shade(out_normal)
+	var tone := Color(shade, shade, shade, 1.0)
+	var uv2 := Vector2(float(layer), 0.0)
+	var base_index := vertices.size()
+	for corner_index in 4:
+		vertices.append(centre + _ridge_point(ordered[corner_index], axis_x))
+		normals.append(out_normal)
+		out_uvs.append(ordered_uvs[corner_index])
+		uv2s.append(uv2)
+		colors.append(tone)
+	for quad_index in [0, 1, 2, 0, 2, 3]:
+		indices.append(base_index + quad_index)
+	surface["faces"] = int(surface["faces"]) + 1
+
+
+func _ridge_triangle(surface: Dictionary, centre: Vector3, points: Array, normal: Vector3,
+		layer: int, axis_x: bool, uvs: Array) -> void:
+	var ordered := points.duplicate()
+	var ordered_uvs := uvs.duplicate()
+	if not axis_x:
+		ordered.reverse()
+		ordered_uvs.reverse()
+	var out_normal := _ridge_normal(normal, axis_x)
+	var vertices: PackedVector3Array = surface["vertex"]
+	var normals: PackedVector3Array = surface["normal"]
+	var out_uvs: PackedVector2Array = surface["uv"]
+	var uv2s: PackedVector2Array = surface["uv2"]
+	var colors: PackedColorArray = surface["color"]
+	var indices: PackedInt32Array = surface["index"]
+	var shade := _ridge_shade(out_normal)
+	var tone := Color(shade, shade, shade, 1.0)
+	var uv2 := Vector2(float(layer), 0.0)
+	var base_index := vertices.size()
+	for corner_index in 3:
+		vertices.append(centre + _ridge_point(ordered[corner_index], axis_x))
+		normals.append(out_normal)
+		out_uvs.append(ordered_uvs[corner_index])
+		uv2s.append(uv2)
+		colors.append(tone)
+	for corner_index in [0, 1, 2]:
+		indices.append(base_index + corner_index)
+	surface["faces"] = int(surface["faces"]) + 1
+
+
+## A framed window: a nearly full-cell pane with the frame and mullion painted
+## into the texture, plus a projecting dark sill.
+func _emit_window(surface: Dictionary, centre: Vector3) -> void:
+	var window := library.layer_index("window")
+	var sill := library.layer_index("dark_timber")
+	_emit_box(surface, centre, Vector3(-0.47, -0.44, -0.47), Vector3(0.47, 0.47, 0.47),
+		window, window, window)
+	_emit_box(surface, centre, Vector3(-0.5, -0.5, -0.5), Vector3(0.5, -0.44, 0.5),
+		sill, sill, sill)
+
+
+## A masonry chimney column with a projecting cap.  Each block keeps full-cube
+## collision; the visual column is inset enough to read as a separate stack.
+func _emit_chimney(surface: Dictionary, centre: Vector3) -> void:
+	var side := library.layer_index("chimney_side")
+	var top := library.layer_index("chimney_top")
+	var stone := library.layer_index("stone_wall")
+	_emit_box(surface, centre, Vector3(-0.45, -0.5, -0.45), Vector3(0.45, 0.38, 0.45),
+		top, side, stone)
+	_emit_box(surface, centre, Vector3(-0.49, 0.38, -0.49), Vector3(0.49, 0.5, 0.49),
+		top, stone, stone)
+
+
+## A small decorative ridge finial.  Non-solid: it never blocks movement and
+## adds no collision, but it is still ordinary chunk geometry.
+func _emit_finial(surface: Dictionary, centre: Vector3) -> void:
+	var wood := library.layer_index("dark_timber")
+	var iron := library.layer_index("finial")
+	# The finial block sits one cell above the ridge block.  Start the post below
+	# local -1.0 so the custom-model 5 mm lift still leaves it exactly on the
+	# ridge cap apex instead of floating half a block above it.
+	_emit_box(surface, centre, Vector3(-0.05, -1.005, -0.05), Vector3(0.05, 0.16, 0.05),
+		wood, wood, wood)
+	_emit_box(surface, centre, Vector3(-0.08, 0.16, -0.08), Vector3(0.08, 0.3, 0.08),
+		iron, iron, iron)
+	_emit_box(surface, centre, Vector3(-0.05, 0.3, -0.05), Vector3(0.05, 0.42, 0.05),
+		iron, iron, iron)
+	_emit_box(surface, centre, Vector3(-0.025, 0.42, -0.025), Vector3(0.025, 0.5, 0.025),
+		iron, iron, iron)
+
+
+## A wooden planter with two crossed bloom planes.  Non-solid, so it can sit on
+## a windowsill or against a wall without becoming an obstacle.
+func _emit_flower_box(surface: Dictionary, centre: Vector3) -> void:
+	var planter := library.layer_index("flower_box")
+	var bloom := library.layer_index("flower_box_bloom")
+	_emit_box(surface, centre, Vector3(-0.34, -0.5, -0.18), Vector3(0.34, -0.24, 0.18),
+		planter, planter, planter)
+	var vertices: PackedVector3Array = surface["vertex"]
+	var normals: PackedVector3Array = surface["normal"]
+	var uvs: PackedVector2Array = surface["uv"]
+	var uv2s: PackedVector2Array = surface["uv2"]
+	var colors: PackedColorArray = surface["color"]
+	var indices: PackedInt32Array = surface["index"]
+	var bottom := centre + Vector3(0.0, -0.24, 0.0)
+	var half := 0.3
+	var height := 0.54
+	var quad_uvs: Array = [Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1)]
+	var uv2 := Vector2(float(bloom), 0.0)
+	var tone := Color(0.96, 0.96, 0.96, 1.0)
+	for plane_index in 2:
+		var angle := PI * float(plane_index) / 2.0
+		var direction := Vector3(cos(angle), 0.0, sin(angle))
+		var left := bottom - direction * half
+		var right := bottom + direction * half
+		var plane := [left, left + Vector3(0.0, height, 0.0), right + Vector3(0.0, height, 0.0), right]
+		var base_index := vertices.size()
+		for corner_index in 4:
+			vertices.append(plane[corner_index])
+			normals.append(Vector3.UP)
+			uvs.append(quad_uvs[corner_index])
+			uv2s.append(uv2)
+			colors.append(tone)
+		for quad_index in QUAD_INDICES:
+			indices.append(base_index + quad_index)
+		surface["faces"] = int(surface["faces"]) + 1
 
 
 ## Adds an axis-aligned box to a surface.  Textures are mapped 0..1 per face;

@@ -1,6 +1,8 @@
 class_name BuildDemo
 extends RefCounted
 
+const MedievalKit = preload("res://scripts/game/medieval_kit.gd")
+
 ## M25 player-authored construction demonstration.
 ##
 ## Builds a cottage and a distinct stone/timber tower from the game's crafted
@@ -59,62 +61,88 @@ static func _level_site(world: VoxelWorld, report: Dictionary) -> Vector3i:
 
 static func _build_cottage(world: VoxelWorld, anchor: Vector3i) -> int:
 	var placed := 0
-	var t := BlockDB.TIMBER_FRAME
-	var p := BlockDB.PLANKS
-	var s := BlockDB.STONE_BRICK
-	var c := BlockDB.COBBLESTONE
-	var g := BlockDB.GLASS
-	var r := BlockDB.ROOF_TILE
-	var k := BlockDB.ROOF_RIDGE
-	# Footprint x -4..4, z -3..3.
+	# Footprint x -4..4, z -3..3.  The floor is planks inside a stone plinth.
 	for dz in range(-3, 4):
 		for dx in range(-4, 5):
-			var pos := anchor + Vector3i(dx, 0, dz)
 			var perimeter := absi(dx) == 4 or absi(dz) == 3
-			placed += _put(world, pos, c if perimeter else s)
-	# Walls: masonry base, timber posts, plank infill, glass windows, a door.
+			placed += _put(world, anchor + Vector3i(dx, 0, dz),
+				BlockDB.STONE_WALL if perimeter else BlockDB.PLANKS)
+	# Ground-floor stone plinth and the dark door surround.
 	for dz in range(-3, 4):
 		for dx in range(-4, 5):
 			var perimeter := absi(dx) == 4 or absi(dz) == 3
 			if not perimeter:
 				continue
+			var block_id := BlockDB.STONE_WALL
+			if dz == 3 and dx == 0:
+				block_id = BlockDB.DOOR
+			elif dz == 3 and absi(dx) == 1:
+				block_id = BlockDB.DARK_TIMBER
+			placed += _put(world, anchor + Vector3i(dx, 1, dz), block_id)
+	# Plaster-and-timber upper walls with framed windows, shutters and braces.
+	for dz in range(-3, 4):
+		for dx in range(-4, 5):
+			var perimeter := absi(dx) == 4 or absi(dz) == 3
+			if not perimeter:
+				continue
+			var block_id := BlockDB.PLASTER
 			var corner := absi(dx) == 4 and absi(dz) == 3
-			var post := corner or (absi(dx) % 2 == 0 and absi(dz) == 3) or (absi(dz) % 2 == 0 and absi(dx) == 4)
-			for y in [1, 2, 3]:
-				var block_id := t if post else p
-				if y == 1:
-					block_id = s
-				# Windows on the long sides at eye height.
-				if y == 2 and not post and absi(dz) == 3 and (dx == -3 or dx == 3):
-					block_id = g
-				if y == 2 and not post and absi(dx) == 4 and (dz == -1 or dz == 1):
-					block_id = g
-				placed += _put(world, anchor + Vector3i(dx, y, dz), block_id)
-	# Door on the south face (z = +3), two blocks high.
-	placed += _put(world, anchor + Vector3i(0, 1, 3), BlockDB.DOOR)
-	placed += _put(world, anchor + Vector3i(0, 2, 3), BlockDB.DOOR)
-	# Gable roof of stairs: eave z=+-3 at y4, then y5 and y6 toward the ridge.
-	for dz in [-3, 3]:
+			if corner:
+				block_id = BlockDB.DARK_TIMBER
+			elif dz == 3:
+				# South facade: central door, timber posts, braces, windows.
+				if dx == 0:
+					block_id = BlockDB.DOOR
+				elif absi(dx) == 1:
+					block_id = BlockDB.DARK_TIMBER
+				elif absi(dx) == 2:
+					block_id = BlockDB.TIMBER_BRACE
+				elif absi(dx) == 3:
+					block_id = BlockDB.WINDOW
+			elif dz == -3:
+				# North facade: a framed window between shuttered bays and braces.
+				if dx == 0:
+					block_id = BlockDB.WINDOW
+				elif absi(dx) == 1:
+					block_id = BlockDB.SHUTTER
+				elif absi(dx) == 2:
+					block_id = BlockDB.TIMBER_BRACE
+			elif absi(dx) == 4:
+				# Side facades: two windows, a central shutter and braced panels.
+				if absi(dz) == 1:
+					block_id = BlockDB.WINDOW
+				elif dz == 0:
+					block_id = BlockDB.SHUTTER
+				elif absi(dz) == 2:
+					block_id = BlockDB.TIMBER_BRACE
+			placed += _put(world, anchor + Vector3i(dx, 2, dz), block_id)
+	# A plaster upper band with dark framing posts and a lintel over the door.
+	for dz in range(-3, 4):
 		for dx in range(-4, 5):
-			var orientation := 0 if dz > 0 else 2
-			placed += _put_state(world, anchor + Vector3i(dx, 4, dz), BlockDB.STAIR, orientation)
-	# The 9-wide facade needs one more eave column on each side of the slope.
-	for side in [-1, 1]:
-		for dx in range(-4, 5):
-			var orientation := 0 if side > 0 else 2
-			placed += _put_state(world, anchor + Vector3i(dx, 5, side * 2), BlockDB.STAIR, orientation)
-			placed += _put_state(world, anchor + Vector3i(dx, 6, side), BlockDB.STAIR, orientation)
-		for dx in range(-4, 5):
-			placed += _put(world, anchor + Vector3i(dx, 6, 0), k)
-	# Gable ends: fill the triangle above the side walls with planks.
-	for dx in [-4, 4]:
-		for y in [4, 5]:
-			for dz in range(-2 + (y - 4), 3 - (y - 4)):
-				if world.get_block(anchor + Vector3i(dx, y, dz)) == BlockDB.AIR:
-					placed += _put(world, anchor + Vector3i(dx, y, dz), p)
-	# Chimney.
-	for y in range(4, 8):
-		placed += _put(world, anchor + Vector3i(3, y, -2), s)
+			var perimeter := absi(dx) == 4 or absi(dz) == 3
+			if not perimeter:
+				continue
+			var block_id := BlockDB.PLASTER
+			if absi(dx) == 4 and absi(dz) == 3:
+				block_id = BlockDB.DARK_TIMBER
+			elif dz == 3:
+				if absi(dx) % 2 == 0 or dx == 0:
+					block_id = BlockDB.DARK_TIMBER
+			elif dz == -3:
+				if absi(dx) % 2 == 0 or dx == 0:
+					block_id = BlockDB.DARK_TIMBER
+			elif absi(dx) == 4:
+				if absi(dz) % 2 == 1:
+					block_id = BlockDB.DARK_TIMBER
+			placed += _put(world, anchor + Vector3i(dx, 3, dz), block_id)
+	# Roof: thin eave overhang, continuous slate ramp planes, triangular ridge,
+	# gable infill, finials and a stone chimney above the ridge.
+	var roof: Dictionary = MedievalKit.build_gable_roof(world, anchor, 4, 3, 4,
+		{"finials": true, "chimney": {"x": 3, "z": -2, "top": 9}})
+	placed += int(roof["pieces"])
+	# Window boxes sit on the ground under the front windows.
+	for dx in [-3, 3]:
+		placed += _put(world, anchor + Vector3i(dx, 1, 4), BlockDB.FLOWER_BOX)
 	# Interior: work stations, storage, a hanging lantern and a floor rug of path.
 	placed += _put(world, anchor + Vector3i(-3, 1, -2), BlockDB.CRAFTING_TABLE)
 	placed += _put(world, anchor + Vector3i(-2, 1, -2), BlockDB.FURNACE)
@@ -195,13 +223,16 @@ static func _build_path(world: VoxelWorld, base: Vector3i) -> int:
 
 # --- helpers --------------------------------------------------------------
 
-## Counts the staircase blocks in the demo footprint (for the capture report).
+## Counts the stair and roof-ramp blocks in the demo footprint (for the capture
+## report).
 static func _count_stairs(world: VoxelWorld, base: Vector3i) -> int:
 	var count := 0
 	for dz in range(-HALF, HALF + 1):
 		for dx in range(-HALF, HALF + 1):
 			for y in range(base.y, base.y + 8):
-				if world.get_block(Vector3i(base.x + dx, y, base.z + dz)) == BlockDB.STAIR:
+				if world.get_block(Vector3i(base.x + dx, y, base.z + dz)) == BlockDB.STAIR \
+						or world.get_block(Vector3i(base.x + dx, y, base.z + dz)) == BlockDB.SLATE_STAIR \
+						or world.get_block(Vector3i(base.x + dx, y, base.z + dz)) == BlockDB.SLATE_RAMP:
 					count += 1
 	return count
 
