@@ -89,6 +89,17 @@ final settlement genuinely player-built rather than a prefab.
 - Captures are 1280×720 on the existing Windows/RTX 3080 machine; no other
   hardware was tested.
 
+### Reproduce the final gate
+
+```powershell
+$godot = 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe'
+& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
+& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
+& $godot --headless --path prototypes/m17/godot -- --straight-to-game --quit-after=30
+& $godot --path prototypes/m17/godot -- --capture --capture-name=m28-final-wide.png --final-demo=wide --time=0.28 --hide-hud --settle=20 --render-distance=8
+& $godot --path prototypes/m17/godot -- --capture --capture-name=m28-final-castle.png --final-demo=castle --time=0.28 --hide-hud --settle=20 --render-distance=6
+```
+
 ## M27 — Bring normal generated worlds closer to the visual references (2026-10-20)
 
 Mission: improve the *normal* explorable world (not the showcase) against the
