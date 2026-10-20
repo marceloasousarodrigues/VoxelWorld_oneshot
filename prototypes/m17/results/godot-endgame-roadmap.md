@@ -3,7 +3,7 @@
 **Purpose:** Continue the Godot prototype from M23 to a complete, playable, resource-driven voxel building game whose visual language is guided by the supplied Dragon Quest Builders-style references.
 
 **Project:** `prototypes/m17/godot/`  
-**Current handoff:** M22–**M25** are implemented and verified. M25 adds stair rotation, live build feedback and a scripted player-authored cottage + tower (ordinary voxel blocks, no prefab stamp). Continue with M26. Do not redo M23–M25.  
+**Current handoff:** M22–**M26** are implemented and verified. M26 makes the save write recoverable across the finalise window and proves a multi-chunk build through unload/reload and restart. Continue with M27. Do not redo M23–M26.  
 **Reference images:** `prototypes/m17/references/visual/dragon-quest-builders/` (see image workflow below).
 
 This roadmap complements the existing `prototypes/m17/results/godot-roadmap.md`, `GODOT_MISSION.md`, `AGENTS.md`, and `ARCHITECTURE.md`. It does not replace their rules or change the production Python/Ursina game. Treat this as the playable endgame plan and keep milestone work scoped to one milestone at a time.
@@ -97,9 +97,11 @@ If the images are not yet in the repository folder, copy the supplied originals 
 
 **Evidence:** interaction tests, real-scene placement/mining checks, two captures showing player-authored builds, and concise control/help text.
 
-### M26 — Protect player-built worlds through saving and streaming
+### M26 — Protect player-built worlds through saving and streaming — **COMPLETE 2026-10-20**
 
 **Goal:** Make long-term building reliable across normal play, saves, chunk movement, and restart.
+
+**Status:** Delivered. The save write now keeps a recoverable `.bak` across the finalise rename (restored on failure or by `read()` after an interruption), and `test_m26_protection.gd` proves a multi-chunk oriented build through fresh-world apply, far-chunk unload/regeneration, `clear_edits()` + re-apply and read-from-disk restart, plus corrupt-save rejection without mutating the live world. Gate: unit 2004 / integration 429 assertions, smoke hash unchanged; no meshing/streaming code changed, so no new benchmark. Evidence: `godot-progress.md` M26 section.
 
 **Dependencies:** M25’s block palette and placement interactions; existing M16 streaming and save manager.
 

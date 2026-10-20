@@ -11,6 +11,34 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ---
 
+## M26 — Protect player-built worlds through saving and streaming
+
+Evidence: `godot-progress.md` M26 section; `scripts/tests/test_m26_protection.gd`.
+
+- [x] Save/reload retains player position/flying, inventory (blocks, ingots,
+      crafted tool), clock, health, breath, hunger, placed and removed blocks,
+      stairs orientation, station contents and resident/settlement payloads
+- [x] **Multi-chunk build** (x=15/16 boundary: masonry, glass, removed block,
+      two oriented stairs, table, door) survives write → fresh-world apply →
+      far-half unload/regeneration → `clear_edits()` → re-apply → read-from-disk
+      restart, with no lost or duplicated blocks
+- [x] Older saves: v1–v8 load (v8 rows default orientation to 0); invalid
+      payloads are rejected and quarantined; a rejected save leaves the live
+      world fingerprint and player untouched
+- [x] **Recoverable atomic write**: the old save is moved to `.bak` across the
+      finalise rename, restored if finalise fails, and recovered by `read()`
+      after an interrupted run; `.tmp`/`.bak` are cleaned by `delete_save`
+- [x] Visual test and build demo remain isolated from normal saves, autosave and
+      quit-save
+- [x] Gate: unit **2004** / integration **429** assertions, both exit 0; smoke
+      twice `world_hash=2065363152372568468` unchanged
+- [~] No human quit/restart play-through; restart is simulated through the real
+      `SaveManager` path
+- [ ] Performance not re-benchmarked because no meshing/streaming/generation
+      code changed (save-file management only); M25 baselines stand
+
+---
+
 ## M25 — Expressive, dependable construction
 
 Design/evidence: `godot-progress.md` M25 section; `m25-build-wide.png`,

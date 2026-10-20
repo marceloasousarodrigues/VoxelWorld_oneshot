@@ -1,5 +1,59 @@
 # M17 Godot — Progress and Resume Point
 
+## M26 — Protect player-built worlds through saving and streaming (2026-10-20)
+
+Mission: make long-term building reliable across normal play, chunk movement,
+restart and reopening, and make a broken save unable to destroy a good world.
+
+### What was actually changed
+
+- **Recoverable atomic save** (`scripts/game/save_manager.gd`): the previous
+  write path deleted the old save *before* renaming the temp file, leaving a
+  window where an interrupted write could lose both.  The write now moves the
+  old save to `world.json.bak`, renames the temp into place, and only then drops
+  the backup; a failed finalise puts the backup back.  `read()` restores a
+  leftover `.bak` at startup (the interrupted-write case), and `delete_save()`
+  clears `.tmp`/`.bak` too.  Corrupt payloads are still quarantined and never
+  applied.
+- **New `scripts/tests/test_m26_protection.gd` (61 assertions):**
+  - a player build straddling the x=15/16 chunk boundary — stone brick, glass,
+    a removed generated block, two oriented stairs (one per side), a crafting
+    table and a door;
+  - write → read → apply to a fresh world → verify every block and orientation,
+    the removal, player position/flying, inventory, clock, health, breath,
+    hunger, station payload, crop payload and resident/settlement payload;
+  - unload and regenerate the far half of the build, then verify both halves;
+  - `clear_edits()` (pristine regeneration) followed by re-applying the save,
+    then reading it from disk again, to cover a full restart/reopen;
+  - an interrupted write (save moved aside) recovers through `read()`;
+  - a corrupt payload is rejected without changing the live world fingerprint
+    or player position.
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows)
+
+- Unit: **2004 assertions, exit 0**, no script errors (M25: 1943; +61 M26).
+- Integration: **429 assertions, exit 0** (unchanged; the existing real-scene
+  save/reload, chest, crop, station and cursor sections still pass).
+- Headless smoke twice: exit 0, 0 bytes stderr,
+  `world_hash=2065363152372568468`, `faces=174353`,
+  `faces_hash=665917304729475893` — unchanged and identical both runs.
+- **Performance:** no meshing, streaming or generation code was changed; the
+  M25/M24 numbers remain the baseline (`perf-*` reports; look/settle/walk p95
+  within the recorded range).  No new benchmark was run for a save-file-only
+  change, and this is stated rather than implied.
+- Older-version loading remains covered by `test_persistence.gd` (v1–v8 rows,
+  v8 four-column orientation default, malformed payload quarantine).
+
+### Limitations / notes
+
+- No human quit/restart play-through; the restart is simulated through the real
+  `SaveManager` write/read/apply path and a cleared world.
+- The backup protects the finalise window; a power loss while writing the
+  temporary file leaves the old save untouched but cannot recover the
+  half-written temp (it is ignored).
+- `--visual-test` and `--build-demo` remain isolated from normal saves
+  (including autosave and quit-save).
+
 ## M25 — Expressive, dependable construction (2026-10-20)
 
 Mission: make the existing voxel building loop comfortable and dependable for a

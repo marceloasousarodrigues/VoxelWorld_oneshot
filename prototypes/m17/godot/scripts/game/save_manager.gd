@@ -115,22 +115,49 @@ func write(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory, clock: 
 		return false
 	file.store_string(JSON.stringify(payload, "\t"))
 	file.close()
-	# Write-then-rename so an interrupted save can never truncate the old one.
+	# Write-then-rename with a recoverable backup.  An interrupted save must
+	# never leave the player with neither the old file nor the new one: the old
+	# save is moved aside (not deleted), the temp becomes the save, and only then
+	# is the backup dropped.  A failed rename puts the old save back, and `read()`
+	# restores a leftover backup after an interrupted run.
 	var absolute_temporary := ProjectSettings.globalize_path(temporary)
 	var absolute_path := ProjectSettings.globalize_path(path)
+	var backup := path + ".bak"
+	var absolute_backup := ProjectSettings.globalize_path(backup)
 	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(absolute_path)
+		if FileAccess.file_exists(backup):
+			DirAccess.remove_absolute(absolute_backup)
+		var backup_error := DirAccess.rename_absolute(absolute_path, absolute_backup)
+		if backup_error != OK:
+			last_error = "could not move the previous save aside (error %d)" % backup_error
+			return false
 	var error := DirAccess.rename_absolute(absolute_temporary, absolute_path)
 	if error != OK:
+		if FileAccess.file_exists(backup):
+			DirAccess.rename_absolute(absolute_backup, absolute_path)
 		last_error = "could not finalise %s (error %d)" % [path, error]
 		return false
+	if FileAccess.file_exists(backup):
+		DirAccess.remove_absolute(absolute_backup)
 	return true
+
+
+## Restores a save that a previous interrupted write moved aside.  A completed
+## write leaves no `.bak`, so this is a no-op in the normal case.
+func _recover_backup() -> void:
+	var path := save_path()
+	var backup := path + ".bak"
+	if FileAccess.file_exists(path) or not FileAccess.file_exists(backup):
+		return
+	DirAccess.rename_absolute(ProjectSettings.globalize_path(backup),
+		ProjectSettings.globalize_path(path))
 
 
 ## Reads and validates a save without touching any live state.
 ## Returns `{"ok": bool, "error": String, "data": Dictionary}`.
 func read() -> Dictionary:
 	last_error = ""
+	_recover_backup()
 	var path := save_path()
 	if not FileAccess.file_exists(path):
 		last_error = "no save at %s" % path
@@ -415,6 +442,8 @@ func _quarantine(path: String, reason: String) -> void:
 
 func delete_save() -> bool:
 	var path := save_path()
-	if not FileAccess.file_exists(path):
-		return false
-	return DirAccess.remove_absolute(ProjectSettings.globalize_path(path)) == OK
+	for suffix: String in ["", ".bak", ".tmp"]:
+		var candidate := path + suffix
+		if FileAccess.file_exists(candidate):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(candidate))
+	return not FileAccess.file_exists(path)
