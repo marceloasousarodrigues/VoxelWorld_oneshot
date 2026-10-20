@@ -433,8 +433,11 @@ func _main() -> void:
 	player.flying = false
 
 	# Walking across a chunk boundary keeps the player grounded and streams the
-	# neighbouring chunk in.
-	player.spawn_on_column(14, 8)
+	# neighbouring chunk in.  A level pad keeps the walk clear of generated trees
+	# and slopes on either side of the boundary.
+	_prepare_test_pad(Vector2i(14, 8), 6)
+	await _stream_until_settled()
+	player.teleport_to(Vector3(14.5, float(_test_pad_y) + 2.0, 8.5))
 	player.look_yaw(-90.0)
 	player.look_pitch(0.0)
 	for i in range(30):

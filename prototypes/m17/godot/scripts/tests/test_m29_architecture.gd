@@ -724,7 +724,8 @@ func _demos(h: TestHarness) -> void:
 		"the starter house door is still editable")
 
 	# Final showcase: the longhouse, market row and keep use the same roof kit.
-	var final_world := VoxelWorld.new(17017)
+	# Pinned to the M30 terrain: the keep finial cell is asserted on that layout.
+	var final_world := VoxelWorld.new(17017, 1)
 	var final_report: Dictionary = FinalDemo.build(final_world)
 	h.check(int(final_report["longhouse"]) > 250, "the longhouse is rebuilt with the new palette")
 	h.check(int(final_report["market"]) > 70, "the market stalls are rebuilt")

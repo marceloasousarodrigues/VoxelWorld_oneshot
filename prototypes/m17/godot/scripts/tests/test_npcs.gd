@@ -29,7 +29,8 @@ func _first_settlement(world: VoxelWorld, limit: int = 8) -> Dictionary:
 ## A flat test world with a settlement-sized plot: a solid stone plateau with a
 ## few logs on top, so a resident has something to do without needing terrain.
 func _test_plot() -> Dictionary:
-	var world := VoxelWorld.new(17017)
+	# Pinned to the M30 terrain: this plot is laid over the generator's natural trees.
+	var world := VoxelWorld.new(17017, 1)
 	for chunk_y in range(0, 6):
 		for chunk_z in range(-1, 2):
 			for chunk_x in range(-1, 2):

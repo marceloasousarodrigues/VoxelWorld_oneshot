@@ -59,7 +59,8 @@ func run(h: TestHarness) -> void:
 	h.check(saves.ensure_directory(), "the M26 test save directory is available")
 
 	# --- a multi-chunk player build ---------------------------------------
-	var world := VoxelWorld.new(17017)
+	# Pinned to the M30 terrain: the pristine cells below are asserted on that layout.
+	var world := VoxelWorld.new(17017, 1)
 	var boundary_x := 15
 	var row_y := 90
 	var row_z := 8
@@ -111,7 +112,7 @@ func run(h: TestHarness) -> void:
 	# --- apply to a fresh session (simulated restart) ---------------------
 	var result: Dictionary = saves.read()
 	h.check(bool(result["ok"]), "the multi-chunk save reads back")
-	var restored := VoxelWorld.new(17017)
+	var restored := VoxelWorld.new(17017, 1)
 	for x in range(13, 19):
 		restored.ensure_chunk(VoxelWorld.world_to_chunk(Vector3i(x, row_y, row_z)))
 	var restored_player := _spawn_player(restored)

@@ -14,8 +14,15 @@ const CHUNKS_Y := WORLD_HEIGHT / ChunkData.SIZE
 const SEA_LEVEL := 62
 const BASE_HEIGHT := 66
 const LEGACY_VERSION := 0
-const CURRENT_VERSION := 1
+## Version 1 is the M30 wilderness path; version 2 (M31) adds the denser,
+## stepped canopy.  Versions 0 and 1 must keep producing their pinned output.
+const WILDERNESS_VERSION := 2
+const CURRENT_VERSION := 2
 const TREE_PAD := 5
+## Wide enough for a radius-4 crown with one block of lean and one of shelf offset.
+const WILDERNESS_TREE_PAD := 7
+## Side length of the columns that share one canopy tree candidate (M31 forest).
+const CANOPY_CELL := 2
 const HIGHLAND_TERRACE_SIZE := 3
 const RIVER_BANK_LIMIT := 0.120
 
@@ -47,7 +54,7 @@ static var BIOME_TINTS := [
 
 
 static func is_supported_version(version: int) -> bool:
-	return version == LEGACY_VERSION or version == CURRENT_VERSION
+	return version >= LEGACY_VERSION and version <= CURRENT_VERSION
 
 # Blocks that receive the biome tint on their mesh vertices.
 const TINTED_BLOCKS := [
@@ -97,6 +104,21 @@ func _init(world_seed_value: int = 17017, terrain_version_value: int = CURRENT_V
 	_cave_a = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.026, 2, 0.5)
 	_cave_b = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.031, 2, 0.5)
 	_cavern = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.011, 3, 0.55)
+
+
+## True for generator version 2 and later (the M31 canopy path).
+func _is_wilderness() -> bool:
+	return terrain_version >= WILDERNESS_VERSION
+
+
+## Horizontal reach of a tree's crown from its trunk, in blocks.  Version 0 and 1
+## keep their original pads so their chunk borders are unchanged.
+func _tree_pad() -> int:
+	if terrain_version == LEGACY_VERSION:
+		return 3
+	if _is_wilderness():
+		return WILDERNESS_TREE_PAD
+	return TREE_PAD
 
 
 func _noise(type: int, frequency: float, octaves: int, gain: float) -> FastNoiseLite:
@@ -195,7 +217,14 @@ func _compute_height(x: int, z: int) -> int:
 			height += mask * mask * 48.0 * clampf(continental * 3.0, 0.0, 1.0)
 		return int(clampf(roundf(height), 1.0, float(WORLD_HEIGHT - 10)))
 	if continental > 0.06:
-		var peak_strength := clampf((mountain - 0.12) / 0.88, 0.0, 1.0)
+		var peak_floor := 0.12
+		var peak_span := 0.88
+		if _is_wilderness():
+			# M31: broader ranges with taller summits, so snowy peaks appear inside
+			# the streamed area instead of only at rare noise maxima.
+			peak_floor = 0.0
+			peak_span = 0.6
+		var peak_strength := clampf((mountain - peak_floor) / peak_span, 0.0, 1.0)
 		var range_strength := clampf(continental * 3.0, 0.0, 1.0)
 		# A steep curve keeps mountain summits pointed instead of saturating the
 		# whole upper range into broad flat tables.
@@ -221,6 +250,17 @@ func _compute_height(x: int, z: int) -> int:
 	# A low-frequency zero-contour field creates winding, connected river beds.
 	# The water system already fills below-sea-level source columns across chunks;
 	# shaping the bed here preserves that source and persistence contract.
+	if _is_wilderness():
+		# M31: the channel centre is carved below sea level so the existing source-water
+		# fill can produce water.  Whether a given reach floods is limited by the
+		# elevation gate above; see the M31 report.
+		if rounded_height < SEA_LEVEL + 34:
+			var wild_distance: float = absf(_river.get_noise_2d(x, z))
+			if wild_distance < RIVER_BANK_LIMIT:
+				var wild_strength := 1.0 - smoothstep(0.0, RIVER_BANK_LIMIT, wild_distance)
+				var wild_floor := SEA_LEVEL - (2.0 + wild_strength * 5.0)
+				rounded_height = mini(rounded_height, roundi(lerpf(float(rounded_height), wild_floor, wild_strength)))
+		return clampi(rounded_height, 1, WORLD_HEIGHT - 10)
 	if rounded_height > SEA_LEVEL + 1 and rounded_height < SEA_LEVEL + 34:
 		var river_distance: float = absf(_river.get_noise_2d(x, z))
 		if river_distance < RIVER_BANK_LIMIT:
@@ -352,6 +392,8 @@ func tree_at(x: int, z: int) -> Dictionary:
 	var biome := _world_biome(x, z)
 	if height <= SEA_LEVEL:
 		return {"type": TreeType.NONE}
+	if _is_wilderness() and biome == Biome.FOREST:
+		return _forest_canopy_tree(x, z, height)
 	var roll := _hash2(x, z, 31337) % 1000
 	match biome:
 		Biome.FOREST:
@@ -416,6 +458,47 @@ func tree_at(x: int, z: int) -> Dictionary:
 			if roll < 12:
 				return {"type": TreeType.CACTUS, "base": height + 1, "height": 1 + _hash2(x, z, 991) % 3}
 	return {"type": TreeType.NONE}
+
+
+## Version 2 forest canopy.  Each CANOPY_CELL x CANOPY_CELL block of columns has
+## one hashed candidate column, so trunks keep natural spacing without a visible
+## grid while the crowns knit into a continuous canopy.  Clearings and river
+## corridors stay open; grove patches are denser and pine-heavy.
+func _forest_canopy_tree(x: int, z: int, height: int) -> Dictionary:
+	var cell_x := floori(float(x) / CANOPY_CELL)
+	var cell_z := floori(float(z) / CANOPY_CELL)
+	var candidate_x := cell_x * CANOPY_CELL + _hash2(cell_x, cell_z, 4711) % CANOPY_CELL
+	var candidate_z := cell_z * CANOPY_CELL + _hash2(cell_x, cell_z, 4712) % CANOPY_CELL
+	if x != candidate_x or z != candidate_z:
+		return {"type": TreeType.NONE}
+	if _river_distance(x, z) < RIVER_BANK_LIMIT * 1.25:
+		return {"type": TreeType.NONE}
+	var patch: float = _forest_patches.get_noise_2d(x, z)
+	if patch < -0.24:
+		return {"type": TreeType.NONE}
+	var density := 0.95
+	if patch < 0.02:
+		density = 0.7
+	if _hash2(x, z, 4713) % 1000 >= int(density * 1000.0):
+		return {"type": TreeType.NONE}
+	# Blossom stays rare: its pink speckle reads as noise at distance, while the
+	# Image 1 canopy is a continuous lime green.
+	var species := _hash2(x, z, 4714) % 100
+	if patch > 0.34:
+		if species < 30:
+			return _oak(x, z, height)
+		if species < 70:
+			return _pine(x, z, height)
+		if species < 95:
+			return _birch(x, z, height)
+		return _blossom(x, z, height)
+	if species < 45:
+		return _oak(x, z, height)
+	if species < 75:
+		return _pine(x, z, height)
+	if species < 95:
+		return _birch(x, z, height)
+	return _blossom(x, z, height)
 
 
 func _oak(x: int, z: int, ground: int) -> Dictionary:
@@ -656,7 +739,7 @@ func plant_tree(world: VoxelWorld, x: int, z: int, tree_type: int, ground_y: int
 		_:
 			return 0
 	var base := int(tree["base"])
-	var tree_pad := 3 if terrain_version == LEGACY_VERSION else TREE_PAD
+	var tree_pad := _tree_pad()
 	var min_chunk_x := floori(float(x - tree_pad - 1) / ChunkData.SIZE)
 	var max_chunk_x := floori(float(x + tree_pad + 1) / ChunkData.SIZE)
 	var min_chunk_z := floori(float(z - tree_pad - 1) / ChunkData.SIZE)
@@ -698,7 +781,7 @@ func _generate_trees(chunk: ChunkData) -> void:
 	var base_x := coord.x * ChunkData.SIZE
 	var base_y := coord.y * ChunkData.SIZE
 	var base_z := coord.z * ChunkData.SIZE
-	var tree_pad := 3 if terrain_version == LEGACY_VERSION else TREE_PAD
+	var tree_pad := _tree_pad()
 	for local_z in range(-tree_pad, ChunkData.SIZE + tree_pad):
 		for local_x in range(-tree_pad, ChunkData.SIZE + tree_pad):
 			var world_x := base_x + local_x
@@ -807,6 +890,13 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 	for layer_index in layer_radii.size():
 		var layer_radius: int = int(layer_radii[layer_index])
 		var dy := layer_index - (4 if terrain_version != LEGACY_VERSION and radius >= 4 else 3)
+		# Version 2 shifts each wide layer by up to one block, so the crown steps
+		# out in shelves rather than stacking into a single smooth dome.
+		var shelf_x := 0
+		var shelf_z := 0
+		if _is_wilderness() and layer_radius >= 2:
+			shelf_x = (_hash3(tree_world_x, top + dy, tree_world_z, 81) % 3) - 1
+			shelf_z = (_hash3(tree_world_x, top + dy, tree_world_z, 82) % 3) - 1
 		for dz in range(-layer_radius, layer_radius + 1):
 			for dx in range(-layer_radius, layer_radius + 1):
 				if dx * dx + dz * dz > layer_radius * layer_radius + 1:
@@ -818,7 +908,7 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 							continue
 					elif _hash3(hash_x + dx, top + dy, hash_z + dz, 6) % 5 == 0:
 						continue
-				_place_block(chunk, local_x + dx + lean_x, top + dy, local_z + dz + lean_z, leaf_block, base_y, true)
+				_place_block(chunk, local_x + dx + lean_x + shelf_x, top + dy, local_z + dz + lean_z + shelf_z, leaf_block, base_y, true)
 	# A short, broken skirt around the trunk softens the flat underside of the
 	# crown, which otherwise reads as a green slab floating over the trunk.
 	if radius >= 3:
