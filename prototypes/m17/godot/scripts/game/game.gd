@@ -15,12 +15,15 @@ const RESULTS_DIR := "res://../results/godot"
 const CONFIG_PATH := "user://settings.json"
 const BuildDemo = preload("res://scripts/game/build_demo.gd")
 const FinalDemo = preload("res://scripts/game/final_demo.gd")
+const StarterHouse = preload("res://scripts/game/starter_house.gd")
 const AUTOSAVE_SECONDS := 120.0
 ## After any damage the player is briefly immune to further *impact* damage, so a
 ## single landing or hit cannot apply twice in consecutive frames.
 const IFRAME_SECONDS := 0.5
 
 var state := State.MENU
+## True when a fresh world was started and the starter house has not been placed.
+var _starter_house_pending := false
 
 var library: TextureLibrary
 var materials: VoxelMaterials
@@ -648,6 +651,9 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	_last_damage_source = ""
 
 	world = VoxelWorld.new(seed_value)
+	# A brand-new world gets a finished starter house near spawn; a loaded save
+	# already contains its house edits and must not be modified.
+	_starter_house_pending = save == null
 	stations = StationRegistryModel.new(world)
 	farming = Farming.new(seed_value)
 	if station_panel != null and station_panel.is_open():
@@ -978,6 +984,14 @@ func _update_loading(delta: float) -> void:
 
 func _enter_play(area_ready: bool) -> void:
 	player.spawn_on_column(int(floor(player.global_position.x)), int(floor(player.global_position.z)))
+	# Fresh worlds get a complete, editable starter house near the spawn.  It is
+	# placed after the spawn column is known and only in normal gameplay, never
+	# in the showcase/build/final demo modes.
+	if _starter_house_pending and str(_options["visual_test"]).is_empty() \
+			and str(_options["build_demo"]).is_empty() and str(_options["final_demo"]).is_empty():
+		var spawn_column := Vector2i(floori(player.global_position.x), floori(player.global_position.z))
+		StarterHouse.build(world, spawn_column)
+	_starter_house_pending = false
 	if not str(_options["visual_test"]).is_empty():
 		VisualTestArena.new().build(world)
 	if not str(_options["build_demo"]).is_empty():

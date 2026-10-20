@@ -3,7 +3,7 @@
 **Purpose:** Continue the Godot prototype from M23 to a complete, playable, resource-driven voxel building game whose visual language is guided by the supplied Dragon Quest Builders-style references.
 
 **Project:** `prototypes/m17/godot/`  
-**Current handoff:** **M22–M28 are implemented and verified.** The final showcase is a player-authored village + castle built block-by-block on a normal generated world, saved/reloaded through the real `SaveManager`, and captured at day/dusk/night. The final definition of done is met for this roadmap, with the documented caveats that the journey is scripted through the real systems (no human play-through) and the M27 visual gaps remain.  
+**Current handoff:** **M22–M28 are implemented and verified**, plus the post-endgame user request for a **complete starter house near spawn** (M29 in the progress/roadmap docs). The final showcase is a player-authored village + castle built block-by-block on a normal generated world, saved/reloaded through the real `SaveManager`, and captured at day/dusk/night. The final definition of done is met for this roadmap, with the documented caveats that the journey is scripted through the real systems (no human play-through) and the M27 visual gaps remain.  
 **Reference images:** `prototypes/m17/references/visual/dragon-quest-builders/` (see image workflow below).
 
 This roadmap complements the existing `prototypes/m17/results/godot-roadmap.md`, `GODOT_MISSION.md`, `AGENTS.md`, and `ARCHITECTURE.md`. It does not replace their rules or change the production Python/Ursina game. Treat this as the playable endgame plan and keep milestone work scoped to one milestone at a time.

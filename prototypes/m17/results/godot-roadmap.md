@@ -11,6 +11,29 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ---
 
+## M29 — Starter house near spawn (post-endgame user request)
+
+Evidence: `godot-progress.md` M29 section; `starter-house-spawn.png`,
+`starter-house-close.png`; `scripts/game/starter_house.gd`;
+`test_starter_house.gd`.
+
+- [x] A fresh world builds a **complete cottage** at `spawn + (-6, -9)` — the
+      default spawn look direction — before play starts
+- [x] Stone foundation, timber frame, plank infill, glass windows, door, stepped
+      tiled stair roof with ridge/chimney, interior table/furnace/chest/barrel,
+      hanging lantern and a lit door lantern
+- [x] A packed path connects the door to the spawn column; the footprint is
+      levelled to the spawn ground and the spawn foot/head cells stay clear
+- [x] The house is written through the normal block API and **recorded as player
+      edits**, so it saves, reloads and streams like player building
+- [x] Loaded saves are not modified; the showcase/build/final demos skip it
+- [x] Gate: unit **2042** / integration **438** assertions, both exit 0; smoke
+      twice `edits=502`, `world_hash=7225730083801702457`
+- [~] Fixed template (no procedural variation); no human play-through
+- [ ] Door open/close interaction remains future work
+
+---
+
 ## M28 — Final playable loop and release-quality pass
 
 Evidence: `godot-progress.md` M28 section; `m28-final-{wide,village,castle,dusk,night}.png`;

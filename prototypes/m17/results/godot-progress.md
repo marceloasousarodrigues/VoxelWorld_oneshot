@@ -1,5 +1,53 @@
 # M17 Godot — Progress and Resume Point
 
+## M29 — Starter house near spawn (post-endgame user request, 2026-10-20)
+
+Request: place a fully built house close to the player spawn at the start of the
+game.
+
+### What was actually changed
+
+- **`scripts/game/starter_house.gd`**: on a **fresh world only**, `_enter_play`
+  builds a complete cottage at `spawn + (-6, -9)` — directly in the default
+  spawn view — then sets a short packed path from the door south/east to the
+  spawn column.
+- The house reuses `BuildDemo._build_cottage`: stone foundation, timber frame,
+  plank infill, glass windows, a real door, a stepped tiled stair roof with ridge
+  and chimney, table/furnace/chest/barrel inside, a hanging lantern and a lit
+  lantern post beside the door.
+- The footprint is levelled to the spawn's ground level (hills cut down, dips
+  filled) and cleared above, so the door, path and player feet line up.
+- **Every cell is recorded as a player edit** through the normal
+  `world.set_block`/`set_block_state` path, so the house is mineable, collidable,
+  streamed and saved like any player building. It is not a non-editable prefab.
+- **Loaded saves are never modified**: the flag is set only when
+  `_start_world(seed, null)` is used for a new world. The showcase, build demo
+  and final demo skip the starter house.
+- `test_starter_house.gd`: house completeness, door/window/roof/interior, path
+  reaching the spawn, clear foot/head spawn cells, recorded edits, and
+  idempotent rebuild (no duplicate edits).
+
+### Verification actually run
+
+- Unit: **2042 assertions, exit 0** (M28: 2026; +16 starter house).
+- Integration: **438 assertions, exit 0**.
+- Headless smoke twice: exit 0, 0 bytes stderr, **`edits=502`**,
+  `world_hash=7225730083801702457`, identical both runs (the new baseline
+  includes the starter-house edits).
+- Windowed captures inspected:
+  - `results/godot/starter-house-spawn.png` — the house fills the view directly
+    ahead of the spawn, with door, lit lantern, glass windows and path.
+  - `results/godot/starter-house-close.png` — full facade and stepped roof.
+- No changes to M23–M28 systems; the final showcase at (40, 40) is unaffected.
+
+### Limitations
+
+- The starter house is a fixed template (not procedurally varied); the terrain
+  immediately around it is levelled to the spawn height.
+- Doors remain ordinary door blocks (no open/close interaction), consistent with
+  the rest of the project.
+- No human play-through; evidence is the scripted startup plus the captures.
+
 ## M28 — Final playable loop and release-quality pass (2026-10-20)
 
 Mission: prove the game is a complete small sandbox — explore, harvest, craft,
