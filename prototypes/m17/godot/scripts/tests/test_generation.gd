@@ -35,6 +35,12 @@ func run(h: TestHarness) -> void:
 	world_b.ensure_chunk(Vector3i(1, 3, 0))
 	var reordered := (world_b.get_chunk(Vector3i(1, 3, 0)) as ChunkData).blocks.duplicate()
 	h.eq(ordered, reordered, "generation is independent of chunk load order")
+	world_a.ensure_chunk(Vector3i(-1, 3, -1))
+	var negative_ordered := (world_a.get_chunk(Vector3i(-1, 3, -1)) as ChunkData).blocks.duplicate()
+	world_b.ensure_chunk(Vector3i(-1, 3, -1))
+	var negative_reordered := (world_b.get_chunk(Vector3i(-1, 3, -1)) as ChunkData).blocks.duplicate()
+	h.eq(negative_ordered, negative_reordered,
+		"negative-coordinate chunks crossing two borders are independent of load order")
 
 	# Vertical layering at a column in the middle of the world.
 	var world := VoxelWorld.new(17017)
@@ -133,12 +139,118 @@ func run(h: TestHarness) -> void:
 	h.greater(float(decos), 0.0, "vegetation decorations are placed")
 	h.greater(float(flowers), 0.0, "wildflowers are placed in grass biomes")
 
+	# A known deterministic fallen trunk crosses the negative-coordinate chunk
+	# border at x=-481/-480. Both generation orders must write every segment.
+	var fallen_order_a := VoxelWorld.new(17017)
+	var fallen_order_b := VoxelWorld.new(17017)
+	var fallen_left := Vector3i(-31, 4, -32)
+	var fallen_right := Vector3i(-30, 4, -32)
+	fallen_order_a.ensure_chunk(fallen_left)
+	fallen_order_a.ensure_chunk(fallen_right)
+	fallen_order_b.ensure_chunk(fallen_right)
+	fallen_order_b.ensure_chunk(fallen_left)
+	var fallen_segments := 0
+	for offset in 4:
+		var world_x := -483 + offset
+		var world_z := -500
+		var log_position := Vector3i(world_x, fallen_order_a.surface_height(world_x, world_z) + 1, world_z)
+		var log_id := fallen_order_a.get_block(log_position)
+		if log_id == BlockDB.OAK_LOG or log_id == BlockDB.PINE_LOG or log_id == BlockDB.BIRCH_LOG:
+			fallen_segments += 1
+	h.eq(fallen_segments, 4, "a fallen trunk is complete across a negative-coordinate chunk seam")
+	h.eq((fallen_order_a.get_chunk(fallen_left) as ChunkData).blocks,
+		(fallen_order_b.get_chunk(fallen_left) as ChunkData).blocks,
+		"fallen-log geometry in the first chunk is independent of load order")
+	h.eq((fallen_order_a.get_chunk(fallen_right) as ChunkData).blocks,
+		(fallen_order_b.get_chunk(fallen_right) as ChunkData).blocks,
+		"fallen-log geometry in the second chunk is independent of load order")
+
 	# Biome variety.
 	var seen := {}
 	for x in range(-400, 401, 40):
 		for z in range(-400, 401, 40):
 			seen[world.biome_at(x, z)] = true
 	h.greater(float(seen.size()), 3.0, "several biomes exist within a short walk")
+
+	# M30 terrain profile: high ground resolves into deliberate terraces, with
+	# isolated ridges above broad hills and gentle surfaces left for building.
+	var m30_world := VoxelWorld.new(17017)
+	var highland_columns := 0
+	var terraced_columns := 0
+	var peak_columns := 0
+	var scenic_relief_columns := 0
+	var level_build_sites := 0
+	var river_columns := 0
+	var river_probe := Vector2i(1 << 30, 1 << 30)
+	var generator: WorldGen = m30_world.generator
+	for x in range(-320, 321, 4):
+		for z in range(-320, 321, 4):
+			var height := m30_world.surface_height(x, z)
+			if height >= WorldGen.SEA_LEVEL + 8:
+				highland_columns += 1
+				if posmod(height, WorldGen.HIGHLAND_TERRACE_SIZE) == 0:
+					terraced_columns += 1
+			if height >= WorldGen.SEA_LEVEL + 40:
+				peak_columns += 1
+			if posmod(x, 32) == 0 and posmod(z, 32) == 0 and height >= WorldGen.SEA_LEVEL + 8:
+				var local_low := height
+				var local_high := height
+				for offset_x in [-16, 0, 16]:
+					for offset_z in [-16, 0, 16]:
+						var neighbor_height := m30_world.surface_height(x + offset_x, z + offset_z)
+						local_low = mini(local_low, neighbor_height)
+						local_high = maxi(local_high, neighbor_height)
+				if local_high - local_low >= 24:
+					scenic_relief_columns += 1
+			if height > WorldGen.SEA_LEVEL + 4 and generator._column_slope(x, z, height) <= 1:
+				level_build_sites += 1
+			# Continental values above 0.35 are naturally dry land in the legacy
+			# profile, so below-sea columns in that band demonstrate carved rivers.
+			if generator._continent.get_noise_2d(x, z) > 0.35 and height < WorldGen.SEA_LEVEL - 1:
+				river_columns += 1
+				if river_probe.x == 1 << 30:
+					river_probe = Vector2i(x, z)
+	h.greater(float(highland_columns), 100.0, "the region has substantial elevated terrain")
+	h.greater(float(terraced_columns), float(highland_columns) * 0.93,
+		"highlands use consistent three-block terraces outside tapered river and valley transitions")
+	h.greater(float(peak_columns), 10.0, "the region includes distinct mountain peaks")
+	h.greater(float(scenic_relief_columns), 20.0,
+		"nearby ridge and valley profiles have strong visible relief")
+	h.greater(float(level_build_sites), 10.0, "the world retains naturally level building sites")
+	h.greater(float(river_columns), 10.0, "winding river channels cut into otherwise dry land")
+	var river_source := Vector3i(river_probe.x, WorldGen.SEA_LEVEL, river_probe.y)
+	m30_world.ensure_chunk(VoxelWorld.world_to_chunk(river_source))
+	h.eq(m30_world.get_block(river_source), BlockDB.WATER,
+		"the river channel at %s fills to the sea-level water surface" % river_probe)
+	h.eq(m30_world.get_fluid(river_source), ChunkData.SOURCE_LEVEL,
+		"the river at %s remains a deterministic source block" % river_probe)
+
+	# M30 forest patches deliberately alternate open clearings and denser groves.
+	var forest_clearings := 0
+	var open_forest_columns_with_trees := 0
+	var dense_grove_columns := 0
+	var dense_grove_trees := 0
+	var dense_grove_species := {}
+	for x in range(-320, 321, 2):
+		for z in range(-320, 321, 2):
+			if m30_world.biome_at(x, z) != WorldGen.Biome.FOREST:
+				continue
+			var patch: float = generator._forest_patches.get_noise_2d(x, z)
+			var tree := generator.tree_at(x, z)
+			if patch < -0.24:
+				forest_clearings += 1
+				if int(tree["type"]) != WorldGen.TreeType.NONE:
+					open_forest_columns_with_trees += 1
+			elif patch > 0.34:
+				dense_grove_columns += 1
+				if int(tree["type"]) != WorldGen.TreeType.NONE:
+					dense_grove_trees += 1
+					dense_grove_species[int(tree["type"])] = true
+	h.greater(float(forest_clearings), 100.0, "forest regions contain broad clearing patches")
+	h.eq(open_forest_columns_with_trees, 0, "clearings remain open and useful for building")
+	h.greater(float(dense_grove_columns), 100.0, "forest regions retain dense woodland patches")
+	h.greater(float(dense_grove_trees), 10.0, "dense patches still provide harvestable trees")
+	h.greater(float(dense_grove_species.size()), 2.0, "dense groves mix broadleaf, blossom, and conifer species")
 
 	# Sea level contract used by the fixture loader.
 	h.eq(WorldGen.SEA_LEVEL, 62, "sea level is 62")
