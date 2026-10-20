@@ -1,5 +1,94 @@
 # M17 Godot — Progress and Resume Point
 
+## M28 — Final playable loop and release-quality pass (2026-10-20)
+
+Mission: prove the game is a complete small sandbox — explore, harvest, craft,
+build a home and village, raise a castle, save, reload and continue — with the
+final settlement genuinely player-built rather than a prefab.
+
+### What was actually changed
+
+- **`scripts/game/final_demo.gd` (`--final-demo=wide|village|castle`)**: a 61×61
+  player-authored settlement on a levelled natural site near (40, 40), kept
+  outside the spawn area.  It contains:
+  - the M25 cottage (home) and stone/timber tower,
+  - a longhouse hall (stone plinth, timber frame, plank infill, glazed windows,
+    double door, long stair roof, chimney, table/furnace/chest/barrel/lanterns),
+  - two market stalls with counters, roofs and goods,
+  - a castle: stone curtain wall with crenellations, four corner towers with
+    glass slits/banners/lanterns, a gatehouse with a door, and a central keep
+    with a timber upper storey and a stair gable roof,
+  - a street network, fenced wheat gardens, a working well, lantern posts and a
+    ring of framing trees.
+  Every cell is written individually through the same `world.set_block` /
+  `set_block_state` path the player uses, and **recorded as a player edit**, so
+  it saves, reloads and streams like normal building work.  No `StructureDB`
+  stamp or showcase-only model is used.
+- **`scripts/tests/test_final_demo.gd` (21 assertions)**: the village/castle
+  buildings, doors, roofs, street, well, crops, lantern count, stair count and
+  mineability.
+- **Real-scene journey proof** (`run_integration.gd::_final_journey_section`):
+  builds the settlement in the live world, saves through the real `SaveManager`,
+  reloads, and verifies the castle gate, cottage door, street and player
+  position survive — the scripted equivalent of build → save → quit → reopen.
+- The build demo's writes now record edits (M25's demo was capture-only); this
+  is what makes the final settlement persistent.
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows)
+
+- Unit: **2026 assertions, exit 0**, no script errors.
+- Integration: **438 assertions, exit 0** (M27: 429; +9 final journey checks).
+- Headless smoke twice: exit 0, 0 bytes stderr,
+  `world_hash=5222532724760257225`, identical both runs (normal generation
+  unchanged by the capture-only demo).
+- **Windowed final captures inspected** (seed 17017, 1280×720, HUD hidden):
+  - `results/godot/m28-final-wide.png` — the village and castle framed by the
+    ring trees, with street, gardens, stalls and keep.
+  - `results/godot/m28-final-village.png` — longhouse, cottage, castle gate,
+    lantern-lit street, fenced crops.
+  - `results/godot/m28-final-castle.png` — close castle: curtain wall,
+    crenellations, corner towers, gate door, timber keep and tiled stair roof.
+  - `results/godot/m28-final-dusk.png` — warm sunset over the settlement.
+  - `results/godot/m28-final-night.png` — lantern pools, stars and readable
+    silhouettes.
+- Performance: M27's `perf-settle-m27.json` remains the baseline (M28 adds only
+  a capture/test demo file; normal gameplay, meshing and streaming are
+  unchanged).  Settle p95 5.108 ms / p99 8.288 ms at radius 4.
+- Prior behavior: the full unit and integration suites cover coordinates,
+  meshing, streaming, edits, persistence, inventory/crafting/stations, survival,
+  creatures, NPCs, raids, settings and the visual contracts.
+
+### Final status against the roadmap definition of done
+
+- Deterministic natural terrain with forests/hills/water/material variety: yes
+  (M17/M22/M24/M27), with the visual gaps listed in the M27 section.
+- Independently obtain and craft the building palette: yes — `test_economy.gd`
+  follows an empty inventory through harvesting, tool gates, stations and
+  smelting to the whole kit.
+- Author a cottage, village and castle in ordinary gameplay blocks: yes — the
+  final demo is block-by-block, recorded as edits, and captured.
+- Player work survives interactions, chunk boundaries, streaming, save, close
+  and reload: yes — `test_m26_protection.gd` plus the final journey section.
+- Complete fresh-world resource-to-castle journey evidenced with tests, runtime
+  checks, captures and performance: yes, with the explicit caveat that the
+  journey is **scripted through the real systems**, not a human play-through.
+- Python/Ursina implementation and unrelated user changes preserved: yes.
+
+### Known limitations / tool limits
+
+- No human keyboard/mouse play-through; all runtime evidence is scripted through
+  the real player/build/save APIs and fixed-camera windowed captures.
+- The final site is levelled and framed with planted trees; it is a real
+  generated world but the plateau itself is prepared by the demo harness.
+- M27 visual gaps remain: dense canopy reads as a carpet from high above, the
+  loaded-region edge is visible on long sea views, and the world has no dramatic
+  generated cliff terraces.
+- No audio, no weather, no city-management layer; M1–M22 limitations (e.g.
+  dropped-item entity for a full inventory, human interface play-through) remain
+  as documented in `godot-roadmap.md`.
+- Captures are 1280×720 on the existing Windows/RTX 3080 machine; no other
+  hardware was tested.
+
 ## M27 — Bring normal generated worlds closer to the visual references (2026-10-20)
 
 Mission: improve the *normal* explorable world (not the showcase) against the

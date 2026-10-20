@@ -3,7 +3,7 @@
 **Purpose:** Continue the Godot prototype from M23 to a complete, playable, resource-driven voxel building game whose visual language is guided by the supplied Dragon Quest Builders-style references.
 
 **Project:** `prototypes/m17/godot/`  
-**Current handoff:** M22–**M27** are implemented and verified. M27 fixed the shallow-water checkerboard, restored real cutout leaf art, added AO on foliage, and retuned clouds/fog/foliage colour with before/after captures and a settle benchmark. Continue with M28 (final end-to-end journey and release pass). Do not redo M23–M27.  
+**Current handoff:** **M22–M28 are implemented and verified.** The final showcase is a player-authored village + castle built block-by-block on a normal generated world, saved/reloaded through the real `SaveManager`, and captured at day/dusk/night. The final definition of done is met for this roadmap, with the documented caveats that the journey is scripted through the real systems (no human play-through) and the M27 visual gaps remain.  
 **Reference images:** `prototypes/m17/references/visual/dragon-quest-builders/` (see image workflow below).
 
 This roadmap complements the existing `prototypes/m17/results/godot-roadmap.md`, `GODOT_MISSION.md`, `AGENTS.md`, and `ARCHITECTURE.md`. It does not replace their rules or change the production Python/Ursina game. Treat this as the playable endgame plan and keep milestone work scoped to one milestone at a time.
@@ -133,9 +133,11 @@ If the images are not yet in the repository folder, copy the supplied originals 
 
 **Evidence:** fixed-seed broad/close/day/dusk captures, written side-by-side comparison and fixes, generation/determinism tests, runtime check, and performance report when affected.
 
-### M28 — Finish the playable loop and release-quality pass
+### M28 — Finish the playable loop and release-quality pass — **COMPLETE 2026-10-20**
 
 **Goal:** Prove the game is a complete, coherent small sandbox rather than a collection of systems.
+
+**Status:** Delivered. `FinalDemo` builds a home, longhouse, market stalls, tower, street, gardens, well, lanterns and a recognizable castle on a natural site, cell-by-cell through the real build API and recorded as player edits; `_final_journey_section` saves and reloads it in the live scene. Gate: unit 2026 / integration 438 assertions, smoke `world_hash=5222532724760257225`; captures `m28-final-{wide,village,castle,dusk,night}.png` inspected. The journey is scripted, not a human play-through; the site is levelled by the harness. Evidence: `godot-progress.md` M28 section.
 
 **Dependencies:** M24 progression, M25 construction, M26 persistence, M27 world presentation.
 

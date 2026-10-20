@@ -21,6 +21,7 @@ const NpcModel = preload("res://scripts/core/npc.gd")
 const SettlementModel = preload("res://scripts/core/settlement.gd")
 const RaidModel = preload("res://scripts/core/raid.gd")
 const StationModel = preload("res://scripts/core/station.gd")
+const FinalDemo = preload("res://scripts/game/final_demo.gd")
 
 
 func _initialize() -> void:
@@ -551,6 +552,9 @@ func _main() -> void:
 
 	# --- Persistence must not duplicate a cursor stack ---------------------
 	await _persistence_cursor_section()
+
+	# --- M28 final player-built village/castle survives save + reload ------
+	await _final_journey_section()
 
 	if _failures.is_empty():
 		print("M17_INTEGRATION_PASS %d assertions" % _passes)
@@ -1953,5 +1957,45 @@ func _persistence_cursor_section() -> void:
 	_check(inventory.count_of(BlockDB.COBBLESTONE) == cobble_before,
 		"reloading with an open inventory does not duplicate the cobblestone")
 
+	_game.saves.delete_save()
+	await process_frame
+
+
+## M28 end-to-end proof: build the player-authored village/castle in the live
+## world, save through the real SaveManager, reload, and verify the settlement
+## and the player's position survive.  This is the scripted equivalent of
+## "build, save, quit, reopen, continue".
+func _final_journey_section() -> void:
+	var world: VoxelWorld = _game.world
+	var player: VoxelPlayer = _game.player
+	var report := FinalDemo.build(world)
+	_check(int(report["castle"]) > 400, "the final journey builds a castle")
+	_check(int(report["cottage"]) > 150 and int(report["longhouse"]) > 200,
+		"the final journey builds a home and a village hall")
+	var base: Vector3i = report["base_y"]
+	var castle := base + Vector3i(FinalDemo.CASTLE_OFFSET.x, 0, FinalDemo.CASTLE_OFFSET.y)
+	var cottage := base + Vector3i(FinalDemo.COTTAGE_OFFSET.x, 0, FinalDemo.COTTAGE_OFFSET.y)
+	# Stand in the village so the built chunks stay loaded across the reload.
+	player.teleport_to(Vector3(float(base.x) - 2.0, float(base.y) + 1.2, float(base.z) + 21.0))
+	player.flying = false
+	_game.streamer.focus_at(player.global_position)
+	await _stream_until_settled()
+	_check(_game.world.get_block(castle + Vector3i(0, 1, 8)) == BlockDB.DOOR,
+		"the castle gate exists before saving")
+	_check(_game.world.get_block(cottage + Vector3i(0, 1, 3)) == BlockDB.DOOR,
+		"the cottage door exists before saving")
+	_game._save_now()
+	_check(FileAccess.file_exists(_game.saves.save_path()), "the final journey save is written")
+	_game._reload_now()
+	await _stream_until_settled()
+	_check(_game.world.get_block(castle + Vector3i(0, 1, 8)) == BlockDB.DOOR,
+		"the castle gate survives save and reload")
+	_check(_game.world.get_block(cottage + Vector3i(0, 1, 3)) == BlockDB.DOOR,
+		"the cottage door survives save and reload")
+	_check(_game.world.get_block(base + Vector3i(0, 0, 12)) == BlockDB.PATH,
+		"the village street survives save and reload")
+	_check(player.global_position.distance_to(Vector3(float(base.x) - 2.0,
+		float(base.y) + 1.2, float(base.z) + 21.0)) < 1.0,
+		"the player position survives save and reload")
 	_game.saves.delete_save()
 	await process_frame

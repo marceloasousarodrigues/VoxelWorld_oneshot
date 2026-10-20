@@ -14,6 +14,7 @@ enum State { MENU, LOADING, PLAYING, PAUSED, DEAD }
 const RESULTS_DIR := "res://../results/godot"
 const CONFIG_PATH := "user://settings.json"
 const BuildDemo = preload("res://scripts/game/build_demo.gd")
+const FinalDemo = preload("res://scripts/game/final_demo.gd")
 const AUTOSAVE_SECONDS := 120.0
 ## After any damage the player is briefly immune to further *impact* damage, so a
 ## single landing or hit cannot apply twice in consecutive frames.
@@ -129,6 +130,7 @@ var _options := {
 	"open_settings": false,
 	"station_capture": "",
 	"build_demo": "",
+	"final_demo": "",
 	"creature_feedback_capture": false,
 	"farming_capture": false,
 	"spawn_hostiles": false,
@@ -566,6 +568,10 @@ func _parse_arguments() -> void:
 				# M25 scripted player-authored cottage + tower on a normal world.
 				# The optional value selects the fixed viewpoint: wide, cottage, tower.
 				_options["build_demo"] = value if not value.is_empty() else "wide"
+			"--final-demo":
+				# M28 scripted player-authored village + castle on a normal world.
+				# The optional value selects the fixed viewpoint: wide, village, castle.
+				_options["final_demo"] = value if not value.is_empty() else "wide"
 
 
 func _parse_vector(value: String) -> Vector3:
@@ -893,6 +899,27 @@ func _apply_build_demo_view(mode: String, base: Vector3i) -> void:
 	streamer.focus_at(player.global_position)
 
 
+## Fixed viewpoints for the M28 player-authored village + castle.
+func _apply_final_demo_view(mode: String, base: Vector3i) -> void:
+	match mode:
+		"village":
+			player.flying = true
+			player.teleport_to(Vector3(float(base.x) - 2.0, float(base.y) + 4.0, float(base.z) + 21.0))
+			player.look_yaw(0.0)
+			player.look_pitch(-5.0)
+		"castle":
+			player.flying = true
+			player.teleport_to(Vector3(float(base.x) + 10.0, float(base.y) + 9.0, float(base.z) + 6.0))
+			player.look_yaw(27.0)
+			player.look_pitch(-12.0)
+		_:
+			player.flying = true
+			player.teleport_to(Vector3(float(base.x) + 4.0, float(base.y) + 9.0, float(base.z) + 33.0))
+			player.look_yaw(0.0)
+			player.look_pitch(-10.0)
+	streamer.focus_at(player.global_position)
+
+
 ## The nearest placement matching `wanted` ("any" or a structure id), searched in
 ## expanding rings of regions around the origin.
 func _nearest_structure(wanted: String) -> Dictionary:
@@ -957,6 +984,10 @@ func _enter_play(area_ready: bool) -> void:
 		var demo: Dictionary = BuildDemo.build(world)
 		var demo_base: Vector3i = demo["base_y"]
 		_apply_build_demo_view(str(_options["build_demo"]), demo_base)
+	if not str(_options["final_demo"]).is_empty():
+		var final: Dictionary = FinalDemo.build(world)
+		var final_base: Vector3i = final["base_y"]
+		_apply_final_demo_view(str(_options["final_demo"]), final_base)
 	_apply_override_position()
 	if not str(_options["visual_test"]).is_empty() and not (_options["player_at"] as Vector3).is_finite():
 		_apply_visual_test_view(str(_options["visual_test"]))
@@ -1214,7 +1245,8 @@ func _process(delta: float) -> void:
 			if hud != null and player != null:
 				hud.set_mining_progress(player.mining_ratio())
 			if not bool(_options["capture"]) and str(_options["visual_test"]).is_empty() \
-					and str(_options["build_demo"]).is_empty() and _autosave_timer >= AUTOSAVE_SECONDS:
+					and str(_options["build_demo"]).is_empty() and str(_options["final_demo"]).is_empty() \
+					and _autosave_timer >= AUTOSAVE_SECONDS:
 				_autosave_timer = 0.0
 				_save_silently("autosave")
 		_:
@@ -2220,7 +2252,8 @@ func _on_fly_changed(enabled: bool) -> void:
 # =========================================================================
 
 func _save_now() -> void:
-	if not str(_options["visual_test"]).is_empty() or not str(_options["build_demo"]).is_empty():
+	if not str(_options["visual_test"]).is_empty() or not str(_options["build_demo"]).is_empty() \
+			or not str(_options["final_demo"]).is_empty():
 		hud.flash("Saving is disabled in the showcase / build demo", 4.0)
 		return
 	if not _flush_cursor_stacks():
@@ -2240,9 +2273,10 @@ func _save_now() -> void:
 
 
 func _save_silently(reason: String) -> void:
-	# The showcase and the scripted build demo are test-only content and must
+	# The showcase and the scripted build demos are test-only content and must
 	# never enter a normal save.
-	if not str(_options["visual_test"]).is_empty() or not str(_options["build_demo"]).is_empty():
+	if not str(_options["visual_test"]).is_empty() or not str(_options["build_demo"]).is_empty() \
+			or not str(_options["final_demo"]).is_empty():
 		return
 	# An interface may hold a temporary cursor stack that is not part of either
 	# inventory model.  Return it before writing, or the save (and the load after

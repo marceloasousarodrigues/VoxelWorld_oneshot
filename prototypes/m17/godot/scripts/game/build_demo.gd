@@ -214,7 +214,9 @@ static func _put(world: VoxelWorld, position: Vector3i, block_id: int) -> int:
 		world.ensure_chunk(coord)
 	if world.get_block(position) == block_id:
 		return 0
-	return 1 if world.set_block(position, block_id, false) else 0
+	# Record the write as a player edit so the built structure is saved and
+	# replayed when its chunk reloads, exactly like a block placed in gameplay.
+	return 1 if world.set_block(position, block_id, true) else 0
 
 
 static func _put_state(world: VoxelWorld, position: Vector3i, block_id: int, orientation: int) -> int:
@@ -225,4 +227,4 @@ static func _put_state(world: VoxelWorld, position: Vector3i, block_id: int, ori
 		world.ensure_chunk(coord)
 	if world.get_block(position) == block_id and world.get_orientation(position) == orientation:
 		return 0
-	return 1 if world.set_block_state(position, block_id, orientation, false) else 0
+	return 1 if world.set_block_state(position, block_id, orientation, true) else 0

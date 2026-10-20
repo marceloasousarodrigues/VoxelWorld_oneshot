@@ -11,6 +11,37 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ---
 
+## M28 — Final playable loop and release-quality pass
+
+Evidence: `godot-progress.md` M28 section; `m28-final-{wide,village,castle,dusk,night}.png`;
+`scripts/game/final_demo.gd`; `test_final_demo.gd`; `run_integration.gd::_final_journey_section`.
+
+- [x] **End-to-end scripted journey through the real systems**: `test_economy.gd`
+      proves an empty inventory can harvest → craft tools/table/furnace →
+      mine/smelt → craft the whole build kit; the final demo then builds a home,
+      longhouse, market stalls, tower, village street/gardens/well/lanterns and a
+      castle from that palette, and the integration section saves + reloads it
+      with the player position and structures intact
+- [x] The final settlement is **player-built**: every cell is written through
+      `world.set_block`/`set_block_state`, recorded as a player edit, mineable,
+      streamed and saved; no `StructureDB` stamp or showcase-only model
+- [x] The starting site is natural and outside the levelled settlement area; the
+      ring of framing trees ties the village into the generated landscape
+- [x] Menus/HUD/inventory/recipes/controls/pause/death/respawn/save-load remain
+      covered by the existing integration sections and HUD help/prompt text
+- [x] Final gate: unit **2026** / integration **438** assertions, both exit 0;
+      smoke twice `world_hash=5222532724760257225`; M27 settle p95 5.108 ms /
+      p99 8.288 ms remains the performance baseline
+- [x] Windowed visual review of broad village/castle, close castle, dusk and
+      night captures
+- [~] No human keyboard/mouse play-through; the journey is scripted through the
+      real APIs, and the site is levelled by the harness
+- [ ] Known non-blocking gaps: canopy carpet at distance, visible loaded-region
+      edge on long sea views, no generated gorge terraces, no audio/weather,
+      no city-management layer, no dropped-item entity for a full inventory
+
+---
+
 ## M27 — Bring normal generated worlds closer to the visual references
 
 Design/evidence: `godot-progress.md` M27 section; `m27-before-*` (pre-tuning)
