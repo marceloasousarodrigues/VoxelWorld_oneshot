@@ -14,6 +14,8 @@ const CHUNKS_Y := WORLD_HEIGHT / ChunkData.SIZE
 const SEA_LEVEL := 62
 const BASE_HEIGHT := 66
 const TREE_PAD := 3
+const HIGHLAND_TERRACE_SIZE := 3
+const RIVER_BANK_LIMIT := 0.120
 
 ## Structures are placed one per "region" of this many blocks, at a deterministic
 ## offset inside it.  `STRUCTURE_MARGIN` keeps a footprint inside its own region,
@@ -55,6 +57,9 @@ var world_seed: int = 17017
 var _continent: FastNoiseLite
 var _hills: FastNoiseLite
 var _mountain: FastNoiseLite
+var _ridge: FastNoiseLite
+var _river: FastNoiseLite
+var _forest_patches: FastNoiseLite
 var _temperature: FastNoiseLite
 var _humidity: FastNoiseLite
 var _cave_a: FastNoiseLite
@@ -71,6 +76,9 @@ func _init(world_seed_value: int = 17017) -> void:
 	_continent = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0042, 4, 0.5)
 	_hills = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.021, 3, 0.45)
 	_mountain = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.0026, 3, 0.5)
+	_ridge = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.0105, 3, 0.52)
+	_river = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0055, 2, 0.55)
+	_forest_patches = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.008, 2, 0.55)
 	_temperature = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0016, 2, 0.5)
 	_humidity = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0021, 2, 0.5)
 	_cave_a = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.026, 2, 0.5)
@@ -171,7 +179,27 @@ func _compute_height(x: int, z: int) -> int:
 	if continental > 0.06:
 		var mask: float = smoothstep(0.18, 0.72, mountain)
 		height += mask * mask * 48.0 * clampf(continental * 3.0, 0.0, 1.0)
-	return int(clampf(roundf(height), 1.0, float(WORLD_HEIGHT - 10)))
+		# Narrow ridges break the old rounded mountain caps into a readable voxel
+		# skyline. The broad mountain mask keeps these peaks grouped into ranges.
+		var ridge_value: float = 1.0 - absf(_ridge.get_noise_2d(x, z))
+		var ridge_mask := pow(clampf(ridge_value, 0.0, 1.0), 4.0)
+		height += ridge_mask * mask * 21.0 * clampf(continental * 2.0, 0.0, 1.0)
+	var rounded_height := int(clampf(roundf(height), 1.0, float(WORLD_HEIGHT - 10)))
+	# Lowlands remain softly traversable and useful for building. Higher ground
+	# resolves into three-block terraces, giving hills and plateaus a chunkier
+	# profile while keeping every step deterministic at negative coordinates.
+	if rounded_height >= SEA_LEVEL + 8:
+		rounded_height = roundi(float(rounded_height) / HIGHLAND_TERRACE_SIZE) * HIGHLAND_TERRACE_SIZE
+	# A low-frequency zero-contour field creates winding, connected river beds.
+	# The water system already fills below-sea-level source columns across chunks;
+	# shaping the bed here preserves that source and persistence contract.
+	if rounded_height > SEA_LEVEL + 1 and rounded_height < SEA_LEVEL + 34:
+		var river_distance: float = absf(_river.get_noise_2d(x, z))
+		if river_distance < RIVER_BANK_LIMIT:
+			var river_strength := 1.0 - smoothstep(0.012, RIVER_BANK_LIMIT, river_distance)
+			var river_floor := SEA_LEVEL - (2.0 + river_strength * 5.0)
+			rounded_height = mini(rounded_height, roundi(lerpf(float(rounded_height), river_floor, river_strength)))
+	return clampi(rounded_height, 1, WORLD_HEIGHT - 10)
 
 
 func _compute_biome(x: int, z: int, height: int) -> int:
@@ -293,6 +321,26 @@ func tree_at(x: int, z: int) -> Dictionary:
 	var roll := _hash2(x, z, 31337) % 1000
 	match biome:
 		Biome.FOREST:
+			var patch: float = _forest_patches.get_noise_2d(x, z)
+			# Broad low-density patches become flowered clearings; positive patches
+			# gather trees into groves instead of spreading one continuous canopy.
+			if patch < -0.46:
+				return {"type": TreeType.NONE}
+			if patch < -0.16:
+				if roll < 3:
+					return _birch(x, z, height)
+				if roll < 12:
+					return _oak(x, z, height)
+			elif patch > 0.38:
+				if roll < 8:
+					return _birch(x, z, height)
+				if roll < 15:
+					return _blossom(x, z, height)
+				if roll < 25:
+					return _pine(x, z, height)
+				if roll < 125:
+					return _oak(x, z, height)
+				return {"type": TreeType.NONE}
 			if roll < 8:
 				return _birch(x, z, height)
 			if roll < 11:
