@@ -139,6 +139,32 @@ func run(h: TestHarness) -> void:
 	h.greater(float(decos), 0.0, "vegetation decorations are placed")
 	h.greater(float(flowers), 0.0, "wildflowers are placed in grass biomes")
 
+	# A known deterministic fallen trunk crosses the negative-coordinate chunk
+	# border at x=-481/-480. Both generation orders must write every segment.
+	var fallen_order_a := VoxelWorld.new(17017)
+	var fallen_order_b := VoxelWorld.new(17017)
+	var fallen_left := Vector3i(-31, 4, -32)
+	var fallen_right := Vector3i(-30, 4, -32)
+	fallen_order_a.ensure_chunk(fallen_left)
+	fallen_order_a.ensure_chunk(fallen_right)
+	fallen_order_b.ensure_chunk(fallen_right)
+	fallen_order_b.ensure_chunk(fallen_left)
+	var fallen_segments := 0
+	for offset in 4:
+		var world_x := -483 + offset
+		var world_z := -500
+		var log_position := Vector3i(world_x, fallen_order_a.surface_height(world_x, world_z) + 1, world_z)
+		var log_id := fallen_order_a.get_block(log_position)
+		if log_id == BlockDB.OAK_LOG or log_id == BlockDB.PINE_LOG or log_id == BlockDB.BIRCH_LOG:
+			fallen_segments += 1
+	h.eq(fallen_segments, 4, "a fallen trunk is complete across a negative-coordinate chunk seam")
+	h.eq((fallen_order_a.get_chunk(fallen_left) as ChunkData).blocks,
+		(fallen_order_b.get_chunk(fallen_left) as ChunkData).blocks,
+		"fallen-log geometry in the first chunk is independent of load order")
+	h.eq((fallen_order_a.get_chunk(fallen_right) as ChunkData).blocks,
+		(fallen_order_b.get_chunk(fallen_right) as ChunkData).blocks,
+		"fallen-log geometry in the second chunk is independent of load order")
+
 	# Biome variety.
 	var seen := {}
 	for x in range(-400, 401, 40):

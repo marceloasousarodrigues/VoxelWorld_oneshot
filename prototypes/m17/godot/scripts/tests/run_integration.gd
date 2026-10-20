@@ -345,6 +345,14 @@ func _main() -> void:
 	_check(block_slot >= 0, "the hotbar still holds a placeable block")
 	_game.inventory.select(block_slot)
 	_check(ItemDB.is_block(_game.inventory.selected_item()), "a block is selected for the build checks")
+	# Keep directional-input checks on a wide, level surface so generated
+	# mountain faces cannot turn a movement regression into an accidental wall test.
+	_prepare_test_pad(Vector2i(roundi(landed.x), roundi(landed.z)), 16)
+	await _stream_until_settled()
+	player.flying = true
+	player.teleport_to(Vector3(landed.x, float(_test_pad_y + 5), landed.z))
+	player.look_yaw(0.0)
+	player.look_pitch(-70.0)
 
 	# Forward movement.
 	var before: Vector3 = player.global_position
