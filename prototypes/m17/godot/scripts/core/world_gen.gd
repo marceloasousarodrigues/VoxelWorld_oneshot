@@ -13,6 +13,8 @@ const WORLD_HEIGHT := 128
 const CHUNKS_Y := WORLD_HEIGHT / ChunkData.SIZE
 const SEA_LEVEL := 62
 const BASE_HEIGHT := 66
+const LEGACY_VERSION := 0
+const CURRENT_VERSION := 1
 const TREE_PAD := 5
 const HIGHLAND_TERRACE_SIZE := 3
 const RIVER_BANK_LIMIT := 0.120
@@ -43,6 +45,10 @@ static var BIOME_TINTS := [
 	Color(0.916, 0.960, 0.906),  # mountain
 ]
 
+
+static func is_supported_version(version: int) -> bool:
+	return version == LEGACY_VERSION or version == CURRENT_VERSION
+
 # Blocks that receive the biome tint on their mesh vertices.
 const TINTED_BLOCKS := [
 	BlockDB.GRASS, BlockDB.DRY_GRASS, BlockDB.OAK_LEAVES, BlockDB.PINE_LEAVES,
@@ -53,6 +59,7 @@ const TINTED_BLOCKS := [
 enum TreeType { NONE, OAK, PINE, CACTUS, BIRCH, BLOSSOM }
 
 var world_seed: int = 17017
+var terrain_version: int = CURRENT_VERSION
 
 var _continent: FastNoiseLite
 var _hills: FastNoiseLite
@@ -73,16 +80,18 @@ var _cache_limit := 4096
 var stats := {"chunks": 0, "columns": 0}
 
 
-func _init(world_seed_value: int = 17017) -> void:
+func _init(world_seed_value: int = 17017, terrain_version_value: int = CURRENT_VERSION) -> void:
 	world_seed = world_seed_value
+	terrain_version = terrain_version_value
 	_continent = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0042, 4, 0.5)
 	_hills = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.021, 3, 0.45)
-	_mountain = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.0055, 3, 0.5)
-	_ridge = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.009, 3, 0.52)
-	_valley = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0044, 2, 0.52)
-	_river = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0055, 2, 0.55)
-	_forest_patches = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0095, 2, 0.55)
-	_flower_patches = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.024, 2, 0.52)
+	_mountain = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.0026 if terrain_version == LEGACY_VERSION else 0.0055, 3, 0.5)
+	if terrain_version != LEGACY_VERSION:
+		_ridge = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.009, 3, 0.52)
+		_valley = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0044, 2, 0.52)
+		_river = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0055, 2, 0.55)
+		_forest_patches = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0095, 2, 0.55)
+		_flower_patches = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.024, 2, 0.52)
 	_temperature = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0016, 2, 0.5)
 	_humidity = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0021, 2, 0.5)
 	_cave_a = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.026, 2, 0.5)
@@ -180,6 +189,11 @@ func _compute_height(x: int, z: int) -> int:
 	var shaped: float = signf(continental) * pow(absf(continental), 1.35)
 	var height := float(BASE_HEIGHT) + shaped * 30.0 + _hills.get_noise_2d(x, z) * 5.0
 	var mountain := _mountain.get_noise_2d(x, z)
+	if terrain_version == LEGACY_VERSION:
+		if continental > 0.06:
+			var mask: float = smoothstep(0.18, 0.72, mountain)
+			height += mask * mask * 48.0 * clampf(continental * 3.0, 0.0, 1.0)
+		return int(clampf(roundf(height), 1.0, float(WORLD_HEIGHT - 10)))
 	if continental > 0.06:
 		var peak_strength := clampf((mountain - 0.12) / 0.88, 0.0, 1.0)
 		var range_strength := clampf(continental * 3.0, 0.0, 1.0)
@@ -255,6 +269,8 @@ func biome_name(biome: int) -> String:
 
 
 func biome_tint(biome: int) -> Color:
+	if terrain_version == LEGACY_VERSION and biome == Biome.FOREST:
+		return Color(0.872, 0.960, 0.840)
 	if biome >= 0 and biome < BIOME_TINTS.size():
 		return BIOME_TINTS[biome]
 	return Color.WHITE
@@ -339,6 +355,14 @@ func tree_at(x: int, z: int) -> Dictionary:
 	var roll := _hash2(x, z, 31337) % 1000
 	match biome:
 		Biome.FOREST:
+			if terrain_version == LEGACY_VERSION:
+				if roll < 8:
+					return _birch(x, z, height)
+				if roll < 11:
+					return _blossom(x, z, height)
+				if roll < 70:
+					return _oak(x, z, height)
+				return {"type": TreeType.NONE}
 			var patch: float = _forest_patches.get_noise_2d(x, z)
 			var river_distance := _river_distance(x, z)
 			# Keep a broken, meadow-like ribbon along rivers so water and banks
@@ -396,18 +420,21 @@ func tree_at(x: int, z: int) -> Dictionary:
 
 func _oak(x: int, z: int, ground: int) -> Dictionary:
 	var trunk := 5 + _hash2(x, z, 4242) % 3
-	return {"type": TreeType.OAK, "base": ground + 1, "height": trunk, "canopy": 2 + _hash2(x, z, 555) % 3}
+	var canopy := 2 + _hash2(x, z, 555) % (2 if terrain_version == LEGACY_VERSION else 3)
+	return {"type": TreeType.OAK, "base": ground + 1, "height": trunk, "canopy": canopy}
 
 
 func _birch(x: int, z: int, ground: int) -> Dictionary:
 	# Taller and slimmer than an oak, with a lighter, airier crown.
 	var trunk := 6 + _hash2(x, z, 4455) % 3
-	return {"type": TreeType.BIRCH, "base": ground + 1, "height": trunk, "canopy": 2 + _hash2(x, z, 556) % 2}
+	var canopy := 2 if terrain_version == LEGACY_VERSION else 2 + _hash2(x, z, 556) % 2
+	return {"type": TreeType.BIRCH, "base": ground + 1, "height": trunk, "canopy": canopy}
 
 
 func _blossom(x: int, z: int, ground: int) -> Dictionary:
 	var trunk := 5 + _hash2(x, z, 4666) % 2
-	return {"type": TreeType.BLOSSOM, "base": ground + 1, "height": trunk, "canopy": 3 + _hash2(x, z, 557) % 2}
+	var canopy := 3 if terrain_version == LEGACY_VERSION else 3 + _hash2(x, z, 557) % 2
+	return {"type": TreeType.BLOSSOM, "base": ground + 1, "height": trunk, "canopy": canopy}
 
 
 func _pine(x: int, z: int, ground: int) -> Dictionary:
@@ -424,6 +451,24 @@ func decoration_at(x: int, z: int, surface_height: int, surface_block: int, biom
 	var roll := _hash2(x, z, 6151) % 1000
 	match biome:
 		Biome.FOREST:
+			if terrain_version == LEGACY_VERSION:
+				if roll < 190:
+					return BlockDB.GRASS_TUFT
+				if roll < 232:
+					return BlockDB.FERN
+				if roll < 254:
+					return BlockDB.JUNGLE_GRASS
+				if roll < 272:
+					return BlockDB.TALL_GRASS
+				if roll < 282:
+					return BlockDB.BUSH
+				if roll < 290:
+					return BlockDB.FLOWER_RED
+				if roll < 297:
+					return BlockDB.FLOWER_YELLOW
+				if roll < 304:
+					return BlockDB.FLOWER_BLUE
+				return BlockDB.AIR
 			var forest_patch: float = _forest_patches.get_noise_2d(x, z)
 			var river_distance := _river_distance(x, z)
 			var clearing := forest_patch < -0.24 or river_distance < RIVER_BANK_LIMIT * 1.25
@@ -514,9 +559,11 @@ func generate_chunk(chunk: ChunkData) -> void:
 			var world_x := base_x + local_x
 			var world_z := base_z + local_z
 			var surface_block := _surface_block(biome, height)
-			var river_distance := _river_distance(world_x, world_z)
-			var river_bank := height > SEA_LEVEL and height <= SEA_LEVEL + 5 \
-				and river_distance < RIVER_BANK_LIMIT * 1.9
+			var river_bank := false
+			if terrain_version != LEGACY_VERSION:
+				var river_distance := _river_distance(world_x, world_z)
+				river_bank = height > SEA_LEVEL and height <= SEA_LEVEL + 5 \
+					and river_distance < RIVER_BANK_LIMIT * 1.9
 			if river_bank:
 				surface_block = BlockDB.SAND
 			# Steep terrain exposes rock instead of a green carpet draped down a
@@ -575,7 +622,8 @@ func generate_chunk(chunk: ChunkData) -> void:
 					blocks[index] = BlockDB.AIR
 
 	_generate_trees(chunk)
-	_generate_fallen_logs(chunk)
+	if terrain_version != LEGACY_VERSION:
+		_generate_fallen_logs(chunk)
 	_generate_boulders(chunk)
 	_generate_decorations(chunk, heights, biomes, base_x, base_z, base_y)
 	_apply_structures(chunk)
@@ -608,10 +656,11 @@ func plant_tree(world: VoxelWorld, x: int, z: int, tree_type: int, ground_y: int
 		_:
 			return 0
 	var base := int(tree["base"])
-	var min_chunk_x := floori(float(x - TREE_PAD - 1) / ChunkData.SIZE)
-	var max_chunk_x := floori(float(x + TREE_PAD + 1) / ChunkData.SIZE)
-	var min_chunk_z := floori(float(z - TREE_PAD - 1) / ChunkData.SIZE)
-	var max_chunk_z := floori(float(z + TREE_PAD + 1) / ChunkData.SIZE)
+	var tree_pad := 3 if terrain_version == LEGACY_VERSION else TREE_PAD
+	var min_chunk_x := floori(float(x - tree_pad - 1) / ChunkData.SIZE)
+	var max_chunk_x := floori(float(x + tree_pad + 1) / ChunkData.SIZE)
+	var min_chunk_z := floori(float(z - tree_pad - 1) / ChunkData.SIZE)
+	var max_chunk_z := floori(float(z + tree_pad + 1) / ChunkData.SIZE)
 	var min_chunk_y := floori(float(base - 2) / ChunkData.SIZE)
 	var max_chunk_y := floori(float(base + 14) / ChunkData.SIZE)
 	var touched := 0
@@ -649,8 +698,9 @@ func _generate_trees(chunk: ChunkData) -> void:
 	var base_x := coord.x * ChunkData.SIZE
 	var base_y := coord.y * ChunkData.SIZE
 	var base_z := coord.z * ChunkData.SIZE
-	for local_z in range(-TREE_PAD, ChunkData.SIZE + TREE_PAD):
-		for local_x in range(-TREE_PAD, ChunkData.SIZE + TREE_PAD):
+	var tree_pad := 3 if terrain_version == LEGACY_VERSION else TREE_PAD
+	for local_z in range(-tree_pad, ChunkData.SIZE + tree_pad):
+		for local_x in range(-tree_pad, ChunkData.SIZE + tree_pad):
 			var world_x := base_x + local_x
 			var world_z := base_z + local_z
 			var tree := tree_at(world_x, world_z)
@@ -709,18 +759,22 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 	for offset in trunk:
 		_place_block(chunk, local_x, base + offset, local_z, log_block, base_y, false)
 	var top := base + trunk
-	var radius := clampi(canopy_radius, 2, 4)
+	var radius := clampi(canopy_radius, 2, 3 if terrain_version == LEGACY_VERSION else 4)
 	var tree_world_x := chunk.coord.x * ChunkData.SIZE + local_x
 	var tree_world_z := chunk.coord.z * ChunkData.SIZE + local_z
 	# Per-tree lean and a ragged outline so a forest reads as varied trees rather
 	# than a field of identical domes.  The lean stays inside the TREE_PAD.
-	var lean_x := (_hash3(tree_world_x, top, tree_world_z, 71) % 3) - 1
-	var lean_z := (_hash3(tree_world_x, top, tree_world_z, 72) % 3) - 1
+	var hash_x := local_x if terrain_version == LEGACY_VERSION else tree_world_x
+	var hash_z := local_z if terrain_version == LEGACY_VERSION else tree_world_z
+	var lean_x := (_hash3(hash_x, top, hash_z, 71) % 3) - 1
+	var lean_z := (_hash3(hash_x, top, hash_z, 72) % 3) - 1
 	# Several deterministic crown profiles vary broadleaf silhouettes: compact
 	# domes, fuller crowns, and narrower crowns with an uneven shoulder.
 	var profile := _hash3(tree_world_x, top, tree_world_z, 73) % 4
 	var layer_radii: Array
-	if radius >= 4:
+	if terrain_version == LEGACY_VERSION:
+		layer_radii = [1, 2, 2, 3, 3, 2, 1] if radius >= 3 else [0, 1, 1, 2, 2, 1, 0]
+	elif radius >= 4:
 		match profile:
 			0:
 				layer_radii = [1, 2, 3, 3, 4, 3, 3, 2, 1]
@@ -752,7 +806,7 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 				layer_radii = [0, 1, 1, 2, 1, 1, 0]
 	for layer_index in layer_radii.size():
 		var layer_radius: int = int(layer_radii[layer_index])
-		var dy := layer_index - (4 if radius >= 4 else 3)
+		var dy := layer_index - (4 if terrain_version != LEGACY_VERSION and radius >= 4 else 3)
 		for dz in range(-layer_radius, layer_radius + 1):
 			for dx in range(-layer_radius, layer_radius + 1):
 				if dx * dx + dz * dz > layer_radius * layer_radius + 1:
@@ -760,9 +814,9 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 				if absi(dx) == layer_radius or absi(dz) == layer_radius:
 					# Trim the outer ring irregularly (and the far corners more).
 					if absi(dx) == layer_radius and absi(dz) == layer_radius:
-						if _hash3(tree_world_x + dx, top + dy, tree_world_z + dz, 5) % 3 != 0:
+						if _hash3(hash_x + dx, top + dy, hash_z + dz, 5) % 3 != 0:
 							continue
-					elif _hash3(tree_world_x + dx, top + dy, tree_world_z + dz, 6) % 5 == 0:
+					elif _hash3(hash_x + dx, top + dy, hash_z + dz, 6) % 5 == 0:
 						continue
 				_place_block(chunk, local_x + dx + lean_x, top + dy, local_z + dz + lean_z, leaf_block, base_y, true)
 	# A short, broken skirt around the trunk softens the flat underside of the
@@ -772,7 +826,7 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 			for dx in range(-2, 3):
 				if dx * dx + dz * dz > 5:
 					continue
-				if _hash3(tree_world_x + dx, top - 4, tree_world_z + dz, 23) % 3 == 0:
+				if _hash3(hash_x + dx, top - 4, hash_z + dz, 23) % 3 == 0:
 					_place_block(chunk, local_x + dx + lean_x, top - 4, local_z + dz + lean_z,
 						leaf_block, base_y, true)
 	# A short branch on each side of the upper trunk gives the silhouette a
@@ -792,25 +846,30 @@ func _place_pine(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk:
 	# Conical tiers: wide near the base, narrowing to a point, with every other
 	# layer one block smaller so the silhouette reads as a pine rather than a
 	# cylinder.  The offsets give the tiers a slightly ragged edge.
+	var hash_x := local_x if terrain_version == LEGACY_VERSION else tree_world_x
+	var hash_z := local_z if terrain_version == LEGACY_VERSION else tree_world_z
 	var profile := _hash3(tree_world_x, top, tree_world_z, 911) % 3
 	var tier_radii: Array
-	match profile:
-		0:
-			tier_radii = [1, 1, 2, 2, 3, 3, 2, 1]
-		1:
-			tier_radii = [1, 2, 2, 3, 3, 2, 1, 1]
-		_:
-			tier_radii = [1, 1, 2, 3, 2, 2, 1, 1]
+	if terrain_version == LEGACY_VERSION:
+		tier_radii = [1, 1, 2, 2, 3, 3, 2, 1]
+	else:
+		match profile:
+			0:
+				tier_radii = [1, 1, 2, 2, 3, 3, 2, 1]
+			1:
+				tier_radii = [1, 2, 2, 3, 3, 2, 1, 1]
+			_:
+				tier_radii = [1, 1, 2, 3, 2, 2, 1, 1]
 	for tier in tier_radii.size():
 		var layer_radius: int = int(tier_radii[tier])
 		var dy := tier - 7
-		var lean := 1 if _hash3(tree_world_x, top + dy, tree_world_z, 909) % 5 == 0 else 0
+		var lean := 1 if _hash3(hash_x, top + dy, hash_z, 909) % 5 == 0 else 0
 		for dz in range(-layer_radius, layer_radius + 1):
 			for dx in range(-layer_radius, layer_radius + 1):
 				if layer_radius > 1 and absi(dx) + absi(dz) > layer_radius + 1:
 					continue
 				if absi(dx) == layer_radius and absi(dz) == layer_radius \
-						and _hash3(tree_world_x + dx, top + dy, tree_world_z + dz, 17) % 3 != 0:
+						and _hash3(hash_x + dx, top + dy, hash_z + dz, 17) % 3 != 0:
 					continue
 				_place_block(chunk, local_x + dx + lean, top + dy, local_z + dz,
 					BlockDB.PINE_LEAVES, base_y, true)

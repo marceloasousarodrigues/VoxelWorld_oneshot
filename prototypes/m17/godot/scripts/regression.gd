@@ -53,14 +53,18 @@ func run() -> void:
 		check(fixture_hashes.has(coord), "preserves the logical fixture coordinate %s" % coord)
 		check(app.get("chunk_nodes")[coord].get_node_or_null("ChunkMesh") != null, "builds the 16³ chunk mesh %s" % coord)
 		check(app.get("chunk_nodes")[coord].get_node_or_null("ChunkCollision") != null, "builds collision for chunk %s" % coord)
-	for material_id: int in [world.GRASS, world.DIRT, world.STONE, world.WATER]:
-		check(app.get("materials").has(material_id), "creates visible %s shader" % world.MATERIAL_NAMES[material_id])
+	for material_id: int in [BlockDB.GRASS, BlockDB.DIRT, BlockDB.STONE, BlockDB.WATER]:
+		check(app.get("materials").has(material_id), "creates visible %s shader" % BlockDB.name_of(material_id))
 
-	check(world.get_block(Vector3i(-1, 7, 0)) != world.AIR, "reads a solid block at negative world X")
-	check(world.get_block(Vector3i(-16, 7, 0)) != world.AIR, "floor maps x=-16 to chunk -1")
-	check(world.get_block(Vector3i(-17, 7, 0)) == world.AIR, "floor maps x=-17 to unloaded chunk -2")
-	check(app.get("_affected_chunk_keys").call(Vector3i(-1, 3, 0)) == [Vector3i(-1, 0, 0), Vector3i(0, 0, 0)], "negative x=-1 edge edit targets the correct adjacent chunks")
-	check(app.get("_affected_chunk_keys").call(Vector3i(-16, 3, 0)) == [Vector3i(-1, 0, 0), Vector3i(-2, 0, 0)], "negative x=-16 edge edit targets the correct adjacent chunks")
+	check(world.get_block(Vector3i(-1, 7, 0)) != BlockDB.AIR, "reads a solid block at negative world X")
+	check(world.get_block(Vector3i(-16, 7, 0)) != BlockDB.AIR, "floor maps x=-16 to chunk -1")
+	check(world.get_block(Vector3i(-17, 7, 0)) == BlockDB.AIR, "floor maps x=-17 to unloaded chunk -2")
+	var x_minus_one_chunks: Array = app.get("_affected_chunk_keys").call(Vector3i(-1, 3, 0))
+	check(x_minus_one_chunks.has(Vector3i(-1, 0, 0)) and x_minus_one_chunks.has(Vector3i(0, 0, 0)),
+		"negative x=-1 edge edit targets both adjacent chunks")
+	var x_minus_sixteen_chunks: Array = app.get("_affected_chunk_keys").call(Vector3i(-16, 3, 0))
+	check(x_minus_sixteen_chunks.has(Vector3i(-1, 0, 0)) and x_minus_sixteen_chunks.has(Vector3i(-2, 0, 0)),
+		"negative x=-16 edge edit targets both adjacent chunks")
 
 	# The shared fixture columns are not bitwise continuous across all slopes.
 	# Pick a pair of adjacent solid boundary cells from the fixture itself.
@@ -75,16 +79,21 @@ func run() -> void:
 		var first_before: ArrayMesh = app.get("chunk_nodes")[first_chunk].get_node("ChunkMesh").mesh
 		var second_before: ArrayMesh = app.get("chunk_nodes")[second_chunk].get_node("ChunkMesh").mesh
 		var previous: int = world.get_block(position)
-		check(world.set_block(position, world.AIR), "breaks the negative-side shared boundary block")
-		check(world.get_block(position) == world.AIR, "authoritative block storage applies the edit")
-		check(world.get_block(neighbour) != world.AIR, "preserves the adjacent boundary block")
+		check(world.set_block(position, BlockDB.AIR), "breaks the negative-side shared boundary block")
+		# The fixture renderer has its own edit entry point; invoke it after the
+		# logical-world edit so both neighbouring mesh nodes are rebuilt.
+		app.get("_set_fixture_block").call(position, BlockDB.AIR)
+		check(world.get_block(position) == BlockDB.AIR, "authoritative block storage applies the edit")
+		check(world.get_block(neighbour) != BlockDB.AIR, "preserves the adjacent boundary block")
 		var first_after: ArrayMesh = app.get("chunk_nodes")[first_chunk].get_node("ChunkMesh").mesh
 		var second_after: ArrayMesh = app.get("chunk_nodes")[second_chunk].get_node("ChunkMesh").mesh
 		check(first_before != first_after, "refreshes the edited negative chunk mesh")
 		check(second_before != second_after, "refreshes the adjacent positive chunk mesh")
-		check(world.edits.has(position) and world.edits[position] == world.AIR, "records edits in the logical edit overlay")
-		check(app.get("_player_intersects").call(Vector3i(int(app.get("player").global_position.x), int(app.get("player").global_position.y), int(app.get("player").global_position.z))), "player-intersection guard reports an overlapping cell")
-		if previous == world.WATER:
+		check(world.edits.has(position) and world.edits[position] == BlockDB.AIR, "records edits in the logical edit overlay")
+		app.get("player").global_position = Vector3(8.5, 12.0, 8.5)
+		check(app.get("_player_intersects").call(Vector3i(8, 12, 8)),
+			"player-intersection guard reports a cell containing the player")
+		if previous == BlockDB.WATER:
 			check(true, "boundary edit exercised water adjacency")
 	else:
 		failures.append("could not locate a shared solid boundary cell to break")

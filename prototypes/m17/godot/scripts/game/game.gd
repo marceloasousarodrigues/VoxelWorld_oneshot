@@ -650,7 +650,11 @@ func _start_world(seed_value: int, save: Variant) -> void:
 	_seconds_since_damage = 0.0
 	_last_damage_source = ""
 
-	world = VoxelWorld.new(seed_value)
+	var terrain_version := WorldGen.CURRENT_VERSION
+	if save != null and typeof(save) == TYPE_DICTIONARY:
+		var saved_data: Dictionary = save.get("data", {})
+		terrain_version = int(saved_data.get("terrain_generator_version", WorldGen.LEGACY_VERSION))
+	world = VoxelWorld.new(seed_value, terrain_version)
 	# A brand-new world gets a finished starter house near spawn; a loaded save
 	# already contains its house edits and must not be modified.
 	_starter_house_pending = save == null

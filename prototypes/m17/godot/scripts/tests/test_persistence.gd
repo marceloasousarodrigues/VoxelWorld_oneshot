@@ -126,11 +126,13 @@ func run(h: TestHarness) -> void:
 
 	# --- read + validate ----------------------------------------------------
 	var result: Dictionary = saves.read()
-	h.check(bool(result["ok"]), "read() accepts the save it just wrote")
+	h.check(bool(result["ok"]), "read() accepts the save it just wrote (%s)" % str(result.get("error", "")))
 	var data: Dictionary = result["data"]
 	h.eq(int(data["seed"]), 17017, "the saved seed round-trips")
 	h.eq(int(data["version"]), SaveManager.VERSION, "the save is written at the current version")
 	h.eq(int(SaveManager.VERSION), 9, "the current save version is 9")
+	h.eq(int(data["terrain_generator_version"]), WorldGen.CURRENT_VERSION,
+		"new saves record the current terrain generator version")
 	var saved_stair_row: Array = []
 	for row: Array in data["blocks"]:
 		if int(row[3]) == BlockDB.STAIR:
@@ -164,6 +166,72 @@ func run(h: TestHarness) -> void:
 	h.check(restored_world.edits.has(edited), "the restored world records the edit")
 	h.eq(int(restored_world.fluid_overrides.get(fluid_cell, -1)), 7, "the fluid override survived")
 	h.check(restored_world.fluid_sources.has(fluid_cell), "the fluid source flag survived")
+	h.eq(restored_world.generator.terrain_version, WorldGen.CURRENT_VERSION,
+		"a current save restores its terrain generator version")
+
+	# M29 saves have the same v9 save schema but no terrain generator metadata.
+	# This fixture is synthesized from the real M29 SaveManager payload shape;
+	# it proves missing-field handling and edit preservation, not every historical
+	# save file ever produced by earlier generator revisions.
+	var legacy_payload: Dictionary = saves.to_dictionary(world, player, inventory, clock,
+		health, breath, hunger)
+	legacy_payload.erase("terrain_generator_version")
+	_write_raw(saves, JSON.stringify(legacy_payload))
+	var legacy_terrain_result: Dictionary = saves.read()
+	h.check(bool(legacy_terrain_result["ok"]), "a v9 M29 fixture without terrain metadata remains readable")
+	if bool(legacy_terrain_result["ok"]):
+		var legacy_applied := saves.apply(legacy_terrain_result, restored_world, restored_player,
+			restored_inventory, null, null)
+		h.check(bool(legacy_applied["ok"]), "a metadata-free save applies using the legacy policy")
+		h.eq(restored_world.generator.terrain_version, WorldGen.LEGACY_VERSION,
+			"a metadata-free save selects the M29 terrain generator")
+		var legacy_reference := VoxelWorld.new(17017, WorldGen.LEGACY_VERSION)
+		legacy_reference.ensure_chunk(chunk_coord)
+		legacy_reference.load_edits(restored_world.edits, restored_world.fluid_overrides,
+			restored_world.fluid_sources, restored_world.edit_orientations)
+		h.eq(restored_world.chunks[chunk_coord].blocks,
+			legacy_reference.chunks[chunk_coord].blocks,
+			"untouched legacy terrain and edits match the M29 generator output")
+		h.eq(restored_world.get_block(edited), BlockDB.PLANKS,
+			"legacy block placement survives generator migration")
+		h.eq(restored_world.get_block(removed), BlockDB.AIR,
+			"legacy block removal survives generator migration")
+		var migrated_payload: Dictionary = saves.to_dictionary(restored_world, restored_player,
+			restored_inventory, clock, health, breath, hunger)
+		h.eq(int(migrated_payload["terrain_generator_version"]), WorldGen.LEGACY_VERSION,
+			"saving a legacy world keeps its generator version")
+		_write_raw(saves, JSON.stringify(migrated_payload))
+		var migrated_result := saves.read()
+		h.check(bool(migrated_result["ok"]),
+			"a migrated legacy save can be read again (%s)" % str(migrated_result.get("error", "")))
+		if bool(migrated_result["ok"]):
+			var migrated_world := VoxelWorld.new(17017)
+			migrated_world.ensure_chunk(chunk_coord)
+			var migrated_apply := saves.apply(migrated_result, migrated_world, null, Inventory.new())
+			h.check(bool(migrated_apply["ok"]), "a migrated legacy save applies to a fresh world")
+			h.eq(migrated_world.generator.terrain_version, WorldGen.LEGACY_VERSION,
+				"the migrated save retains the legacy generator on reload")
+			h.eq(migrated_world.get_block(edited), BlockDB.PLANKS,
+				"the placed player edit survives migration and reload")
+			h.eq(migrated_world.get_block(removed), BlockDB.AIR,
+				"the removed player block survives migration and reload")
+
+	var unsupported_terrain: Dictionary = saves.to_dictionary(world, player, inventory)
+	unsupported_terrain["terrain_generator_version"] = 99
+	_write_raw(saves, JSON.stringify(unsupported_terrain))
+	var unsupported_terrain_result := saves.read()
+	h.check(not bool(unsupported_terrain_result["ok"]),
+		"an unsupported terrain generator version is rejected explicitly")
+	h.check(not FileAccess.file_exists(saves.save_path()),
+		"an unsupported terrain version is quarantined")
+	var malformed_terrain: Dictionary = saves.to_dictionary(world, player, inventory)
+	malformed_terrain["terrain_generator_version"] = "1"
+	_write_raw(saves, JSON.stringify(malformed_terrain))
+	var malformed_terrain_result := saves.read()
+	h.check(not bool(malformed_terrain_result["ok"]),
+		"a non-integer terrain generator version is rejected explicitly")
+	h.check(not FileAccess.file_exists(saves.save_path()),
+		"malformed terrain metadata is quarantined")
 
 	h.approx(restored_player.global_position.x, 10.5, 1e-3, "the player x position survived")
 	h.approx(restored_player.global_position.y, 72.0, 1e-3, "the player y position survived")

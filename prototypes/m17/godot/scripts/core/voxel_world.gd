@@ -38,9 +38,9 @@ var fluid_sources: Dictionary = {}
 var stats := {"generated_chunks": 0, "generation_ms": 0.0, "edits": 0, "loaded": 0}
 
 
-func _init(world_seed_value: int = 17017) -> void:
+func _init(world_seed_value: int = 17017, terrain_version: int = WorldGen.CURRENT_VERSION) -> void:
 	world_seed = world_seed_value
-	generator = WorldGen.new(world_seed_value)
+	generator = WorldGen.new(world_seed_value, terrain_version)
 
 
 # --- coordinates ----------------------------------------------------------

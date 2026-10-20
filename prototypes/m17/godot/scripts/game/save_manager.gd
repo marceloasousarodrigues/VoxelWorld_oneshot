@@ -6,8 +6,9 @@ extends RefCounted
 ## What is stored: the world seed, every block the player changed (or that the
 ## fluid simulation changed relative to the pristine generated world), the fluid
 ## overrides, and the player/inventory state.  Generated terrain is *not* stored:
-## it is deterministic from the seed, so a save stays small no matter how far the
-## player has explored.
+## it is deterministic from the seed and the stored terrain-generator version,
+## so a save stays small no matter how far the player has explored. A missing
+## terrain version means M29 generator version 0; new saves record version 1.
 ##
 ## Recovery: a save whose header is missing, whose version is unknown or whose
 ## payload fails validation is never applied.  It is renamed to `*.corrupt-<n>`
@@ -79,6 +80,7 @@ func to_dictionary(world: VoxelWorld, player: VoxelPlayer, inventory: Inventory,
 		"version": VERSION,
 		"engine": Engine.get_version_info().get("string", "unknown"),
 		"seed": world.world_seed,
+		"terrain_generator_version": world.generator.terrain_version,
 		"chunk_size": ChunkData.SIZE,
 		"world_height": WorldGen.WORLD_HEIGHT,
 		"stats": {
@@ -183,6 +185,13 @@ func read() -> Dictionary:
 	if int(data.get("chunk_size", -1)) != ChunkData.SIZE or int(data.get("world_height", -1)) != WorldGen.WORLD_HEIGHT:
 		_quarantine(path, "world shape does not match this build")
 		return {"ok": false, "error": last_error}
+	var terrain_version: Variant = data.get("terrain_generator_version", WorldGen.LEGACY_VERSION)
+	var terrain_version_is_number := typeof(terrain_version) == TYPE_INT or typeof(terrain_version) == TYPE_FLOAT
+	if not terrain_version_is_number \
+			or float(terrain_version) != float(int(terrain_version)) \
+			or not WorldGen.is_supported_version(int(terrain_version)):
+		_quarantine(path, "unsupported or malformed terrain generator version")
+		return {"ok": false, "error": last_error}
 	var sanitised: Variant = _sanitise(data)
 	if sanitised == null:
 		_quarantine(path, last_error)
@@ -198,6 +207,9 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 	var data: Dictionary = save["data"]
 	if int(data["seed"]) != world.world_seed:
 		return {"ok": false, "error": "save belongs to seed %d, the world is seed %d" % [int(data["seed"]), world.world_seed]}
+	var terrain_version := int(data.get("terrain_generator_version", WorldGen.LEGACY_VERSION))
+	if not WorldGen.is_supported_version(terrain_version):
+		return {"ok": false, "error": "the saved terrain generator version is unsupported"}
 	var health_data: Dictionary = data.get("health", {})
 	if not health_data.is_empty() and not Health.new().from_dictionary(health_data):
 		return {"ok": false, "error": "the saved health is invalid"}
@@ -223,6 +235,10 @@ func apply(save: Dictionary, world: VoxelWorld, player: VoxelPlayer, inventory: 
 		if saved_position.size() < 3:
 			return {"ok": false, "error": "the saved player position is invalid"}
 	var edits := data["blocks"] as Array
+	# Switch the generator before load_edits regenerates loaded chunks. Legacy
+	# saves without the optional field resolve to the M29 generator (version 0).
+	if world.generator.terrain_version != terrain_version:
+		world.generator = WorldGen.new(world.world_seed, terrain_version)
 	var block_edits: Dictionary = {}
 	var block_orientations: Dictionary = {}
 	for row: Array in edits:
@@ -348,6 +364,7 @@ func _sanitise(data: Dictionary) -> Variant:
 		"blocks": rows,
 		"fluid": fluid,
 		"version": version,
+		"terrain_generator_version": int(data.get("terrain_generator_version", WorldGen.LEGACY_VERSION)),
 	}
 
 
