@@ -9,7 +9,7 @@
 - Active milestone: M30, as explicitly supplied by the user.
 - Worktree: `C:/Users/Admin/Documents/Projects/VoxelWorld_m30`.
 - Branch: `codex/m30-voxel-wilderness`, based on committed revision `92a9bdd`.
-- Implementation commit: to be recorded after commit; documentation commit follows separately.
+- Initial implementation commit: `fc1c81174985a9e466934aba4380a8d5ea03466b`; initial report commit: `62f6ab1`.
 - M30 source changes are limited to `prototypes/m17/godot/scripts/core/world_gen.gd` and `prototypes/m17/godot/scripts/tests/test_generation.gd`.
 - M29-pending changes are in a separate original checkout. M30 did not change the mesher, block definitions, texture manifest, rendering, game, or save manager.
 
@@ -118,7 +118,7 @@ The follow-up improves local crown silhouettes, mixed groves, clearings, and mou
 ### Follow-up commit record
 
 - Implementation and test commit: `c34ab4d314acf9911151d571fb507c4b8301439e`.
-- Report update commit: to be recorded after commit.
+- Report update for that follow-up: `a764311`.
 
 ## Visual quality pass — paired runtime comparison
 
@@ -151,6 +151,7 @@ The pass improves local canopy variety, visible openings, forest-floor landmarks
 - Godot 4.7.2 headless unit suite: **passed, 2,060 assertions** (`M17_TESTS_PASS 2060 assertions`).
 - Godot integration suite: **passed, 438 assertions** (`M17_INTEGRATION_PASS 438 assertions`), including movement, saves/reloads, and the updated terrain-safe movement fixture.
 - Runtime: the before/after views above were rendered by the running Godot game; these are not headless mesh previews.
+- A fresh independent read-only review found no blocking or important issues with chunk margins, seam/load-order coverage, or generation cost.
 - RTX 3080, seed `17017`, render radius 6, VSync off: the settled look phase recorded 3,850 frames, average 384.9 FPS, p95 3.453 ms, p99 4.422 ms, 191.9 FPS one-percent low, and near-zero queued chunks. Initial streaming had p95 8.302 ms and a worst sampled frame of 107.41 ms. These are harness measurements on one machine, not a hardware-independent guarantee. Raw frame telemetry is in `m30-visual-quality-r6.json`.
 - `git diff --check`: passed before commit.
 
