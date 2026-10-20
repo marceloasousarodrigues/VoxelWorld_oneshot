@@ -58,6 +58,7 @@ var _continent: FastNoiseLite
 var _hills: FastNoiseLite
 var _mountain: FastNoiseLite
 var _ridge: FastNoiseLite
+var _valley: FastNoiseLite
 var _river: FastNoiseLite
 var _forest_patches: FastNoiseLite
 var _temperature: FastNoiseLite
@@ -75,10 +76,11 @@ func _init(world_seed_value: int = 17017) -> void:
 	world_seed = world_seed_value
 	_continent = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0042, 4, 0.5)
 	_hills = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.021, 3, 0.45)
-	_mountain = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.0026, 3, 0.5)
-	_ridge = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.0105, 3, 0.52)
+	_mountain = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.0055, 3, 0.5)
+	_ridge = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.009, 3, 0.52)
+	_valley = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0044, 2, 0.52)
 	_river = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0055, 2, 0.55)
-	_forest_patches = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.008, 2, 0.55)
+	_forest_patches = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0095, 2, 0.55)
 	_temperature = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0016, 2, 0.5)
 	_humidity = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0021, 2, 0.5)
 	_cave_a = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.026, 2, 0.5)
@@ -177,13 +179,23 @@ func _compute_height(x: int, z: int) -> int:
 	var height := float(BASE_HEIGHT) + shaped * 30.0 + _hills.get_noise_2d(x, z) * 5.0
 	var mountain := _mountain.get_noise_2d(x, z)
 	if continental > 0.06:
-		var mask: float = smoothstep(0.18, 0.72, mountain)
-		height += mask * mask * 48.0 * clampf(continental * 3.0, 0.0, 1.0)
-		# Narrow ridges break the old rounded mountain caps into a readable voxel
-		# skyline. The broad mountain mask keeps these peaks grouped into ranges.
+		var peak_strength := clampf((mountain - 0.12) / 0.88, 0.0, 1.0)
+		var range_strength := clampf(continental * 3.0, 0.0, 1.0)
+		# A steep curve keeps mountain summits pointed instead of saturating the
+		# whole upper range into broad flat tables.
+		height += pow(peak_strength, 3.0) * 76.0 * range_strength
+		# A separate ridged field adds narrow spines within each broad range for a
+		# layered skyline. The mask keeps isolated noise peaks out of lowland plains.
 		var ridge_value: float = 1.0 - absf(_ridge.get_noise_2d(x, z))
-		var ridge_mask := pow(clampf(ridge_value, 0.0, 1.0), 4.0)
-		height += ridge_mask * mask * 21.0 * clampf(continental * 2.0, 0.0, 1.0)
+		var ridge_mask := pow(clampf(ridge_value, 0.0, 1.0), 5.0)
+		height += ridge_mask * sqrt(peak_strength) * 36.0 * range_strength
+		# Broad low-frequency cuts form dry side valleys between the sharper
+		# ridgelines. They stay tied to mountain ranges and leave gentle lowlands
+		# and existing river channels under their original shaping rules.
+		var valley_distance: float = absf(_valley.get_noise_2d(x, z))
+		var valley_strength := 1.0 - smoothstep(0.015, 0.105, valley_distance)
+		var highland_strength := smoothstep(SEA_LEVEL + 12.0, SEA_LEVEL + 36.0, height)
+		height -= valley_strength * highland_strength * 16.0
 	var rounded_height := int(clampf(roundf(height), 1.0, float(WORLD_HEIGHT - 10)))
 	# Lowlands remain softly traversable and useful for building. Higher ground
 	# resolves into three-block terraces, giving hills and plateaus a chunkier
@@ -322,23 +334,23 @@ func tree_at(x: int, z: int) -> Dictionary:
 	match biome:
 		Biome.FOREST:
 			var patch: float = _forest_patches.get_noise_2d(x, z)
-			# Broad low-density patches become flowered clearings; positive patches
-			# gather trees into groves instead of spreading one continuous canopy.
-			if patch < -0.46:
+			# Negative patches create larger openings, the transition band thins
+			# toward meadow, and positive patches gather mixed species into groves.
+			if patch < -0.24:
 				return {"type": TreeType.NONE}
-			if patch < -0.16:
+			if patch < 0.02:
 				if roll < 3:
 					return _birch(x, z, height)
 				if roll < 12:
 					return _oak(x, z, height)
-			elif patch > 0.38:
-				if roll < 8:
+			elif patch > 0.34:
+				if roll < 20:
 					return _birch(x, z, height)
-				if roll < 15:
+				if roll < 42:
 					return _blossom(x, z, height)
-				if roll < 25:
+				if roll < 78:
 					return _pine(x, z, height)
-				if roll < 125:
+				if roll < 230:
 					return _oak(x, z, height)
 				return {"type": TreeType.NONE}
 			if roll < 8:
@@ -664,13 +676,36 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 		_place_block(chunk, local_x, base + offset, local_z, log_block, base_y, false)
 	var top := base + trunk
 	var radius := clampi(canopy_radius, 2, 3)
+	var tree_world_x := chunk.coord.x * ChunkData.SIZE + local_x
+	var tree_world_z := chunk.coord.z * ChunkData.SIZE + local_z
 	# Per-tree lean and a ragged outline so a forest reads as varied trees rather
 	# than a field of identical domes.  The lean stays inside the TREE_PAD.
-	var lean_x := (_hash3(local_x, top, local_z, 71) % 3) - 1
-	var lean_z := (_hash3(local_x, top, local_z, 72) % 3) - 1
-	# Rounded crown: seven layers from a narrow underside through the widest
-	# middle to a narrow top, with the outer ring trimmed deterministically.
-	var layer_radii := [1, 2, 2, 3, 3, 2, 1] if radius >= 3 else [0, 1, 1, 2, 2, 1, 0]
+	var lean_x := (_hash3(tree_world_x, top, tree_world_z, 71) % 3) - 1
+	var lean_z := (_hash3(tree_world_x, top, tree_world_z, 72) % 3) - 1
+	# Several deterministic crown profiles vary broadleaf silhouettes: compact
+	# domes, fuller crowns, and narrower crowns with an uneven shoulder.
+	var profile := _hash3(tree_world_x, top, tree_world_z, 73) % 4
+	var layer_radii: Array
+	if radius >= 3:
+		match profile:
+			0:
+				layer_radii = [1, 2, 2, 3, 3, 2, 1]
+			1:
+				layer_radii = [0, 1, 2, 3, 3, 2, 1]
+			2:
+				layer_radii = [1, 2, 3, 3, 3, 2, 1]
+			_:
+				layer_radii = [1, 2, 3, 2, 3, 2, 1]
+	else:
+		match profile:
+			0:
+				layer_radii = [0, 1, 1, 2, 2, 1, 0]
+			1:
+				layer_radii = [0, 1, 2, 2, 2, 1, 0]
+			2:
+				layer_radii = [0, 0, 1, 2, 2, 1, 0]
+			_:
+				layer_radii = [0, 1, 1, 2, 1, 1, 0]
 	for layer_index in layer_radii.size():
 		var layer_radius: int = int(layer_radii[layer_index])
 		var dy := layer_index - 3
@@ -681,9 +716,9 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 				if absi(dx) == layer_radius or absi(dz) == layer_radius:
 					# Trim the outer ring irregularly (and the far corners more).
 					if absi(dx) == layer_radius and absi(dz) == layer_radius:
-						if _hash3(local_x + dx, top + dy, local_z + dz, 5) % 3 != 0:
+						if _hash3(tree_world_x + dx, top + dy, tree_world_z + dz, 5) % 3 != 0:
 							continue
-					elif _hash3(local_x + dx, top + dy, local_z + dz, 6) % 5 == 0:
+					elif _hash3(tree_world_x + dx, top + dy, tree_world_z + dz, 6) % 5 == 0:
 						continue
 				_place_block(chunk, local_x + dx + lean_x, top + dy, local_z + dz + lean_z, leaf_block, base_y, true)
 	# A short, broken skirt around the trunk softens the flat underside of the
@@ -693,7 +728,7 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 			for dx in range(-2, 3):
 				if dx * dx + dz * dz > 5:
 					continue
-				if _hash3(local_x + dx, top - 4, local_z + dz, 23) % 3 == 0:
+				if _hash3(tree_world_x + dx, top - 4, tree_world_z + dz, 23) % 3 == 0:
 					_place_block(chunk, local_x + dx + lean_x, top - 4, local_z + dz + lean_z,
 						leaf_block, base_y, true)
 	# A short branch on each side of the upper trunk gives the silhouette a

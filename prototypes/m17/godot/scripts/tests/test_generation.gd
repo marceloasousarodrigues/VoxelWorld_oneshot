@@ -152,6 +152,7 @@ func run(h: TestHarness) -> void:
 	var highland_columns := 0
 	var terraced_columns := 0
 	var peak_columns := 0
+	var scenic_relief_columns := 0
 	var level_build_sites := 0
 	var river_columns := 0
 	var river_probe := Vector2i(1 << 30, 1 << 30)
@@ -165,6 +166,16 @@ func run(h: TestHarness) -> void:
 					terraced_columns += 1
 			if height >= WorldGen.SEA_LEVEL + 40:
 				peak_columns += 1
+			if posmod(x, 32) == 0 and posmod(z, 32) == 0 and height >= WorldGen.SEA_LEVEL + 8:
+				var local_low := height
+				var local_high := height
+				for offset_x in [-16, 0, 16]:
+					for offset_z in [-16, 0, 16]:
+						var neighbor_height := m30_world.surface_height(x + offset_x, z + offset_z)
+						local_low = mini(local_low, neighbor_height)
+						local_high = maxi(local_high, neighbor_height)
+				if local_high - local_low >= 24:
+					scenic_relief_columns += 1
 			if height > WorldGen.SEA_LEVEL + 4 and generator._column_slope(x, z, height) <= 1:
 				level_build_sites += 1
 			# Continental values above 0.35 are naturally dry land in the legacy
@@ -174,9 +185,11 @@ func run(h: TestHarness) -> void:
 				if river_probe.x == 1 << 30:
 					river_probe = Vector2i(x, z)
 	h.greater(float(highland_columns), 100.0, "the region has substantial elevated terrain")
-	h.greater(float(terraced_columns), float(highland_columns) * 0.95,
-		"highlands use consistent three-block terraces outside tapered river banks")
+	h.greater(float(terraced_columns), float(highland_columns) * 0.93,
+		"highlands use consistent three-block terraces outside tapered river and valley transitions")
 	h.greater(float(peak_columns), 10.0, "the region includes distinct mountain peaks")
+	h.greater(float(scenic_relief_columns), 20.0,
+		"nearby ridge and valley profiles have strong visible relief")
 	h.greater(float(level_build_sites), 10.0, "the world retains naturally level building sites")
 	h.greater(float(river_columns), 10.0, "winding river channels cut into otherwise dry land")
 	var river_source := Vector3i(river_probe.x, WorldGen.SEA_LEVEL, river_probe.y)
@@ -191,24 +204,27 @@ func run(h: TestHarness) -> void:
 	var open_forest_columns_with_trees := 0
 	var dense_grove_columns := 0
 	var dense_grove_trees := 0
+	var dense_grove_species := {}
 	for x in range(-320, 321, 2):
 		for z in range(-320, 321, 2):
 			if m30_world.biome_at(x, z) != WorldGen.Biome.FOREST:
 				continue
 			var patch: float = generator._forest_patches.get_noise_2d(x, z)
 			var tree := generator.tree_at(x, z)
-			if patch < -0.46:
+			if patch < -0.24:
 				forest_clearings += 1
 				if int(tree["type"]) != WorldGen.TreeType.NONE:
 					open_forest_columns_with_trees += 1
-			elif patch > 0.38:
+			elif patch > 0.34:
 				dense_grove_columns += 1
 				if int(tree["type"]) != WorldGen.TreeType.NONE:
 					dense_grove_trees += 1
+					dense_grove_species[int(tree["type"])] = true
 	h.greater(float(forest_clearings), 100.0, "forest regions contain broad clearing patches")
 	h.eq(open_forest_columns_with_trees, 0, "clearings remain open and useful for building")
 	h.greater(float(dense_grove_columns), 100.0, "forest regions retain dense woodland patches")
 	h.greater(float(dense_grove_trees), 10.0, "dense patches still provide harvestable trees")
+	h.greater(float(dense_grove_species.size()), 2.0, "dense groves mix broadleaf, blossom, and conifer species")
 
 	# Sea level contract used by the fixture loader.
 	h.eq(WorldGen.SEA_LEVEL, 62, "sea level is 62")

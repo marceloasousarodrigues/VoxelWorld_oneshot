@@ -13,6 +13,7 @@ extends SceneTree
 var _game: Node
 var _failures: Array[String] = []
 var _passes := 0
+var _test_pad_y := 69
 const CreatureScript = preload("res://scripts/game/passive_creature.gd")
 const CreatureModel = preload("res://scripts/core/passive_creatures.gd")
 const HostileScript = preload("res://scripts/game/hostile_creature.gd")
@@ -35,6 +36,22 @@ func _check(condition: bool, description: String) -> void:
 	else:
 		_failures.append(description)
 		print("M17_INT_ASSERT_FAIL %s" % description)
+
+
+## Build a small, flat interaction area above the highest local column so these
+## player-control checks stay independent of generated terrain height.
+func _prepare_test_pad(center: Vector2i = Vector2i(8, 8), radius: int = 6) -> void:
+	var highest_surface := 1
+	for z in range(center.y - radius, center.y + radius + 1):
+		for x in range(center.x - radius, center.x + radius + 1):
+			highest_surface = maxi(highest_surface, _game.world.surface_height(x, z))
+	_test_pad_y = mini(highest_surface + 2, WorldGen.WORLD_HEIGHT - 8)
+	for z in range(center.y - radius, center.y + radius + 1):
+		for x in range(center.x - radius, center.x + radius + 1):
+			var surface: int = int(_game.world.surface_height(x, z))
+			for y in range(surface + 1, mini(_test_pad_y + 10, WorldGen.WORLD_HEIGHT)):
+				_game.world.set_block(Vector3i(x, y, z), BlockDB.AIR)
+			_game.world.set_block(Vector3i(x, _test_pad_y, z), BlockDB.STONE)
 
 
 # --- reached-geometry helpers for the edit regressions --------------------
@@ -222,27 +239,34 @@ func _main() -> void:
 		"the player rests on a block boundary, not sunk into the terrain (fraction %.3f)" % feet_fraction)
 	# Exercise the creature damage/death/drop path through the real scene node and
 	# game inventory integration (three separate player attacks, one drop).
-	var creature_state := {"id": 9001, "species": "boar", "position": landed + Vector3(0.0, 0.0, -0.8),
-		"health": CreatureDB.health("boar"), "alive": true, "wander": Vector3.ZERO, "key": "integration-boar"}
-	var test_creature = CreatureScript.new()
-	test_creature.configure(creature_state, _game.world)
-	_game.creature_root.add_child(test_creature)
-	test_creature.killed.connect(_game._on_creature_killed)
 	var meat_before: int = _game.inventory.count_of(ItemDB.RAW_MEAT)
 	var hide_before: int = _game.inventory.count_of(ItemDB.HIDE)
 	var oak_before: int = _game.inventory.count_of(BlockDB.OAK_LOG)
 	player.flying = true
 	player.teleport_to(landed)
 	player.look_yaw(0.0)
-	player.look_pitch(-70.0)
-	for i in range(2):
-		await physics_frame
+	player.look_pitch(-25.0)
+	await physics_frame
+	# Place the test target on the actual camera ray. Terrain profiles can change
+	# the settled player height; a fixed downward offset can put a close target
+	# below the ray or behind a voxel and make a failed attack loop forever.
+	var ray_forward: Vector3 = -player.camera.global_basis.z
+	var creature_position: Vector3 = player.camera.global_position + ray_forward * 1.8 - Vector3(0.0, 0.45, 0.0)
+	var creature_state := {"id": 9001, "species": "boar", "position": creature_position,
+		"health": CreatureDB.health("boar"), "alive": true, "wander": Vector3.ZERO, "key": "integration-boar"}
+	var test_creature = CreatureScript.new()
+	test_creature.configure(creature_state, _game.world)
+	_game.creature_root.add_child(test_creature)
+	test_creature.killed.connect(_game._on_creature_killed)
+	await physics_frame
 	_check(player._creature_in_front() == test_creature, "LMB targeting prioritizes the closer passive creature")
 	var health_before_hit: int = int(test_creature.state.health)
 	_check(player.break_target() and int(test_creature.state.health) < health_before_hit,
 		"first player interaction damages a living passive creature")
-	while is_instance_valid(test_creature) and bool(test_creature.state.get("alive", false)):
+	var remaining_attacks := CreatureDB.health("boar") + 1
+	while remaining_attacks > 0 and is_instance_valid(test_creature) and bool(test_creature.state.get("alive", false)):
 		player.break_target()
+		remaining_attacks -= 1
 	_check(not bool(test_creature.state.get("alive", true)), "lethal player interaction kills the creature")
 	await process_frame
 	_check(_game.inventory.count_of(ItemDB.RAW_MEAT) > meat_before,
@@ -376,8 +400,10 @@ func _main() -> void:
 	# Block placement and breaking through the real player controller.  The player
 	# hovers above the ground so the placement cell is clear of its own body (the
 	# controller correctly refuses to build inside the player).
+	_prepare_test_pad()
+	await _stream_until_settled()
 	player.flying = true
-	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.teleport_to(Vector3(8.5, float(_test_pad_y + 5), 8.5))
 	player.look_yaw(0.0)
 	player.look_pitch(-89.0)
 	for i in range(3):
@@ -760,14 +786,14 @@ func _crafting_and_mining_section() -> void:
 	inventory.clear_slot(0)
 	inventory.clear_slot(1)
 	player.flying = true
-	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.teleport_to(Vector3(8.5, float(_test_pad_y + 5), 8.5))
 	player.look_yaw(0.0)
 	player.look_pitch(-89.0)
 	for i in range(2):
 		await process_frame
 
 	# The station is a block in the world, not a menu flag.
-	var table_cell := Vector3i(8, 72, 8)
+	var table_cell := Vector3i(8, _test_pad_y + 1, 8)
 	_check(_game.world.is_loaded(table_cell), "the station cell is loaded")
 	_game.world.set_block(table_cell, BlockDB.CRAFTING_TABLE)
 	var feet := Vector3i(floori(player.global_position.x), floori(player.global_position.y),
@@ -840,7 +866,7 @@ func _crafting_and_mining_section() -> void:
 	_check(not _game.crafting.row_enabled("iron_ingot"), "smelting needs a nearby furnace")
 	_check(_game.crafting.row_status("iron_ingot").contains("Furnace"),
 		"the smelting row names the missing furnace")
-	_game.world.set_block(Vector3i(9, 72, 8), BlockDB.FURNACE)
+	_game.world.set_block(Vector3i(9, _test_pad_y + 1, 8), BlockDB.FURNACE)
 	_game.crafting.set_station(_game._current_station())
 	inventory.remove(ItemDB.IRON_LUMP, inventory.count_of(ItemDB.IRON_LUMP))
 	inventory.remove(ItemDB.COAL, inventory.count_of(ItemDB.COAL))
@@ -856,14 +882,14 @@ func _crafting_and_mining_section() -> void:
 	# Regression for "recipes requiring a crafting table do not appear": the
 	# catalogue used a four-block menu radius while the interaction reach is six.
 	# A table you can open with E must also unlock its recipes.
-	var reach_cell := Vector3i(26, 72, 22)
+	var reach_cell := Vector3i(26, _test_pad_y + 3, 22)
 	_game.world.set_block(reach_cell, BlockDB.CRAFTING_TABLE)
-	player.teleport_to(Vector3(26.5, 74.0, 27.5))
+	player.teleport_to(Vector3(26.5, float(_test_pad_y + 5), 27.5))
 	await process_frame
 	_check(_game._current_station() == Crafting.STATION_TABLE,
 		"a crafting table five blocks away still unlocks table recipes")
 	_game.world.set_block(reach_cell, BlockDB.AIR)
-	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.teleport_to(Vector3(8.5, float(_test_pad_y + 5), 8.5))
 	await process_frame
 
 	_game._close_crafting()
@@ -873,10 +899,10 @@ func _crafting_and_mining_section() -> void:
 	# --- Mining rules through the real player ------------------------------
 	# A clean column so the first solid voxel below the player is the one under
 	# test, whatever the terrain does nearby.
-	var mine_cell := Vector3i(10, 70, 10)
-	_game.world.set_block(Vector3i(10, 69, 10), BlockDB.STONE)
-	_game.world.set_block(Vector3i(10, 72, 10), BlockDB.AIR)
-	_game.world.set_block(Vector3i(10, 71, 10), BlockDB.AIR)
+	var mine_cell := Vector3i(10, _test_pad_y + 2, 10)
+	_game.world.set_block(mine_cell + Vector3i.DOWN, BlockDB.STONE)
+	for clear_y in range(mine_cell.y + 1, mine_cell.y + 5):
+		_game.world.set_block(Vector3i(10, clear_y, 10), BlockDB.AIR)
 	_game.world.set_block(mine_cell, BlockDB.STONE)
 	player.teleport_to(Vector3(mine_cell) + Vector3(0.5, 3.0, 0.5))
 	player.look_yaw(0.0)
@@ -1010,7 +1036,7 @@ func _crafting_and_mining_section() -> void:
 		await process_frame
 
 	player.look_pitch(0.0)
-	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.teleport_to(Vector3(8.5, float(_test_pad_y + 5), 8.5))
 	for i in range(2):
 		await process_frame
 
@@ -1022,7 +1048,7 @@ func _hunger_section() -> void:
 	var player: Node = _game.player
 	var inventory: Inventory = _game.inventory
 	player.flying = true
-	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.teleport_to(Vector3(8.5, float(_test_pad_y + 5), 8.5))
 	for i in range(2):
 		await process_frame
 
@@ -1262,7 +1288,7 @@ func _residents_section() -> void:
 	var player: Node = _game.player
 	var inventory: Inventory = _game.inventory
 	player.flying = true
-	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.teleport_to(Vector3(8.5, float(_test_pad_y + 5), 8.5))
 	player.look_pitch(0.0)
 	for i in range(2):
 		await process_frame
@@ -1278,7 +1304,7 @@ func _residents_section() -> void:
 
 	# A controlled settlement on an elevated platform so the resident has work and
 	# the attack ray has clear air above it.
-	var anchor := Vector3i(12, 75, 12)
+	var anchor := Vector3i(12, _test_pad_y + 1, 12)
 	for dz in range(-2, 3):
 		for dx in range(-2, 3):
 			for dy in range(-4, 0):
@@ -1287,7 +1313,7 @@ func _residents_section() -> void:
 		"width": 5, "depth": 4}
 	var state := NpcModel.spawn_state(_game.world.world_seed, plot, 0)
 	state["role"] = NpcModel.Role.MINER
-	state["position"] = Vector3(12.5, 75.0, 12.5)
+	state["position"] = Vector3(12.5, float(_test_pad_y + 1), 12.5)
 	_game.npc_states[str(state["id"])] = state
 	_game.settlement_stores["settlement-test"] = {}
 	_game._settlement_names["settlement-test"] = "Testhold"
@@ -1356,7 +1382,7 @@ func _residents_section() -> void:
 	_game.npc_states.clear()
 	_game.settlement_stores.clear()
 	_game.npc_nodes.clear()
-	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.teleport_to(Vector3(8.5, float(_test_pad_y + 5), 8.5))
 	player.look_pitch(-20.0)
 	for i in range(2):
 		await process_frame
@@ -1368,7 +1394,7 @@ func _residents_section() -> void:
 func _raid_section() -> void:
 	# A live resident to defend the place.
 	var defender := NpcModel.spawn_state(_game.world.world_seed, {
-		"id": "settlement-test", "name": "Testhold", "kind": "hut", "anchor": Vector3i(12, 75, 12),
+		"id": "settlement-test", "name": "Testhold", "kind": "hut", "anchor": Vector3i(12, _test_pad_y + 1, 12),
 		"width": 5, "depth": 4,
 	}, 0)
 	defender["role"] = NpcModel.Role.MINER
@@ -1377,7 +1403,7 @@ func _raid_section() -> void:
 	# The raid targets the settlements the game has already derived; a stand-in
 	# entry keeps the test independent of where the world put a hut.
 	_game.settlements = [{"id": "settlement-test", "name": "Testhold", "kind": "hut",
-		"anchor": Vector3i(12, 75, 12), "width": 5, "depth": 4, "distance": 4.0}]
+		"anchor": Vector3i(12, _test_pad_y + 1, 12), "width": 5, "depth": 4, "distance": 4.0}]
 	_game._update_npcs(0.1)
 	# Force the raid so the test does not depend on the clock.
 	_game._options["raid_now"] = true
@@ -1902,7 +1928,7 @@ func _stations_section() -> void:
 
 	# Leave no save behind for later captures or sessions.
 	_game.saves.delete_save()
-	player.teleport_to(Vector3(8.5, 74.0, 8.5))
+	player.teleport_to(Vector3(8.5, float(_test_pad_y + 5), 8.5))
 	player.look_pitch(-20.0)
 	for i in range(2):
 		await process_frame

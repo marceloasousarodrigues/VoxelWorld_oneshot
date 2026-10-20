@@ -151,7 +151,9 @@ func run(h: TestHarness) -> void:
 	var mutated := VoxelWorld.new(17017)
 	mutated.ensure_chunk(Vector3i(0, 4, 0))
 	var before := mutated.fingerprint()
-	mutated.set_block(Vector3i(8, 70, 8), BlockDB.STONE)
+	var edit_position := Vector3i(8, 70, 8)
+	var replacement := BlockDB.AIR if mutated.get_block(edit_position) == BlockDB.STONE else BlockDB.STONE
+	mutated.set_block(edit_position, replacement)
 	h.check(mutated.fingerprint() != before, "the world fingerprint reacts to an edit")
 
 	# 6) Every meshed chunk owns exactly one view node, and tearing the streamer
