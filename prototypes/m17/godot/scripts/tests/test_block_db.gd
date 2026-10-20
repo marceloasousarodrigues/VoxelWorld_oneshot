@@ -69,7 +69,7 @@ func run(h: TestHarness) -> void:
 	h.check(not BlockDB.hides_neighbour_face(BlockDB.STONE, BlockDB.WATER), "stone face is visible against water")
 	h.check(BlockDB.hides_neighbour_face(BlockDB.WATER, BlockDB.WATER), "water hides the face against water")
 	h.check(not BlockDB.hides_neighbour_face(BlockDB.WATER, BlockDB.AIR), "water surface is visible against air")
-	h.check(not BlockDB.hides_neighbour_face(BlockDB.WATER, BlockDB.STONE), "water face against stone is hidden by the stone instead")
+	h.check(BlockDB.hides_neighbour_face(BlockDB.WATER, BlockDB.STONE), "water culls its face against solid stone")
 	h.check(BlockDB.hides_neighbour_face(BlockDB.GLASS, BlockDB.GLASS), "glass culls its equal neighbours")
 	h.check(not BlockDB.hides_neighbour_face(BlockDB.GLASS, BlockDB.AIR), "glass face is visible against air")
 	h.check(BlockDB.hides_neighbour_face(BlockDB.OAK_LEAVES, BlockDB.OAK_LEAVES), "canopy interior faces are culled")
@@ -105,7 +105,7 @@ func run(h: TestHarness) -> void:
 			var inlined := false
 			if neighbour != BlockDB.AIR:
 				if is_liquid:
-					inlined = liquid[neighbour] == 1
+					inlined = true
 				elif opaque[neighbour] == 1:
 					inlined = open_model[neighbour] == 0
 				elif neighbour == block_id and culls:

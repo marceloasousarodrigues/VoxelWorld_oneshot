@@ -95,8 +95,8 @@ const AO_OFFSET_DIAGONAL := [
 const AO_STRENGTH := 0.22
 ## Slow per-block brightness variation, keyed by world cell.  It breaks the
 ## tiled look without hiding face boundaries.
-const VARIATION_MIN := 0.945
-const VARIATION_RANGE := 0.11
+const VARIATION_MIN := 0.925
+const VARIATION_RANGE := 0.16
 const WATER_RENDER_HEIGHT := 0.875
 ## Layers that make up the shadow-casting chunk mesh; water is a separate mesh
 ## so it never casts shadows and sorts independently.
@@ -465,7 +465,7 @@ func _emit_faces(input: Dictionary) -> void:
 			# helper by `test_block_db`.
 			if neighbour != BlockDB.AIR:
 				if is_liquid:
-					if liquid[neighbour] == 1:
+					if neighbour != BlockDB.AIR:
 						continue
 				elif opaque[neighbour] == 1:
 					# Open station models (table/furnace) are not full cubes and
@@ -489,7 +489,7 @@ func _emit_faces(input: Dictionary) -> void:
 				var face_tint := body_tint
 				if (block_id == BlockDB.GRASS or block_id == BlockDB.DRY_GRASS) and face != BlockDB.FACE_PY:
 					face_tint = Color(variation, variation, variation, 1.0)
-				if layer == BlockDB.LAYER_OPAQUE:
+				if layer == BlockDB.LAYER_OPAQUE or layer == BlockDB.LAYER_CUTOUT:
 					_face_ao_into(padded_centre, face)
 					_emit_face(surface, centre, face, block_id, face_tint, 1.0, _ao_scratch)
 				else:
@@ -681,9 +681,9 @@ func _macro_tint(cell: Vector3i) -> Color:
 	var c := _macro_hash(x0, z0 + 1)
 	var d := _macro_hash(x0 + 1, z0 + 1)
 	var value := lerpf(lerpf(a, b, fx), lerpf(c, d, fx), fz)
-	# Cool deep green through warm yellow-green, kept close to neutral so the
-	# biome tint still decides the overall hue.
-	return Color(0.90 + 0.13 * value, 0.97 + 0.05 * value, 0.90 + 0.08 * (1.0 - value))
+	# Cool deep green through warm yellow-green.  The range is wide enough that a
+	# forest canopy reads as several greens rather than one flat carpet.
+	return Color(0.88 + 0.15 * value, 0.96 + 0.05 * value, 0.89 + 0.09 * (1.0 - value))
 
 
 func _macro_hash(x: int, z: int) -> float:
@@ -716,10 +716,10 @@ func _emit_water_face(surface: Dictionary, local_centre: Vector3, world_centre: 
 		normals.append(face_normal)
 		var world_corner := world_centre + corner
 		if face_normal.y != 0.0:
-			uvs.append(Vector2(world_corner.x * 0.25, world_corner.z * 0.25))
+			uvs.append(Vector2(world_corner.x * 0.5, world_corner.z * 0.5))
 		else:
 			var horizontal := world_corner.z if face_normal.x != 0.0 else world_corner.x
-			uvs.append(Vector2(horizontal * 0.25, world_corner.y * 0.25))
+			uvs.append(Vector2(horizontal * 0.5, world_corner.y * 0.5))
 		uv2s.append(Vector2(float(layer), 0.0))
 		# Shade water slightly darker with depth (lower surface = deeper).
 		var depth_tone := 0.72 + 0.28 * surface_height

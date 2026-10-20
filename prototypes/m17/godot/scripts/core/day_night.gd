@@ -16,15 +16,15 @@ const NOON_ELEVATION := 74.0
 
 # Palette of the sky at noon and at midnight; everything in between is lerped by
 # the smooth `daylight()` factor.
-const DAY_SKY_TOP := Color("1b5fa8")
-const DAY_SKY_HORIZON := Color("7fb8dc")
+const DAY_SKY_TOP := Color("1a5da6")
+const DAY_SKY_HORIZON := Color("69a5d1")
 const NIGHT_SKY_TOP := Color("060c1f")
 const NIGHT_SKY_HORIZON := Color("1d2b4a")
 const DAY_GROUND_BOTTOM := Color("5e7f92")
-const DAY_GROUND_HORIZON := Color("8ab8cc")
+const DAY_GROUND_HORIZON := Color("7fa9bd")
 const NIGHT_GROUND_BOTTOM := Color("0a1020")
 const NIGHT_GROUND_HORIZON := Color("18233a")
-const DAY_FOG := Color("a9cdd8")
+const DAY_FOG := Color("7fa9bd")
 const NIGHT_FOG := Color("111a30")
 const DAY_SUN := Color("fff2dd")
 const NIGHT_SUN := Color("a9bde8")
@@ -169,7 +169,7 @@ func star_amount() -> float:
 
 
 func cloud_amount() -> float:
-	return lerpf(0.22, 0.34, daylight())
+	return lerpf(0.30, 0.58, daylight())
 
 
 ## Wall-clock hour the in-game time maps to, for the HUD (`0.0` = sunrise = 06:00).

@@ -3,7 +3,7 @@
 **Purpose:** Continue the Godot prototype from M23 to a complete, playable, resource-driven voxel building game whose visual language is guided by the supplied Dragon Quest Builders-style references.
 
 **Project:** `prototypes/m17/godot/`  
-**Current handoff:** M22–**M26** are implemented and verified. M26 makes the save write recoverable across the finalise window and proves a multi-chunk build through unload/reload and restart. Continue with M27. Do not redo M23–M26.  
+**Current handoff:** M22–**M27** are implemented and verified. M27 fixed the shallow-water checkerboard, restored real cutout leaf art, added AO on foliage, and retuned clouds/fog/foliage colour with before/after captures and a settle benchmark. Continue with M28 (final end-to-end journey and release pass). Do not redo M23–M27.  
 **Reference images:** `prototypes/m17/references/visual/dragon-quest-builders/` (see image workflow below).
 
 This roadmap complements the existing `prototypes/m17/results/godot-roadmap.md`, `GODOT_MISSION.md`, `AGENTS.md`, and `ARCHITECTURE.md`. It does not replace their rules or change the production Python/Ursina game. Treat this as the playable endgame plan and keep milestone work scoped to one milestone at a time.
@@ -114,9 +114,11 @@ If the images are not yet in the repository folder, copy the supplied originals 
 
 **Evidence:** save/reload integration results, restart/unload scenario, determinism hashes, any relevant before/after performance report, and updated compatibility notes.
 
-### M27 — Bring normal generated worlds closer to the visual references
+### M27 — Bring normal generated worlds closer to the visual references — **COMPLETE 2026-10-20**
 
 **Goal:** Improve the actual explorable world’s visual identity, not just a test arena.
+
+**Status:** Delivered increment. Fixed the shallow-water z-fighting/checkerboard (water culls against solids), restored real cutout oak/pine leaf art (M18 had made it opaque), added AO on foliage, per-tree crown lean/raggedness, stronger green variation, denser ground cover, stone on slope ≥ 3, and retuned water/clouds/fog/aerial perspective. Before/after fixed-seed normal-world captures and the player-built cottage/tower were inspected; settle p95/p99 are at or below baseline. Gate: unit 2005 / integration 429 assertions, smoke `world_hash=5222532724760257225`. Remaining gaps are recorded in `godot-progress.md` (canopy still reads as a carpet from high above, visible loaded-region edge, no generated gorge terraces). Evidence: `godot-progress.md` M27 section and `m27-*.png`.
 
 **Dependencies:** M23–M26 stable enough to avoid visual iteration on broken building/persistence systems; reference images present.
 

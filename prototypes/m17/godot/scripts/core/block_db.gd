@@ -325,7 +325,10 @@ static func hides_neighbour_face(block_id: int, neighbour_id: int) -> bool:
 	if neighbour_id == AIR:
 		return false
 	if is_liquid(block_id):
-		return is_liquid(neighbour_id)
+		# Water only needs a face where it meets air.  Against a solid block the
+		# solid's own face is already visible, and a coplanar water quad z-fights
+		# with the seabed (the shallow-water checkerboard).
+		return neighbour_id != AIR
 	# An open station model (table/furnace) does not fill its voxel cube, so it
 	# must not hide the face of the block it sits on or beside.
 	if is_open_model(neighbour_id):

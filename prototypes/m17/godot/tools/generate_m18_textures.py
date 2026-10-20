@@ -136,7 +136,7 @@ def dense_leaves(source: str, output: str, tint: tuple, fill: int) -> None:
                 if fill > 0 and hashed % 100 < fill:
                     pixels[x, y] = (0, 0, 0, 0)
                     continue
-                shade = 92 + hashed % 17
+                shade = 72 + hashed % 44
                 pixels[x, y] = (
                     min(255, base[0] * shade // 100),
                     min(255, base[1] * shade // 100),
@@ -164,8 +164,8 @@ def main() -> None:
     crafting_table_side()
     furnace_opening()
     glass_clean()
-    dense_leaves("default_leaves.png", "oak_leaves_clean.png", (1.0, 1.02, 0.96), 0)
-    dense_leaves("default_pine_needles.png", "pine_leaves_clean.png", (0.88, 1.02, 0.92), 0)
+    dense_leaves("default_leaves.png", "oak_leaves_clean.png", (1.0, 1.02, 0.96), 28)
+    dense_leaves("default_pine_needles.png", "pine_leaves_clean.png", (0.88, 1.02, 0.92), 24)
     print("wrote crafting_table_top.png, crafting_table_side.png, furnace_opening.png, glass_clean.png")
 
 

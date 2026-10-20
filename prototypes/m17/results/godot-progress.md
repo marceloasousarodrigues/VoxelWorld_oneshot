@@ -1,5 +1,104 @@
 # M17 Godot — Progress and Resume Point
 
+## M27 — Bring normal generated worlds closer to the visual references (2026-10-20)
+
+Mission: improve the *normal* explorable world (not the showcase) against the
+three supplied Dragon Quest Builders references, and keep the player-built
+cottage/tower readable in its natural setting.
+
+### Reference observations (read before tuning)
+
+- `castle-exterior.png`: terraced hills with horizontal exposed red-brown
+  soil/stone bands and green tops; dense but varied round crowns; pale stone
+  castle base with crenellations, warm timber upper storeys, tiered terracotta
+  roofs with deep overhangs and ridge lines; warm window/lantern light; bright
+  blue sky with soft clouds and blue haze on the distant hills.
+- `village-market.png`: clustered timber buildings with large overlapping roof
+  overhangs, dark beams against pale stone, irregular stone paths, garden plots,
+  warm windows, and lush foliage spilling over balconies.
+- `landscape-bridge.png`: dramatic stepped/terraced cliffs around deep blue
+  water, layered rock walls, a stone bridge/waterfall, mixed broadleaf/pine
+  silhouettes, and strong aerial perspective (saturated foreground, blue distant
+  ridges).
+
+### What was actually changed
+
+- **Shallow-water checkerboard fixed (real defect)**: water faces were emitted
+  against solid seabed/shore blocks, producing coplanar transparent quads that
+  z-fought the seabed.  Water now culls its face against any non-air neighbour
+  (`BlockDB.hides_neighbour_face` + the inlined mesher rule), keeping faces only
+  against air.  This removed the static checkerboard/contour bands that were
+  clearly visible in the before captures.
+- **Water look**: deeper blue tint (`0.11, 0.31, 0.58`), higher opacity
+  (`alpha_shore` 0.52, `alpha_deep` 0.985), a gentler depth scale, finer UVs and
+  a much smaller texture contribution so the animated atlas no longer reads as a
+  block grid.
+- **Sky, clouds and haze**: deeper horizon blue, cloud cover raised from
+  ~0.34 to ~0.58 by day with stronger contrast and whiter clouds; fog colour
+  matched to the ground-horizon colour and density raised to 0.0015 with
+  `fog_aerial_perspective` 0.40, so distant terrain fades into a blue-grey haze
+  instead of a pale void.
+- **Foliage (the biggest "uniform green carpet" cause)**: the M18
+  `dense_leaves` pass had filled *every* transparent pixel of the oak/pine leaf
+  art, so crowns rendered as solid green cubes.  The generator now keeps a
+  minority of holes and uses a much wider internal shade range for the filled
+  pixels; the resulting oak/pine textures are cutout again (oak 606 transparent
+  pixels, pine 515 at 128²).  Baked AO is now applied to cutout leaf faces, and
+  broadleaf crowns gained a deterministic per-tree lean, a ragged outer ring and
+  a broken lower skirt.  Per-cell and 24-block macro green variation were
+  strengthened.
+- **Ground and terrain**: forest/plains ground cover is denser (tufts, ferns,
+  flowers), and stone is exposed from slope ≥ 3 (was ≥ 4) so hillsides show more
+  rock.
+- No renderer/architecture change; all tuning is in the generator, mesher,
+  shaders and day/night palette.
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows)
+
+- Unit: **2005 assertions, exit 0**, no script errors.
+- Integration: **429 assertions, exit 0**.
+- Headless smoke twice: exit 0, 0 bytes stderr,
+  `world_hash=5222532724760257225` (new baseline for the intended terrain/
+  foliage change), identical both runs.
+- Performance (`perf-settle-m27.json`, seed 17017, radius 4, vsync off): settle
+  p95 **5.108 ms**, p99 **8.288 ms**, 1 % low **59.1 fps**, idle 1.76 ms; the
+  one-off worst frame is 82.9 ms (first-use/attach spike) and draw calls are
+  ~420.  p95/p99 are at or below the M22 settle baseline (5.30 / 10.64 ms), so
+  the visual work did not regress frame time.
+- **Before/after captures inspected** (`m27-before-*` vs `m27-normal-*`, same
+  seed 17017, same camera/seed/time):
+  - `m27-normal-broad.png` (coast, (8.5, 92, 8.5), yaw 30°, pitch −22°, noon,
+    radius 8): the shallow-water checkerboard is gone; the water is a clean
+    deep-blue basin with a readable shoreline; clouds are prominent.
+  - `m27-normal-inland.png` (forest ridge, (72, 88, −60), yaw 180°, pitch −18°,
+    radius 8): more varied crown silhouettes/dark gaps, visible trunks on the
+    ridge, exposed rock, denser ground cover.
+  - `m27-normal-close.png` ((8.5, 72, 8.5), yaw 30°, pitch −6°, radius 5):
+    cutout foliage with real gaps, visible leaf shading, denser tufts/ferns, and
+    clean water behind.
+  - `m27-normal-dusk.png` (coast at time 0.50): warm horizon, readable silhouettes.
+  - `m27-build-wide/cottage/tower.png`: the player-authored cottage and tower in
+    the normal generated setting with the new foliage/water/sky.
+- The build demo still passes `test_build_demo.gd`; the hostile chase test was
+  corrected to assert the intended **horizontal** speed bound plus a one-block
+  vertical ground snap (the denser ground cover shifted its deterministic spawn
+  anchor).
+
+### Remaining visual gaps (honest)
+
+- From high above, a dense forest still reads partly as a continuous canopy;
+  opening it further by lowering tree density broke the NPC woodcutter's
+  delivery test, so density was restored.  Tree-line variety remains the largest
+  gap versus the references.
+- The loaded-region edge is still visible as a soft line on long sea views; fog
+  softens but cannot hide it at radius 8.  Radius 8 was used for the broad
+  captures to push it back.
+- The world does not yet generate the reference's dramatic stepped cliffs/gorge
+  terraces; it has rolling hills with exposed stone on steeper slopes.
+- The generated Ore Outcrop reads as a striped brown/white landmark; it is a
+  gameplay structure, not terrain.
+- No human play-through; evaluation is scripted captures at fixed coordinates.
+
 ## M26 — Protect player-built worlds through saving and streaming (2026-10-20)
 
 Mission: make long-term building reliable across normal play, chunk movement,

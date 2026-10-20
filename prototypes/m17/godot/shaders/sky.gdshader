@@ -73,8 +73,8 @@ void sky() {
 	if (h > 0.004) {
 		vec2 cloud_uv = dir.xz / max(h, 0.09) * cloud_scale;
 		float clouds = fbm(cloud_uv + vec2(TIME * cloud_speed, TIME * cloud_speed * 0.6));
-		float cover = smoothstep(0.42, 0.74, clouds) * smoothstep(0.004, 0.20, h);
-		vec3 cloud_col = mix(sky_horizon, vec3(1.0), 0.45) * (0.46 + 0.54 * day_amount);
+		float cover = smoothstep(0.36, 0.66, clouds) * smoothstep(0.004, 0.20, h);
+		vec3 cloud_col = mix(sky_horizon, vec3(1.0), 0.65) * (0.50 + 0.50 * day_amount);
 		col = mix(col, cloud_col, cover * cloud_amount);
 	}
 

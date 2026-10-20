@@ -7,13 +7,15 @@ render_mode cull_disabled, blend_mix, depth_draw_never, diffuse_burley, specular
 // texture, which avoids the checkerboard animation of the earlier shader.
 uniform sampler2DArray atlas : source_color, filter_nearest_mipmap, repeat_enable;
 uniform sampler2D depth_texture : hint_depth_texture, filter_nearest;
-uniform vec4 water_tint : source_color = vec4(0.20, 0.44, 0.78, 1.0);
+uniform vec4 water_tint : source_color = vec4(0.11, 0.31, 0.58, 1.0);
 uniform float frame_rate = 3.0;
 uniform float frames = 8.0;
 uniform float wave_strength : hint_range(0.0, 0.2) = 0.045;
-uniform float alpha_shore : hint_range(0.0, 1.0) = 0.26;
-uniform float alpha_deep : hint_range(0.0, 1.0) = 0.90;
-uniform float depth_scale = 4.0;
+uniform float alpha_shore : hint_range(0.0, 1.0) = 0.52;
+uniform float alpha_deep : hint_range(0.0, 1.0) = 0.985;
+// A larger depth scale softens the one-block seabed steps that otherwise read
+// as hard contour stripes through the transparent surface.
+uniform float depth_scale = 7.0;
 
 varying vec3 world_position;
 
@@ -55,8 +57,10 @@ void fragment() {
 
 	float fresnel = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
 
-	vec3 water = water_tint.rgb * (0.90 + 0.08 * tex.rgb);
-	ALBEDO = water * mix(1.06, 0.56, depth_t);
+	// The animated atlas only adds a subtle surface grain; the wave normals and
+	// depth tint carry the look, so the blocky texture pattern stays invisible.
+	vec3 water = water_tint.rgb * (0.975 + 0.025 * tex.rgb);
+	ALBEDO = water * mix(1.00, 0.90, depth_t);
 	ROUGHNESS = mix(0.06, 0.24, fresnel);
 	METALLIC = 0.0;
 	SPECULAR = 0.78;

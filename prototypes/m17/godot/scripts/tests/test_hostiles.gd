@@ -68,7 +68,11 @@ func run(h: TestHarness) -> void:
 	var far_target := standing + Vector3(6.0, 0.0, 0.0)
 	var chased: Vector3 = model.chase_destination(world, standing, far_target, 0.5)
 	h.check(chased.x > standing.x, "the hostile advances toward the player")
-	h.check((chased - standing).length() <= HostileModel.SPEED * 0.5 + 0.001, "chase step is speed bounded")
+	# The step is bounded horizontally; the Y term snaps to the live ground height,
+	# so a one-block rise/fall is allowed on top of the horizontal speed bound.
+	var flat_step := Vector2(chased.x - standing.x, chased.z - standing.z).length()
+	h.check(flat_step <= HostileModel.SPEED * 0.5 + 0.001, "chase step is speed bounded")
+	h.check(absf(chased.y - standing.y) <= 1.001, "a chase step only snaps one block vertically")
 	var in_range_target := standing + Vector3(HostileModel.ATTACK_RANGE * 0.5, 0.0, 0.0)
 	h.eq(model.chase_destination(world, standing, in_range_target, 0.5), standing,
 		"the hostile stops once the player is in attack range")

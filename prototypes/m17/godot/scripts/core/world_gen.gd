@@ -349,34 +349,34 @@ func decoration_at(x: int, z: int, surface_height: int, surface_block: int, biom
 	var roll := _hash2(x, z, 6151) % 1000
 	match biome:
 		Biome.FOREST:
-			if roll < 140:
+			if roll < 190:
 				return BlockDB.GRASS_TUFT
-			if roll < 185:
+			if roll < 232:
 				return BlockDB.FERN
-			if roll < 212:
+			if roll < 254:
 				return BlockDB.JUNGLE_GRASS
-			if roll < 226:
+			if roll < 272:
 				return BlockDB.TALL_GRASS
-			if roll < 236:
+			if roll < 282:
 				return BlockDB.BUSH
-			if roll < 244:
+			if roll < 290:
 				return BlockDB.FLOWER_RED
-			if roll < 251:
+			if roll < 297:
 				return BlockDB.FLOWER_YELLOW
-			if roll < 258:
+			if roll < 304:
 				return BlockDB.FLOWER_BLUE
 		Biome.PLAINS:
-			if roll < 100:
+			if roll < 150:
 				return BlockDB.GRASS_TUFT
-			if roll < 118:
+			if roll < 170:
 				return BlockDB.TALL_GRASS
-			if roll < 128:
+			if roll < 182:
 				return BlockDB.BUSH
-			if roll < 136:
+			if roll < 190:
 				return BlockDB.FLOWER_RED
-			if roll < 144:
+			if roll < 198:
 				return BlockDB.FLOWER_YELLOW
-			if roll < 152:
+			if roll < 206:
 				return BlockDB.FLOWER_BLUE
 		Biome.SAVANNA:
 			if roll < 55:
@@ -431,7 +431,7 @@ func generate_chunk(chunk: ChunkData) -> void:
 			# asks for, and it removes the harsh grass-side striping on mountains.
 			if height > SEA_LEVEL + 2:
 				var slope := _column_slope(world_x, world_z, height)
-				if slope >= 4:
+				if slope >= 3:
 					surface_block = BlockDB.STONE
 				elif slope >= 2 and (surface_block == BlockDB.GRASS or surface_block == BlockDB.DRY_GRASS):
 					# A hillside face reads as earth, not as a stack of green
@@ -616,8 +616,12 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 		_place_block(chunk, local_x, base + offset, local_z, log_block, base_y, false)
 	var top := base + trunk
 	var radius := clampi(canopy_radius, 2, 3)
+	# Per-tree lean and a ragged outline so a forest reads as varied trees rather
+	# than a field of identical domes.  The lean stays inside the TREE_PAD.
+	var lean_x := (_hash3(local_x, top, local_z, 71) % 3) - 1
+	var lean_z := (_hash3(local_x, top, local_z, 72) % 3) - 1
 	# Rounded crown: seven layers from a narrow underside through the widest
-	# middle to a narrow top, with the corners trimmed deterministically.
+	# middle to a narrow top, with the outer ring trimmed deterministically.
 	var layer_radii := [1, 2, 2, 3, 3, 2, 1] if radius >= 3 else [0, 1, 1, 2, 2, 1, 0]
 	for layer_index in layer_radii.size():
 		var layer_radius: int = int(layer_radii[layer_index])
@@ -626,11 +630,24 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 			for dx in range(-layer_radius, layer_radius + 1):
 				if dx * dx + dz * dz > layer_radius * layer_radius + 1:
 					continue
-				if absi(dx) == layer_radius and absi(dz) == layer_radius:
-					# Trim only the outer corners, and not every one of them.
-					if _hash3(local_x + dx, top + dy, local_z + dz, 5) % 3 != 0:
+				if absi(dx) == layer_radius or absi(dz) == layer_radius:
+					# Trim the outer ring irregularly (and the far corners more).
+					if absi(dx) == layer_radius and absi(dz) == layer_radius:
+						if _hash3(local_x + dx, top + dy, local_z + dz, 5) % 3 != 0:
+							continue
+					elif _hash3(local_x + dx, top + dy, local_z + dz, 6) % 5 == 0:
 						continue
-				_place_block(chunk, local_x + dx, top + dy, local_z + dz, leaf_block, base_y, true)
+				_place_block(chunk, local_x + dx + lean_x, top + dy, local_z + dz + lean_z, leaf_block, base_y, true)
+	# A short, broken skirt around the trunk softens the flat underside of the
+	# crown, which otherwise reads as a green slab floating over the trunk.
+	if radius >= 3:
+		for dz in range(-2, 3):
+			for dx in range(-2, 3):
+				if dx * dx + dz * dz > 5:
+					continue
+				if _hash3(local_x + dx, top - 4, local_z + dz, 23) % 3 == 0:
+					_place_block(chunk, local_x + dx + lean_x, top - 4, local_z + dz + lean_z,
+						leaf_block, base_y, true)
 	# A short branch on each side of the upper trunk gives the silhouette a
 	# recognizable broadleaf shape instead of a single green blob.
 	if trunk >= 6:

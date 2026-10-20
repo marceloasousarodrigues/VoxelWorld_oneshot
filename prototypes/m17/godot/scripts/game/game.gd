@@ -112,7 +112,7 @@ var _options := {
 	"fluid_cells_per_tick": 1024,
 	"shadow_distance": 96.0,
 	"shadows": true,
-	"fog_density": 0.0009,
+	"fog_density": 0.0015,
 	"time_of_day": 0.28,
 	"time_rate": 1.0,
 	"capture": false,
@@ -251,9 +251,9 @@ func _build_environment() -> void:
 	# disables it for comparison captures; `--fog=<density>` retunes it.
 	environment.fog_mode = Environment.FOG_MODE_EXPONENTIAL
 	environment.fog_density = float(_options["fog_density"])
-	environment.fog_sky_affect = 0.30
+	environment.fog_sky_affect = 0.22
 	environment.fog_sun_scatter = 0.22
-	environment.fog_aerial_perspective = 0.28
+	environment.fog_aerial_perspective = 0.40
 	environment.ssao_enabled = true
 	environment.ssao_radius = 0.8
 	environment.ssao_intensity = 0.5

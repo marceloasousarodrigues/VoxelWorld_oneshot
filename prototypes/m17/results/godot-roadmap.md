@@ -11,6 +11,34 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ---
 
+## M27 — Bring normal generated worlds closer to the visual references
+
+Design/evidence: `godot-progress.md` M27 section; `m27-before-*` (pre-tuning)
+and `m27-normal-{broad,inland,close,dusk}.png`, `m27-build-{wide,cottage,tower}.png`.
+
+- [x] Reference observations recorded for all three supplied images
+- [x] **Shallow-water checkerboard fixed**: water culls its face against solids
+      instead of emitting coplanar transparent quads over the seabed
+- [x] Water depth/opacity/tint retuned; animated texture reduced to a subtle
+      grain; clean deep-blue basin with a readable shoreline
+- [x] Sky/haze: deeper horizon, brighter/stronger clouds, fog colour matched to
+      the ground horizon, stronger aerial perspective
+- [x] Foliage: oak/pine leaf art restored to a real cutout (the M18 pass had
+      made it fully opaque), internal leaf shading, AO on cutout leaves, per-tree
+      lean/ragged crowns/lower skirt, stronger per-cell and macro green variation
+- [x] Denser ground cover and stone exposed from slope ≥ 3
+- [x] Fixed-seed normal-world broad/close/inland/dusk captures plus the
+      player-built cottage/tower in its natural setting, all inspected
+- [x] Gate: unit **2005** / integration **429** assertions, both exit 0; smoke
+      twice `world_hash=5222532724760257225`; settle p95 5.108 ms / p99 8.288 ms
+      (at or below the M22 baseline) in `perf-settle-m27.json`
+- [~] No human play-through; fixed scripted viewpoints only
+- [ ] Remaining gaps: canopy still reads as a carpet from high above (reducing
+      density broke the NPC test), loaded-edge line on long sea views, no
+      dramatic generated cliff terraces, striped Ore Outcrop landmark
+
+---
+
 ## M26 — Protect player-built worlds through saving and streaming
 
 Evidence: `godot-progress.md` M26 section; `scripts/tests/test_m26_protection.gd`.
