@@ -681,6 +681,18 @@ func _stairs_section() -> void:
 	_check(world.get_orientation(stair_cell) == 1, "the stair faces the player's look direction")
 	_check(inventory.count_of(BlockDB.STAIR) == count_before - 1, "placing the stair consumes one item")
 
+	# The live HUD feedback names the material, the aimed face and the remaining
+	# count, and R exposes an explicit rotation that the preview reflects.
+	await process_frame
+	var build_prompt: String = _game.hud.build_prompt_text()
+	_check(build_prompt.contains("Stair") and build_prompt.contains("top")
+		and build_prompt.contains("left"), "the HUD build prompt names the stair, face and count")
+	player.rotate_placement()
+	await process_frame
+	var rotated_prompt: String = _game.hud.build_prompt_text()
+	_check(rotated_prompt.contains("rotate"), "the HUD build prompt documents the stair rotation")
+	_check(rotated_prompt.contains("+Z"), "the HUD build prompt shows the explicit facing")
+
 	# The live streamed mesh and collision must be exactly what the mesher derives
 	# from the same voxels, including the partial stair geometry.
 	var settled := await _stream_until_settled()

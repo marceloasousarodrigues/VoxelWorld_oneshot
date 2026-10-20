@@ -3,7 +3,7 @@
 **Purpose:** Continue the Godot prototype from M23 to a complete, playable, resource-driven voxel building game whose visual language is guided by the supplied Dragon Quest Builders-style references.
 
 **Project:** `prototypes/m17/godot/`  
-**Current handoff:** M22, **M23 (roof stairs)** and **M24 (building economy)** are implemented and verified. M24 fixed a real dead end (gravel never generated, so packed paths were unobtainable) and proves an empty-inventory route to the whole build kit. Continue with M25. Do not redo M23/M24.  
+**Current handoff:** M22–**M25** are implemented and verified. M25 adds stair rotation, live build feedback and a scripted player-authored cottage + tower (ordinary voxel blocks, no prefab stamp). Continue with M26. Do not redo M23–M25.  
 **Reference images:** `prototypes/m17/references/visual/dragon-quest-builders/` (see image workflow below).
 
 This roadmap complements the existing `prototypes/m17/results/godot-roadmap.md`, `GODOT_MISSION.md`, `AGENTS.md`, and `ARCHITECTURE.md`. It does not replace their rules or change the production Python/Ursina game. Treat this as the playable endgame plan and keep milestone work scoped to one milestone at a time.
@@ -79,9 +79,11 @@ If the images are not yet in the repository folder, copy the supplied originals 
 
 **Evidence:** reachable-recipe/dependency checks, targeted integration route, fresh-world play evidence or a deterministic harness that follows the real player/inventory/station path, and updated recipes/progression notes.
 
-### M25 — Make voxel construction expressive and dependable
+### M25 — Make voxel construction expressive and dependable — **COMPLETE 2026-10-20**
 
 **Goal:** Let a player comfortably shape a house, village street, and castle with the existing authoritative voxel world.
+
+**Status:** Delivered. Added stair rotation (`R`), a live placement preview (material, aimed face, count, valid/blocked reason, facing) and a scripted player-authored cottage + tower built cell-by-cell through the real block API (`--build-demo`, no `StructureDB` stamp). Gate: unit 1943 / integration 429 assertions, smoke hash unchanged; captures `m25-build-{wide,cottage,tower,dusk}.png` inspected. Evidence: `godot-progress.md` M25 section.
 
 **Dependencies:** M24’s reachable materials; M23 stairs; current single-block mining/placement and save model.
 

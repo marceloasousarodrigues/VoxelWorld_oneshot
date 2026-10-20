@@ -50,6 +50,7 @@ var _durability_bars: Array[ColorRect] = []
 var _mining_root: Control
 var _mining_fill: ColorRect
 var _interact: Label
+var _build_prompt: Label
 
 
 func setup(player_inventory: Inventory, texture_library: TextureLibrary) -> void:
@@ -98,6 +99,14 @@ func _build() -> void:
 	_interact.offset_bottom = 68
 	_interact.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_interact.visible = false
+	_build_prompt = _build_label(Vector2.ZERO, 14, Color(0.88, 0.96, 1.0, 0.94))
+	_build_prompt.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_build_prompt.offset_left = -380
+	_build_prompt.offset_right = 380
+	_build_prompt.offset_top = -(SLOT_SIZE + 56)
+	_build_prompt.offset_bottom = -(SLOT_SIZE + 32)
+	_build_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_build_prompt.visible = false
 	_build_hotbar()
 	_build_vitals()
 	_build_mining_bar()
@@ -381,7 +390,7 @@ func refresh() -> void:
 			text += "   %d / %d" % [inventory.durability_of(inventory.selected), max_wear]
 		_selected_label.text = "%s   (slot %d)" % [text, inventory.selected + 1]
 	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  hold LMB mine  ·  RMB build/eat  ·  E use  ·  C recipes  ·  I inventory  ·  O settings\n" \
-		+ "1-9 or mouse wheel select  ·  F fly  ·  F5 save  ·  F9 load  ·  F3 debug  ·  Esc pause"
+		+ "1-9 or mouse wheel select  ·  R rotate stair  ·  F fly  ·  F5 save  ·  F9 load  ·  F3 debug  ·  Esc pause"
 
 
 func _refresh_durability(index: int, item_id: int) -> void:
@@ -484,6 +493,21 @@ func set_interact_prompt(text: String) -> void:
 
 func set_debug(text: String) -> void:
 	_debug.text = text
+
+
+## Live placement feedback under the hotbar: the selected material, the aimed
+## face, remaining count and any refusal reason.  Empty text hides it.
+func set_build_prompt(text: String, valid: bool = true) -> void:
+	if _build_prompt == null:
+		return
+	_build_prompt.text = text
+	_build_prompt.visible = not text.is_empty()
+	_build_prompt.add_theme_color_override("font_color",
+		Color(0.88, 0.96, 1.0, 0.94) if valid else Color(1.0, 0.70, 0.60, 0.98))
+
+
+func build_prompt_text() -> String:
+	return _build_prompt.text if _build_prompt != null else ""
 
 
 func toggle_debug() -> void:

@@ -11,6 +11,38 @@ Source of the phase structure: `prototypes/m17/GODOT_MISSION.md` §8.
 
 ---
 
+## M25 — Expressive, dependable construction
+
+Design/evidence: `godot-progress.md` M25 section; `m25-build-wide.png`,
+`m25-build-cottage.png`, `m25-build-tower.png`, `m25-build-dusk.png`.
+
+- [x] Compact architectural set confirmed against the references and current
+      assets: stone foundation/masonry, timber frame/posts, plank infill, glass,
+      door, packed path, stairs/roof tile/ridge, fence (a gap is the gate),
+      lantern, and table/furnace/chest/barrel props
+- [x] **Stair rotation (`R`)** cycles an explicit facing that overrides the
+      camera; placing on an underside still flips the stair
+- [x] **Live build feedback**: selected material, aimed face, remaining count,
+      resulting stair facing and a valid/blocked reason, derived from the same
+      preview the placement path uses; controls documented in the HUD
+- [x] Placement still refuses occupied cells and the player body; mining and
+      building use only the affected chunk + seam invalidation (existing
+      `test_edit_rebuild.gd` and streamer integration)
+- [x] **Player-authored demonstration**: `build_demo.gd` levels a natural site
+      and writes a cottage and a stone/timber tower cell by cell through the
+      real block API — no `StructureDB` stamp and no showcase-only model
+- [x] Tests: `test_build_demo.gd` (materials, both roof-slope orientations,
+      ridge, furnishings, mineability), stair rotation/preview cases, and 3
+      real-scene HUD integration assertions
+- [x] Gate: unit **1943** / integration **429** assertions, both exit 0; smoke
+      twice `world_hash=2065363152372568468` unchanged; four windowed captures
+      inspected
+- [~] No human keyboard/mouse build; the demo is scripted through the real API
+- [ ] Slabs/corner stairs remain a future comfort feature; M28 builds the final
+      village/castle journey
+
+---
+
 ## M24 — Exploration yields a useful building economy
 
 Design/evidence: `godot-progress.md` M24 section; `scripts/tests/test_economy.gd`.

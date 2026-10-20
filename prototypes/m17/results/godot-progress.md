@@ -1,5 +1,74 @@
 # M17 Godot — Progress and Resume Point
 
+## M25 — Expressive, dependable construction (2026-10-20)
+
+Mission: make the existing voxel building loop comfortable and dependable for a
+cottage, village street and castle, with clear placement feedback and a
+demonstration built from the crafted palette.
+
+### What was actually changed
+
+- **Stair rotation control (`R`)**: `VoxelPlayer.rotate_placement()` cycles an
+  explicit facing (+Z → +X → −Z → −X, wrapping) that overrides the camera for
+  the next placements; placing on an underside still flips the stair.  This lets
+  a player lay a consistent roof slope while looking along the wall rather than
+  along the stair.  `R` is added to the input map and documented in the HUD.
+- **Live build feedback**: `VoxelPlayer.placement_preview()` returns the aimed
+  face, placement cell, resulting orientation, remaining count and the refusal
+  reason using exactly the same rules as `place_selected`.  The HUD now shows
+  e.g. `RMB place Stair on the top · 7 left · R rotate (+Z)` or
+  `Cannot place Planks: space occupied`, and the control hint includes
+  `R rotate stair`.
+- **Player-authored build demonstration** (`scripts/game/build_demo.gd`,
+  `--build-demo=wide|cottage|tower`): levels a natural site near (40, 40), then
+  builds a cottage (stone foundation, timber posts, plank infill, glass windows,
+  door, stair roof with ridge and chimney, table/furnace/chest/barrel, hanging
+  lantern, lantern post) and a distinct stone/timber tower (stone-brick base,
+  timber upper storey with glass slits, battlements, door, top lantern), plus a
+  packed path and lane lanterns.  **It is not a `StructureDB` stamp**: every cell
+  is written individually through the same `world.set_block` /
+  `set_block_state` path the player uses, so it is ordinary mineable,
+  collidable world data.
+- The build demo is isolated from normal saves in the same way as the visual
+  showcase (`_save_now`/`_save_silently`/autosave guards).
+
+### Verification actually run (Godot 4.7.2 stable mono, Windows)
+
+- Unit: **1943 assertions, exit 0**, no script errors (M24: 1912; +31 build
+  demo and placement-feedback assertions).
+- Integration: **429 assertions, exit 0** (M24: 426; +3 live HUD prompt and
+  rotation checks).
+- Headless smoke twice: exit 0, 0 bytes stderr,
+  `world_hash=2065363152372568468`, `faces=174353`,
+  `faces_hash=665917304729475893` — unchanged from M24 and identical both runs.
+- **Windowed captures inspected** (`--build-demo`, render distance 5, 1280×720):
+  - `results/godot/m25-build-wide.png` — cottage + tower on the levelled natural
+    site with path and lanterns.
+  - `results/godot/m25-build-cottage.png` — stone/timber/plank/glass/door/roof
+    detail, chimney and lantern light.
+  - `results/godot/m25-build-tower.png` — stone base, timber upper storey,
+    glass slits and battlements.
+  - `results/godot/m25-build-dusk.png` — the same site with warm lantern pools.
+  A first capture exposed a floating ridge on the pavilion in M23 (fixed there)
+  and stray decorative edge stones in the demo site (removed); both were
+  re-captured.
+- `test_build_demo.gd` pins the cottage/tower materials, both roof-slope
+  orientations, the ridge, furnishings and that demo blocks can be mined again.
+  `test_stair_interaction.gd` gained the rotation cycle and preview
+  valid/occupied/inside-body cases.
+
+### Limitations / notes
+
+- No human keyboard/mouse build; the demonstration is scripted through the real
+  build API with the crafted block ids whose reachability M24 proves.  M28 will
+  exercise the end-to-end journey.
+- No slab block was added; the palette already covers foundation/masonry, timber
+  frame, plank infill, glass, door, path, stairs, roof tile/ridge, fence (a gap
+  forms the gate) and lantern/props.  Slabs remain a future comfort feature.
+- Mining/building at negative coordinates and across chunk seams is covered by
+  the existing `test_edit_rebuild.gd` and streamer integration checks, not
+  repeated here.
+
 ## M24 — Exploration yields a useful building economy (2026-10-20)
 
 Mission: prove a fresh player can reach the full construction palette through

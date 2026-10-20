@@ -13,6 +13,7 @@ enum State { MENU, LOADING, PLAYING, PAUSED, DEAD }
 
 const RESULTS_DIR := "res://../results/godot"
 const CONFIG_PATH := "user://settings.json"
+const BuildDemo = preload("res://scripts/game/build_demo.gd")
 const AUTOSAVE_SECONDS := 120.0
 ## After any damage the player is briefly immune to further *impact* damage, so a
 ## single landing or hit cannot apply twice in consecutive frames.
@@ -127,6 +128,7 @@ var _options := {
 	"open_inventory": false,
 	"open_settings": false,
 	"station_capture": "",
+	"build_demo": "",
 	"creature_feedback_capture": false,
 	"farming_capture": false,
 	"spawn_hostiles": false,
@@ -560,6 +562,10 @@ func _parse_arguments() -> void:
 				# M18 reproducible visual test area (see VisualTestArena).  The
 				# optional value selects the fixed viewpoint: close, normal, wide.
 				_options["visual_test"] = value if not value.is_empty() else "normal"
+			"--build-demo":
+				# M25 scripted player-authored cottage + tower on a normal world.
+				# The optional value selects the fixed viewpoint: wide, cottage, tower.
+				_options["build_demo"] = value if not value.is_empty() else "wide"
 
 
 func _parse_vector(value: String) -> Vector3:
@@ -864,6 +870,29 @@ func _apply_visual_test_view(mode: String) -> void:
 	streamer.focus_at(player.global_position)
 
 
+## Fixed viewpoints for the M25 player-authored build demonstration.
+func _apply_build_demo_view(mode: String, base: Vector3i) -> void:
+	var cottage := base + Vector3i(BuildDemo.COTTAGE_OFFSET.x, 0, BuildDemo.COTTAGE_OFFSET.y)
+	var tower := base + Vector3i(BuildDemo.TOWER_OFFSET.x, 0, BuildDemo.TOWER_OFFSET.y)
+	match mode:
+		"cottage":
+			player.flying = true
+			player.teleport_to(Vector3(cottage.x + 8.5, float(base.y) + 3.5, cottage.z + 11.5))
+			player.look_yaw(36.0)
+			player.look_pitch(-10.0)
+		"tower":
+			player.flying = true
+			player.teleport_to(Vector3(tower.x + 8.5, float(base.y) + 4.0, tower.z + 9.5))
+			player.look_yaw(42.0)
+			player.look_pitch(-8.0)
+		_:
+			player.flying = true
+			player.teleport_to(Vector3(float(base.x) + 2.5, float(base.y) + 9.0, float(base.z) + 14.0))
+			player.look_yaw(0.0)
+			player.look_pitch(-20.0)
+	streamer.focus_at(player.global_position)
+
+
 ## The nearest placement matching `wanted` ("any" or a structure id), searched in
 ## expanding rings of regions around the origin.
 func _nearest_structure(wanted: String) -> Dictionary:
@@ -924,6 +953,10 @@ func _enter_play(area_ready: bool) -> void:
 	player.spawn_on_column(int(floor(player.global_position.x)), int(floor(player.global_position.z)))
 	if not str(_options["visual_test"]).is_empty():
 		VisualTestArena.new().build(world)
+	if not str(_options["build_demo"]).is_empty():
+		var demo: Dictionary = BuildDemo.build(world)
+		var demo_base: Vector3i = demo["base_y"]
+		_apply_build_demo_view(str(_options["build_demo"]), demo_base)
 	_apply_override_position()
 	if not str(_options["visual_test"]).is_empty() and not (_options["player_at"] as Vector3).is_finite():
 		_apply_visual_test_view(str(_options["visual_test"]))
@@ -1180,7 +1213,8 @@ func _process(delta: float) -> void:
 			_update_status()
 			if hud != null and player != null:
 				hud.set_mining_progress(player.mining_ratio())
-			if not bool(_options["capture"]) and str(_options["visual_test"]).is_empty() and _autosave_timer >= AUTOSAVE_SECONDS:
+			if not bool(_options["capture"]) and str(_options["visual_test"]).is_empty() \
+					and str(_options["build_demo"]).is_empty() and _autosave_timer >= AUTOSAVE_SECONDS:
 				_autosave_timer = 0.0
 				_save_silently("autosave")
 		_:
@@ -1427,6 +1461,30 @@ func _update_status() -> void:
 				prompt = "E  use %s" % str(StationModel.KIND_NAMES.get(station_kind, "Station"))
 	hud.set_interact_prompt(prompt)
 
+	# Live build feedback: the held material, the aimed face, how many are left,
+	# and whether the placement would be accepted.  This is the same preview the
+	# placement path uses, so the text cannot drift from the actual rules.
+	var build_text := ""
+	var build_valid := true
+	if player.can_interact:
+		var preview: Dictionary = player.placement_preview()
+		if not preview.is_empty():
+			var item_id := int(preview["item"])
+			var item_name := ItemDB.name_of(item_id)
+			var count := inventory.count_of(item_id)
+			if bool(preview["valid"]):
+				build_text = "RMB place %s on the %s  ·  %d left" % [
+					item_name, VoxelPlayer.face_name(preview["normal"]), count]
+				if int(preview["block"]) == BlockDB.STAIR:
+					var orientation := int(preview["orientation"])
+					build_text += "  ·  R rotate (%s%s)" % [
+						VoxelPlayer.facing_name(orientation % 4),
+						" upside down" if orientation >= 4 else ""]
+			else:
+				build_text = "Cannot place %s: %s" % [item_name, str(preview["reason"])]
+				build_valid = false
+	hud.set_build_prompt(build_text, build_valid)
+
 
 func _center_biome_name() -> String:
 	var cell := Vector3i(floori(player.global_position.x), floori(player.global_position.y), floori(player.global_position.z))
@@ -1485,6 +1543,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			inventory.select(posmod(inventory.selected + step, Inventory.HOTBAR_SIZE))
 		elif event.is_action_pressed("toggle_fly"):
 			player.toggle_fly()
+		elif event.is_action_pressed("rotate_placement"):
+			var facing := player.rotate_placement()
+			if facing >= 0:
+				hud.flash("Stair facing %s — RMB places it" % VoxelPlayer.facing_name(facing), 1.6)
+			else:
+				hud.flash("Hold a stair block to rotate it", 1.4)
 		elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
 				and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -2156,8 +2220,8 @@ func _on_fly_changed(enabled: bool) -> void:
 # =========================================================================
 
 func _save_now() -> void:
-	if not str(_options["visual_test"]).is_empty():
-		hud.flash("Saving is disabled in the visual test showcase", 4.0)
+	if not str(_options["visual_test"]).is_empty() or not str(_options["build_demo"]).is_empty():
+		hud.flash("Saving is disabled in the showcase / build demo", 4.0)
 		return
 	if not _flush_cursor_stacks():
 		hud.flash("Make space first — a stack held by the cursor cannot be saved yet", 5.0)
@@ -2176,8 +2240,9 @@ func _save_now() -> void:
 
 
 func _save_silently(reason: String) -> void:
-	# The showcase is test-only content and must never enter a normal save.
-	if not str(_options["visual_test"]).is_empty():
+	# The showcase and the scripted build demo are test-only content and must
+	# never enter a normal save.
+	if not str(_options["visual_test"]).is_empty() or not str(_options["build_demo"]).is_empty():
 		return
 	# An interface may hold a temporary cursor stack that is not part of either
 	# inventory model.  Return it before writing, or the save (and the load after

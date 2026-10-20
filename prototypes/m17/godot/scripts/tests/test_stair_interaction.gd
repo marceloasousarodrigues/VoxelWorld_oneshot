@@ -40,6 +40,33 @@ func run(h: TestHarness) -> void:
 	h.eq(world.get_block(Vector3i(8, 9, 8)), BlockDB.AIR, "mining removes the stair")
 	h.eq(world.get_orientation(Vector3i(8, 9, 8)), 0, "mining clears the stair orientation")
 
+	# R cycles an explicit facing, which overrides the camera so a roof row can
+	# be built while looking along the wall.  The live preview mirrors the same
+	# placement rules the HUD uses.
+	player.placement_facing = -1
+	h.eq(player.rotate_placement(), 0, "R starts at the +Z facing")
+	h.eq(player.rotate_placement(), 1, "R cycles to +X")
+	h.eq(player.rotate_placement(), 2, "R cycles to -Z")
+	h.eq(player.rotate_placement(), 3, "R cycles to -X")
+	h.eq(player.rotate_placement(), 0, "R wraps back to +Z")
+	player.look_yaw(180.0)  # camera faces -Z; the explicit +Z rotation must win
+	player._hit = {"hit": true, "block": Vector3i(10, 8, 8), "normal": Vector3i.UP,
+		"block_id": BlockDB.STONE}
+	h.eq(player.placement_orientation(Vector3i.UP), 0, "the explicit rotation overrides the camera")
+	var preview: Dictionary = player.placement_preview()
+	h.check(bool(preview.get("valid", false)), "the build preview accepts a clear aimed face")
+	h.eq(preview.get("normal", Vector3i.ZERO), Vector3i.UP, "the preview reports the aimed face")
+	player._hit = {"hit": true, "block": Vector3i(10, 7, 8), "normal": Vector3i.UP,
+		"block_id": BlockDB.STONE}
+	var occupied := player.placement_preview()
+	h.check(not bool(occupied.get("valid", true)), "the preview refuses an occupied cell")
+	h.check(str(occupied.get("reason", "")).contains("occupied"), "the preview explains the occupied cell")
+	player._hit = {"hit": true, "block": Vector3i(100, 99, 100), "normal": Vector3i.UP,
+		"block_id": BlockDB.STONE}
+	var inside := player.placement_preview()
+	h.check(not bool(inside.get("valid", true)), "the preview refuses a cell inside the player")
+	h.eq(str(inside.get("reason", "")), "inside you", "the preview explains the body collision")
+
 	tree.root.remove_child(player)
 	player.free()
 	h.finish()

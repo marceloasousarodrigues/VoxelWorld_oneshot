@@ -68,6 +68,10 @@ var can_interact := true
 ## When false the targeted-block outline is not drawn; the M18 visual test
 ## captures turn it off so the station geometry is unobstructed.
 var show_target_marker := true
+## Explicit facing for the next placed stair (0=+Z, 1=+X, 2=-Z, 3=-X), or -1 to
+## derive it from the camera.  R cycles it so a roof row can be built while the
+## camera looks along the wall instead of along the stair.
+var placement_facing := -1
 
 var _pitch := 0.0
 var _break_cooldown := 0.0
@@ -522,7 +526,7 @@ func place_selected() -> bool:
 		return false
 	var orientation := 0
 	if block_id == BlockDB.STAIR:
-		orientation = BlockShape.orientation_for_placement(-camera.global_basis.z, normal)
+		orientation = placement_orientation(normal)
 	var existing := world.get_block(cell)
 	if existing != BlockDB.AIR and not BlockDB.is_liquid(existing):
 		interaction_failed.emit("That space is occupied")
@@ -536,6 +540,81 @@ func place_selected() -> bool:
 	block_placed.emit(cell, block_id)
 	_update_target()
 	return true
+
+
+## Advances the explicit stair facing (R).  Returns the new facing, or -1 when
+## the held item is not a stair.
+func rotate_placement() -> int:
+	if inventory == null or ItemDB.placeable_block(inventory.selected_item()) != BlockDB.STAIR:
+		return -1
+	placement_facing = 0 if placement_facing < 0 else (placement_facing + 1) % 4
+	return placement_facing
+
+
+## Orientation a stair receives for a hit normal, honouring the explicit R
+## rotation when it has been set and otherwise following the camera.
+func placement_orientation(normal: Vector3i) -> int:
+	if placement_facing < 0:
+		return BlockShape.orientation_for_placement(-camera.global_basis.z, normal)
+	return placement_facing + (4 if normal == Vector3i.DOWN else 0)
+
+
+## Live build feedback used by the HUD: what the held block would do on the
+## aimed face, and why it would be refused.  Returns {} when nothing placeable
+## is selected.
+func placement_preview() -> Dictionary:
+	if inventory == null:
+		return {}
+	var item_id := inventory.selected_item()
+	var block_id := ItemDB.placeable_block(item_id)
+	if block_id == BlockDB.NO_DROP:
+		return {}
+	var hit := target()
+	if not hit.get("hit", false):
+		return {"item": item_id, "block": block_id, "valid": false, "reason": "aim at a block"}
+	var normal: Vector3i = hit["normal"]
+	var cell: Vector3i = hit["block"] + normal
+	var orientation := 0
+	if block_id == BlockDB.STAIR:
+		orientation = placement_orientation(normal)
+	var preview := {
+		"item": item_id, "block": block_id, "cell": cell, "normal": normal,
+		"orientation": orientation, "valid": true, "reason": "",
+	}
+	if not VoxelWorld.in_world_vertical(cell.y):
+		preview["valid"] = false
+		preview["reason"] = "outside the buildable height"
+	elif world.get_block(cell) != BlockDB.AIR and not BlockDB.is_liquid(world.get_block(cell)):
+		preview["valid"] = false
+		preview["reason"] = "space occupied"
+	elif cell_intersects_body(cell, block_id, orientation):
+		preview["valid"] = false
+		preview["reason"] = "inside you"
+	return preview
+
+
+static func face_name(normal: Vector3i) -> String:
+	match normal:
+		Vector3i.UP:
+			return "top"
+		Vector3i.DOWN:
+			return "underside"
+		Vector3i.RIGHT:
+			return "+X face"
+		Vector3i.LEFT:
+			return "-X face"
+		Vector3i.BACK:
+			return "+Z face"
+		Vector3i.FORWARD:
+			return "-Z face"
+	return "face"
+
+
+static func facing_name(facing: int) -> String:
+	var names := ["+Z", "+X", "-Z", "-X"]
+	if facing < 0 or facing >= names.size():
+		return "?"
+	return names[facing]
 
 
 ## True when the given world cell overlaps the player's collision volume.
