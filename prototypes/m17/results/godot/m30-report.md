@@ -38,6 +38,7 @@ Ground-detail block additions and rendering/fog changes were not justified for t
 - Generation tests compare positive and negative-coordinate chunks generated in different load orders and sample a `641×641` coordinate region at four-block intervals for terraces, peaks, level build sites, and carved rivers.
 - The new river probe is generated as a water source at sea level. Forest patch tests verify broad open areas and populated dense areas.
 - `git diff --check`: passed before commit.
+- A fresh, independent read-only review found no blocking or important issues. It checked canopy and fallen-log chunk margins, negative-coordinate load-order coverage, and the available R6 performance sample.
 - No separate human keyboard-and-mouse play-through was performed.
 
 ## Runtime and visual evidence
@@ -118,3 +119,43 @@ The follow-up improves local crown silhouettes, mixed groves, clearings, and mou
 
 - Implementation and test commit: `c34ab4d314acf9911151d571fb507c4b8301439e`.
 - Report update commit: to be recorded after commit.
+
+## Visual quality pass — paired runtime comparison
+
+This pass responds to the user's follow-up priorities: tree/canopy variety and natural openings, stronger local landform composition, and water/shoreline integration. It leaves M29 building systems, rendering architecture, save code, block IDs, and the Python/Ursina implementation untouched. The experimental higher-frequency mountain noise was discarded after a runtime capture showed a narrow spire rather than a better ridgeline.
+
+### Changes
+
+- Expanded broadleaf crown profiles from radii 2–3 to 2–4 and introduced deterministic, world-coordinate crown profiles for broadleaf and pine silhouettes so chunk seams do not change their shape.
+- Increased mixed oak, birch, blossom, and pine distribution within forest patches; retained larger patch-scale openings; added flowering clearings and a tree-light strip along river channels.
+- Added sparse, deterministic fallen logs on level forest ground using existing log block IDs.
+- Added sand at low river banks and sandy subsurface there to make water edges read more clearly.
+- Kept the previous lower mountain peak/ridge amplitudes and wider valley cuts. The tighter-frequency experiment was reverted after it did not improve the tested composition.
+- Updated the integration movement fixture to use a level test pad under the steeper generated terrain, and added a fixed negative-coordinate chunk-seam test for fallen logs and generation order.
+
+### Matched captures and visual result
+
+The four before/after pairs below are actual Godot runtime captures from seed `17017`, render radius 6, and matching tour viewpoints. The before frames are from baseline `a764311`; the after frames use the final source settings for this pass. Captures use the game's 1280×720 Vulkan window.
+
+| View | Baseline | Updated runtime | Observed change |
+|---|---|---|---|
+| Wide valley / river | `m30-visual-before-wide.png` | `m30-visual-after-wide.png` | Broader visible opening and more broken-up canopy; river banks read more distinctly. |
+| Canopy | `m30-visual-before-canopy.png` | `m30-visual-after-canopy.png` | Crown sizes and silhouettes vary more, including lighter blossom/birch foliage; the close view is still crowded and heavily green. |
+| Hills / cliffs | `m30-visual-before-hills.png` | `m30-visual-after-hills.png` | More exposed stepped terrain and less wall-like snow coverage in this matched view, but it still lacks the reference's layered distant peaks. |
+| Natural clearing / coast | `m30-visual-before-clearing.png` | `m30-visual-after-clearing.png` | Clear open ground remains legible, with a sand/stone shoreline transition and varied surrounding trees. |
+
+The pass improves local canopy variety, visible openings, forest-floor landmarks, and shoreline contrast. It is **not yet substantially matched to the full reference**: captures remain local island/ridge compositions, the canopy still reads as predominantly green at wide scale, and there is no broad, dramatic mountain-and-water vista or new memorable natural landmark. The user's priority was scene quality rather than distant continuity, so no horizon or world-boundary investigation was done in this pass.
+
+### Verification and performance
+
+- Godot 4.7.2 headless unit suite: **passed, 2,060 assertions** (`M17_TESTS_PASS 2060 assertions`).
+- Godot integration suite: **passed, 438 assertions** (`M17_INTEGRATION_PASS 438 assertions`), including movement, saves/reloads, and the updated terrain-safe movement fixture.
+- Runtime: the before/after views above were rendered by the running Godot game; these are not headless mesh previews.
+- RTX 3080, seed `17017`, render radius 6, VSync off: the settled look phase recorded 3,850 frames, average 384.9 FPS, p95 3.453 ms, p99 4.422 ms, 191.9 FPS one-percent low, and near-zero queued chunks. Initial streaming had p95 8.302 ms and a worst sampled frame of 107.41 ms. These are harness measurements on one machine, not a hardware-independent guarantee. Raw frame telemetry is in `m30-visual-quality-r6.json`.
+- `git diff --check`: passed before commit.
+
+### Remaining limitations and status
+
+- Runtime visuals are closer in the local features listed above, but the supplied reference is still materially richer and more expansive. More intentional large-scale ridge/valley composition and stronger forest-to-meadow transitions remain the highest visual opportunities.
+- Save data still has no generator version. Unedited terrain in older saves can regenerate under the new terrain algorithm; existing player edits remain covered by the current integration flow. Resolve the compatibility policy with the M29-owned save/world work before claiming full milestone completion.
+- Final status remains **Partial**, not complete. No broad performance regression was observed in this settled radius-6 look sample; streaming settle still has a high worst-frame spike.
