@@ -89,3 +89,32 @@ Mesh, attachment, and generation durations are startup/settling aggregates, not 
 - Independent read-only review found no source-scope or determinism-test issue. It flagged that the original report was a placeholder and asked for an explicit terrain compatibility qualification. This report now records the actual evidence and marks legacy pristine-terrain migration as deferred; this limitation remains a blocker to M30 completion.
 - Implementation commit: `fc1c81174985a9e466934aba4380a8d5ea03466b`.
 - Documentation commit: this report is committed separately; its final hash is reported in the task completion summary.
+
+## M30 visual follow-up
+
+The user requested another pass against the supplied reference, focusing on canopy variety and clearings, stronger landform composition, and the blank horizon. Work remains isolated to the M30 worktree and branch.
+
+### Follow-up changes
+
+- Added deterministic broadleaf crown profiles and based canopy shape, lean, and edge trimming on world coordinates. Trees crossing chunk boundaries now retain the same crown shape.
+- Broadened forest openings, strengthened dense mixed groves, and added an explicit test for multiple tree species in dense patches.
+- Sharpened mountain peaks and ridges, added a low-frequency valley cut, and increased mountain occurrence near the diagnostic seed/camera region. Added a sampled local-relief assertion.
+- Updated integration fixtures to build an elevated test pad and position the creature target on the actual camera ray. Terrain is now taller around some old hardcoded test locations; without these fixture changes, the suite either collided with generated hills or could loop indefinitely after a missed creature hit.
+- Updated the generation fingerprint test to mutate its block even when the chosen cell is already stone under the sharper terrain profile.
+
+### Verification and horizon diagnosis
+
+- Headless unit suite: **passed, 2,057 assertions** (`M17_TESTS_PASS 2057 assertions`).
+- Integration suite: **passed, 438 assertions** (`M17_INTEGRATION_PASS 438 assertions`).
+- Radius-6 runtime view at seed `17017`: all **791/791** requested chunks loaded; no queued, generating, or meshing jobs remained at settled capture. The view shows the nearer ridge and mixed canopy; an initial sample showed 60 FPS, while a later sample was 44.7 FPS, so this is not evidence of sustained 60 FPS.
+- Radius-8 runtime capture shows the same generator and streamer working across a wider view, but the horizon remains mostly sky and ocean around the local landmass. The captured radius-8 run had **1,182 loaded/requested chunks** at vertical radius 6, 489,072 visible faces, and no remaining queued/in-flight jobs after settling. This points to the finite view radius and this seed/camera's coastline composition rather than a streaming backlog. These captures verify the tested view only; they do not establish that all camera positions or graphics configurations are free of visibility issues.
+- Look-phase performance at radius 6, after streaming had settled: 3,764 frames, average 376 FPS with VSync off, p95 3.88 ms, p99 4.74 ms, and 0 queued chunks. During the initial settle phase, p95 was 9.04 ms and worst frame 78.17 ms. These are machine-specific harness readings, not a general performance guarantee.
+- Captures: `m30-followup-horizon-r6.png`, `m30-followup-horizon.png`; performance report: `m30-followup-r6.json`.
+- `git diff --check`: passed before the follow-up commits.
+
+The follow-up improves local crown silhouettes, mixed groves, clearings, and mountain relief. The visual capture still falls short of the supplied wide fantasy panorama: radius 8 does not reveal a distant, continuous mountain range from the tested coast, and it contains no new fantasy landmark. The reference's broad horizon therefore remains a composition/visibility limitation, not a verified streamer failure. The terrain-version save compatibility limitation above also remains unresolved, so overall M30 status stays **Partial**.
+
+### Follow-up commit record
+
+- Implementation and test commit: `c34ab4d314acf9911151d571fb507c4b8301439e`.
+- Report update commit: to be recorded after commit.
