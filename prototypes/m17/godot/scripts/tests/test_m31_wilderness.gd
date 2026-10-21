@@ -27,11 +27,12 @@ func _region_hash(version: int) -> int:
 
 func run(h: TestHarness) -> void:
 	h.eq(WorldGen.WILDERNESS_VERSION, 2, "the M31 generator is version 2")
-	h.eq(WorldGen.CURRENT_VERSION, 2, "new worlds use the current (M31) generator")
+	h.check(WorldGen.CURRENT_VERSION >= 2, "new worlds use the M31 path or newer")
 	h.check(WorldGen.is_supported_version(WorldGen.LEGACY_VERSION), "version 0 remains a supported legacy save")
 	h.check(WorldGen.is_supported_version(1), "version 1 (M30) remains a supported save")
 	h.check(WorldGen.is_supported_version(2), "version 2 is a supported save")
-	h.check(not WorldGen.is_supported_version(3), "a future version is rejected")
+	h.check(WorldGen.is_supported_version(3), "version 3 (M32) is a supported save")
+	h.check(not WorldGen.is_supported_version(4), "a future version is rejected")
 	h.check(not WorldGen.is_supported_version(-1), "a negative version is rejected")
 
 	h.eq(_region_hash(WorldGen.LEGACY_VERSION), PINNED_LEGACY_HASH,

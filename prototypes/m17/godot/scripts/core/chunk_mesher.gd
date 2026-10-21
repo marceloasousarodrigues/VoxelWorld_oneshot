@@ -190,6 +190,7 @@ func capture_input(chunk: ChunkData, world: VoxelWorld) -> Dictionary:
 			neighbour_fluid.append(neighbour.fluid.duplicate())
 	return {
 		"coord": chunk.coord,
+		"terrain_version": chunk.terrain_version,
 		"blocks": chunk.blocks.duplicate(),
 		"orientations": chunk.orientations.duplicate(),
 		"fluid": chunk.fluid.duplicate(),
@@ -398,7 +399,8 @@ func _emit_faces(input: Dictionary) -> void:
 				or block_id == BlockDB.PINE_LEAVES or block_id == BlockDB.BIRCH_LEAVES \
 				or block_id == BlockDB.BLOSSOM_LEAVES or is_deco
 		if tinted:
-			tint = WorldGen.BIOME_TINTS[biomes[ChunkData.column_index(local_x, local_z)]]
+			tint = WorldGen.tint_for_version(int(input.get("terrain_version", 0)),
+				biomes[ChunkData.column_index(local_x, local_z)])
 		var variation := _cell_variation(origin + Vector3i(local_x, local_y, local_z))
 		var body_tint := Color(tint.r * variation, tint.g * variation, tint.b * variation, 1.0)
 		if tinted:

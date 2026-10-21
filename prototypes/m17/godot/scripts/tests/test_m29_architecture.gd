@@ -659,8 +659,10 @@ func _demos(h: TestHarness) -> void:
 	h.eq(roof_world.get_block(anchor + Vector3i(1, 6, -1)), CHIMNEY,
 		"the chimney rises above the ridge")
 
-	# The M25 cottage is the starter house as well, so this covers both.
-	var build_world := VoxelWorld.new(17017)
+	# The M25 cottage is the starter house as well, so this covers both.  This is
+	# an architecture fixture, so pin the historical M30 terrain: the fixed site
+	# is near tall v3 mountains and would run into the world height ceiling.
+	var build_world := VoxelWorld.new(17017, 1)
 	var build_report: Dictionary = BuildDemo.build(build_world)
 	h.check(int(build_report["cottage"]) > 180, "the M25 cottage is rebuilt with the M29 palette")
 	var base: Vector3i = build_report["base_y"]

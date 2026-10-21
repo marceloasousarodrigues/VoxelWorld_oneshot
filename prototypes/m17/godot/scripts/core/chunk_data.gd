@@ -21,6 +21,10 @@ var fluid: PackedByteArray
 var sources: PackedByteArray
 var biomes: PackedByteArray
 var surface: PackedInt32Array
+## Generator version that produced this chunk (0 for fixtures/legacy data).  The
+## mesher uses it to keep historical palettes stable while new worlds can carry a
+## brighter M32 foliage tint.
+var terrain_version := 0
 var generated := false
 var edited := false
 var solid_cells := 0

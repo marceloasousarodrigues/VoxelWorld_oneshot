@@ -15,15 +15,29 @@ const SEA_LEVEL := 62
 const BASE_HEIGHT := 66
 const LEGACY_VERSION := 0
 ## Version 1 is the M30 wilderness path; version 2 (M31) adds the denser,
-## stepped canopy.  Versions 0 and 1 must keep producing their pinned output.
+## stepped canopy.  Version 3 (M32) is the playable-landscape pass: smaller
+## terraces, grass-topped steps instead of brown stair treads, narrower river
+## banks with mixed sand/gravel/soil, and fuller broadleaf crowns.  Versions 0, 1
+## and 2 must keep producing their pinned output.
 const WILDERNESS_VERSION := 2
-const CURRENT_VERSION := 2
+const M32_VERSION := 3
+const CURRENT_VERSION := 3
 const TREE_PAD := 5
 ## Wide enough for a radius-4 crown with one block of lean and one of shelf offset.
 const WILDERNESS_TREE_PAD := 7
+## M32 crowns add a one-block per-layer shelf, so the pad grows by one.
+const M32_TREE_PAD := 8
 ## Side length of the columns that share one canopy tree candidate (M31 forest).
 const CANOPY_CELL := 2
 const HIGHLAND_TERRACE_SIZE := 3
+## M32 hills use natural one-block voxel steps; the M31 stepped profile is kept
+## for the high mountain belt, where broad shelves read as geology rather than
+## as stripes across a forested slope.
+const M32_MOUNTAIN_TERRACE_SIZE := 3
+## The stepped shelves now start at the snow line, so the forested upper slope
+## below it uses natural one-block voxel steps.  The M31 stepped, snow-capped
+## summit profile is preserved above this floor.
+const M32_MOUNTAIN_FLOOR := SEA_LEVEL + 46
 const RIVER_BANK_LIMIT := 0.120
 
 ## Structures are placed one per "region" of this many blocks, at a deterministic
@@ -76,6 +90,7 @@ var _valley: FastNoiseLite
 var _river: FastNoiseLite
 var _forest_patches: FastNoiseLite
 var _flower_patches: FastNoiseLite
+var _detail: FastNoiseLite
 var _temperature: FastNoiseLite
 var _humidity: FastNoiseLite
 var _cave_a: FastNoiseLite
@@ -99,6 +114,10 @@ func _init(world_seed_value: int = 17017, terrain_version_value: int = CURRENT_V
 		_river = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0055, 2, 0.55)
 		_forest_patches = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0095, 2, 0.55)
 		_flower_patches = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.024, 2, 0.52)
+		if terrain_version >= M32_VERSION:
+			# Small deterministic relief that keeps the terraces from forming
+			# perfectly straight treads across a whole hillside.
+			_detail = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.047, 2, 0.5)
 	_temperature = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0016, 2, 0.5)
 	_humidity = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0021, 2, 0.5)
 	_cave_a = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.026, 2, 0.5)
@@ -111,11 +130,18 @@ func _is_wilderness() -> bool:
 	return terrain_version >= WILDERNESS_VERSION
 
 
+## True for generator version 3 and later (the M32 landscape pass).
+func _is_m32() -> bool:
+	return terrain_version >= M32_VERSION
+
+
 ## Horizontal reach of a tree's crown from its trunk, in blocks.  Version 0 and 1
 ## keep their original pads so their chunk borders are unchanged.
 func _tree_pad() -> int:
 	if terrain_version == LEGACY_VERSION:
 		return 3
+	if _is_m32():
+		return M32_TREE_PAD
 	if _is_wilderness():
 		return WILDERNESS_TREE_PAD
 	return TREE_PAD
@@ -241,12 +267,27 @@ func _compute_height(x: int, z: int) -> int:
 		var valley_strength := 1.0 - smoothstep(0.015, 0.105, valley_distance)
 		var highland_strength := smoothstep(SEA_LEVEL + 12.0, SEA_LEVEL + 36.0, height)
 		height -= valley_strength * highland_strength * 22.0
+	if _is_m32():
+		# Quantisation alone produces long, ruler-straight terraces.  A ±2 block
+		# deterministic detail field makes the tread edges meander and adds small
+		# local ridges without turning the terrain into noise.
+		height += _detail.get_noise_2d(x, z) * 2.2
 	var rounded_height := int(clampf(roundf(height), 1.0, float(WORLD_HEIGHT - 10)))
 	# Lowlands remain softly traversable and useful for building. Higher ground
-	# resolves into three-block terraces, giving hills and plateaus a chunkier
+	# resolves into deliberate terraces, giving hills and plateaus a chunkier
 	# profile while keeping every step deterministic at negative coordinates.
-	if rounded_height >= SEA_LEVEL + 8:
-		rounded_height = roundi(float(rounded_height) / HIGHLAND_TERRACE_SIZE) * HIGHLAND_TERRACE_SIZE
+	# Keep the river corridor on one-block steps: a floodplain that rises in
+	# 2-block treads reads as a concrete-sided canal, especially from the water.
+	var river_floodplain := _is_m32() and _river_distance(x, z) < RIVER_BANK_LIMIT * 1.6
+	if rounded_height >= SEA_LEVEL + 8 and not river_floodplain:
+		if _is_m32():
+			# Hills use the detail field's natural one-block steps.  Only the
+			# mountain belt keeps the deliberate wide shelves, so the same 3-block
+			# stair profile no longer paints brown bands across every hillside.
+			if rounded_height >= M32_MOUNTAIN_FLOOR:
+				rounded_height = roundi(float(rounded_height) / M32_MOUNTAIN_TERRACE_SIZE) * M32_MOUNTAIN_TERRACE_SIZE
+		else:
+			rounded_height = roundi(float(rounded_height) / HIGHLAND_TERRACE_SIZE) * HIGHLAND_TERRACE_SIZE
 	# A low-frequency zero-contour field creates winding, connected river beds.
 	# The water system already fills below-sea-level source columns across chunks;
 	# shaping the bed here preserves that source and persistence contract.
@@ -281,6 +322,11 @@ func _compute_biome(x: int, z: int, height: int) -> int:
 	var humidity: float = _humidity.get_noise_2d(x, z)
 	if temperature < -0.34:
 		return Biome.SNOW
+	if _is_m32() and height > SEA_LEVEL + 8 and height <= SEA_LEVEL + 40:
+		# The reference landscape is forested up its hillsides, with meadows kept
+		# on the low ground.  M31 left highland plains bare, exposing long rows of
+		# terrace faces; v3 closes that canopy over the hills.
+		return Biome.FOREST
 	if temperature > 0.30 and humidity < -0.12:
 		return Biome.DESERT
 	if temperature > 0.16 and humidity < 0.08:
@@ -308,12 +354,21 @@ func biome_name(biome: int) -> String:
 	return "Unknown"
 
 
-func biome_tint(biome: int) -> Color:
-	if terrain_version == LEGACY_VERSION and biome == Biome.FOREST:
-		return Color(0.872, 0.960, 0.840)
+## Version-aware terrain tint.  Kept static so the mesher can call it with the
+## chunk's recorded generator version without knowing the world or generator.
+static func tint_for_version(version: int, biome: int) -> Color:
+	if version >= M32_VERSION and biome == Biome.FOREST:
+		# The reference canopy is a vivid lime green rather than the darker
+		# blue-green of the M31 forest.  The texture already carries the leaf
+		# detail, so this only lifts the hue and keeps shaded faces readable.
+		return Color(1.080, 1.100, 0.740)
 	if biome >= 0 and biome < BIOME_TINTS.size():
 		return BIOME_TINTS[biome]
 	return Color.WHITE
+
+
+func biome_tint(biome: int) -> Color:
+	return tint_for_version(terrain_version, biome)
 
 
 func sea_level() -> int:
@@ -333,7 +388,11 @@ func _surface_block(biome: int, height: int) -> int:
 		Biome.SNOW:
 			return BlockDB.SNOW
 		Biome.MOUNTAIN:
-			return BlockDB.SNOW if height > SEA_LEVEL + 46 else BlockDB.STONE
+			if height > SEA_LEVEL + 46:
+				return BlockDB.SNOW
+			# M32 keeps a green treeline on the upper slope; the bare stone belt
+			# was the source of the long grey/brown bands in the M31 captures.
+			return BlockDB.GRASS if _is_m32() else BlockDB.STONE
 		_:
 			return BlockDB.GRASS
 
@@ -452,7 +511,11 @@ func tree_at(x: int, z: int) -> Dictionary:
 			if roll < 22:
 				return _pine(x, z, height)
 		Biome.MOUNTAIN:
-			if height < SEA_LEVEL + 40 and roll < 18:
+			if _is_m32() and height < SEA_LEVEL + 46:
+				# A sparse-to-moderate conifer treeline below the snow cap.
+				if roll < 90:
+					return _pine(x, z, height)
+			elif height < SEA_LEVEL + 40 and roll < 18:
 				return _pine(x, z, height)
 		Biome.DESERT:
 			if roll < 12:
@@ -471,19 +534,56 @@ func _forest_canopy_tree(x: int, z: int, height: int) -> Dictionary:
 	var candidate_z := cell_z * CANOPY_CELL + _hash2(cell_x, cell_z, 4712) % CANOPY_CELL
 	if x != candidate_x or z != candidate_z:
 		return {"type": TreeType.NONE}
-	if _river_distance(x, z) < RIVER_BANK_LIMIT * 1.25:
+	var river_clearance := RIVER_BANK_LIMIT * (1.55 if _is_m32() else 1.25)
+	if _river_distance(x, z) < river_clearance:
 		return {"type": TreeType.NONE}
 	var patch: float = _forest_patches.get_noise_2d(x, z)
-	if patch < -0.24:
+	var clearing_threshold := -0.32 if _is_m32() else -0.24
+	if patch < clearing_threshold:
 		return {"type": TreeType.NONE}
 	var density := 0.95
 	if patch < 0.02:
 		density = 0.7
+	if _is_m32():
+		# Larger crowns cost more faces than extra trunks, so the candidate rate
+		# stays high but the species mix favours broadleaves.  Measured coverage
+		# with 0.90/0.62 fell to 11.7%; 0.98/0.78 restores the M31 density band
+		# without bringing back the thin pole-like silhouettes.
+		density = 0.98 if patch >= 0.02 else 0.78
 	if _hash2(x, z, 4713) % 1000 >= int(density * 1000.0):
 		return {"type": TreeType.NONE}
 	# Blossom stays rare: its pink speckle reads as noise at distance, while the
 	# Image 1 canopy is a continuous lime green.
 	var species := _hash2(x, z, 4714) % 100
+	var tree: Dictionary
+	if _is_m32():
+		# Broadleaf-dominant mix.  Pines are kept for ridgelines and groves, not
+		# scattered through the lowland as narrow bottle-brush silhouettes.
+		if patch > 0.34:
+			if species < 50:
+				tree = _oak(x, z, height)
+			elif species < 66:
+				tree = _birch(x, z, height)
+			elif species < 96:
+				tree = _pine(x, z, height)
+			else:
+				tree = _blossom(x, z, height)
+		elif species < 62:
+			tree = _oak(x, z, height)
+		elif species < 78:
+			tree = _birch(x, z, height)
+		elif species < 96:
+			tree = _pine(x, z, height)
+		else:
+			tree = _blossom(x, z, height)
+		# On a terraced hillside the uphill half of a normal crown is buried in
+		# the slope.  Lifting broadleaf slope trees by up to two blocks keeps the
+		# canopy above the tread and makes the forest read on hills, not only on
+		# flats.  Pines are already tall and keep their natural height.
+		var slope := _column_slope(x, z, height)
+		if slope >= 2 and int(tree["type"]) != TreeType.PINE:
+			tree["height"] = int(tree["height"]) + mini(2, slope)
+		return tree
 	if patch > 0.34:
 		if species < 30:
 			return _oak(x, z, height)
@@ -504,6 +604,12 @@ func _forest_canopy_tree(x: int, z: int, height: int) -> Dictionary:
 func _oak(x: int, z: int, ground: int) -> Dictionary:
 	var trunk := 5 + _hash2(x, z, 4242) % 3
 	var canopy := 2 + _hash2(x, z, 555) % (2 if terrain_version == LEGACY_VERSION else 3)
+	if _is_m32():
+		# Broader crowns on a varied trunk: the crown mass dominates the
+		# silhouette instead of a bare pole, and neighbouring trees sit at
+		# different heights so the forest does not become a flat canopy carpet.
+		trunk = 5 + _hash2(x, z, 4242) % 4 + _hash2(x, z, 4243) % 3
+		canopy = 3 + _hash2(x, z, 555) % 2
 	return {"type": TreeType.OAK, "base": ground + 1, "height": trunk, "canopy": canopy}
 
 
@@ -511,6 +617,8 @@ func _birch(x: int, z: int, ground: int) -> Dictionary:
 	# Taller and slimmer than an oak, with a lighter, airier crown.
 	var trunk := 6 + _hash2(x, z, 4455) % 3
 	var canopy := 2 if terrain_version == LEGACY_VERSION else 2 + _hash2(x, z, 556) % 2
+	if _is_m32():
+		canopy = 3
 	return {"type": TreeType.BIRCH, "base": ground + 1, "height": trunk, "canopy": canopy}
 
 
@@ -554,7 +662,8 @@ func decoration_at(x: int, z: int, surface_height: int, surface_block: int, biom
 				return BlockDB.AIR
 			var forest_patch: float = _forest_patches.get_noise_2d(x, z)
 			var river_distance := _river_distance(x, z)
-			var clearing := forest_patch < -0.24 or river_distance < RIVER_BANK_LIMIT * 1.25
+			var clearing_threshold := -0.32 if _is_m32() else -0.24
+			var clearing := forest_patch < clearing_threshold or river_distance < RIVER_BANK_LIMIT * 1.25
 			var flower_patch: float = _flower_patches.get_noise_2d(x, z)
 			if clearing and flower_patch > 0.10:
 				if roll < 120:
@@ -612,6 +721,7 @@ func decoration_at(x: int, z: int, surface_height: int, surface_block: int, biom
 
 func generate_chunk(chunk: ChunkData) -> void:
 	stats["chunks"] = int(stats["chunks"]) + 1
+	chunk.terrain_version = terrain_version
 	var coord := chunk.coord
 	var base_x := coord.x * ChunkData.SIZE
 	var base_y := coord.y * ChunkData.SIZE
@@ -625,7 +735,9 @@ func generate_chunk(chunk: ChunkData) -> void:
 		if heights[index] > max_height:
 			max_height = heights[index]
 	# Whole chunk above the terrain (and above the tallest tree): leave it empty.
-	if base_y > max_height + 14:
+	# M32 crowns reach seven blocks above the trunk top, so the upper margin grows
+	# with them; versions 0-2 keep their historical early exit.
+	if base_y > max_height + (21 if _is_m32() else 14):
 		chunk.surface = heights.duplicate()
 		chunk.generated = true
 		chunk.mark_dirty()
@@ -643,24 +755,66 @@ func generate_chunk(chunk: ChunkData) -> void:
 			var world_z := base_z + local_z
 			var surface_block := _surface_block(biome, height)
 			var river_bank := false
+			var bank_subsurface := -1
 			if terrain_version != LEGACY_VERSION:
 				var river_distance := _river_distance(world_x, world_z)
-				river_bank = height > SEA_LEVEL and height <= SEA_LEVEL + 5 \
-					and river_distance < RIVER_BANK_LIMIT * 1.9
-			if river_bank:
-				surface_block = BlockDB.SAND
+				if _is_m32():
+					# M32 banks are a narrow wet sand/gravel edge followed by a
+					# mixed soil, gravel and grass transition.  M31 painted the
+					# whole low bank sand, which read as a white concrete apron.
+					if height > SEA_LEVEL and height <= SEA_LEVEL + 5 \
+							and river_distance < RIVER_BANK_LIMIT * 1.25:
+						river_bank = true
+						var bank_roll := _hash3(world_x, height, world_z, 4321) % 10
+						if height <= SEA_LEVEL + 1:
+							surface_block = BlockDB.SAND
+							bank_subsurface = BlockDB.SAND
+						elif height <= SEA_LEVEL + 3 and river_distance < RIVER_BANK_LIMIT * 0.55:
+							surface_block = BlockDB.SAND if bank_roll < 7 else BlockDB.GRAVEL
+							bank_subsurface = surface_block
+						else:
+							# A mostly grassy lip with gravel bars and a little
+							# exposed soil.  M31's all-sand apron and an earlier
+							# all-dirt pass both read as a single flat material.
+							if bank_roll < 3:
+								surface_block = BlockDB.GRAVEL
+							elif bank_roll < 4:
+								surface_block = BlockDB.DIRT
+							else:
+								surface_block = BlockDB.GRASS
+							bank_subsurface = BlockDB.DIRT if surface_block == BlockDB.GRASS else surface_block
+				else:
+					river_bank = height > SEA_LEVEL and height <= SEA_LEVEL + 5 \
+						and river_distance < RIVER_BANK_LIMIT * 1.9
+					if river_bank:
+						surface_block = BlockDB.SAND
+						bank_subsurface = BlockDB.SAND
 			# Steep terrain exposes rock instead of a green carpet draped down a
 			# cliff.  This is the layered / rocky silhouette the visual direction
 			# asks for, and it removes the harsh grass-side striping on mountains.
 			if height > SEA_LEVEL + 2:
 				var slope := _column_slope(world_x, world_z, height)
-				if slope >= 3:
-					surface_block = BlockDB.STONE
-				elif slope >= 2 and (surface_block == BlockDB.GRASS or surface_block == BlockDB.DRY_GRASS):
-					# A hillside face reads as earth, not as a stack of green
-					# ribbons; the grass top stays on the walkable steps.
-					surface_block = BlockDB.DIRT
-			var subsurface := BlockDB.SAND if river_bank else _subsurface_block(biome)
+				if _is_m32():
+					# M32 keeps the grass top on natural hill steps and on the
+					# mountain shelves.  The grass block's own side texture
+					# supplies the earth band, so slopes read as green steps
+					# instead of brown stair treads.
+					# Only genuine cliff faces (two terrace steps or more) turn to
+					# rock; a small hashed subset of the steepest grass gives
+					# outcrops without painting horizontal grey bands across hills.
+					if slope >= 6:
+						surface_block = BlockDB.STONE
+					elif slope >= 5 and surface_block == BlockDB.GRASS \
+							and _hash3(world_x, height, world_z, 611) % 100 < 30:
+						surface_block = BlockDB.STONE
+				else:
+					if slope >= 3:
+						surface_block = BlockDB.STONE
+					elif slope >= 2 and (surface_block == BlockDB.GRASS or surface_block == BlockDB.DRY_GRASS):
+						# A hillside face reads as earth, not as a stack of green
+						# ribbons; the grass top stays on the walkable steps.
+						surface_block = BlockDB.DIRT
+			var subsurface := bank_subsurface if river_bank else _subsurface_block(biome)
 			var underwater := height < SEA_LEVEL
 			for local_y in ChunkData.SIZE:
 				var world_y := base_y + local_y
@@ -745,7 +899,7 @@ func plant_tree(world: VoxelWorld, x: int, z: int, tree_type: int, ground_y: int
 	var min_chunk_z := floori(float(z - tree_pad - 1) / ChunkData.SIZE)
 	var max_chunk_z := floori(float(z + tree_pad + 1) / ChunkData.SIZE)
 	var min_chunk_y := floori(float(base - 2) / ChunkData.SIZE)
-	var max_chunk_y := floori(float(base + 14) / ChunkData.SIZE)
+	var max_chunk_y := floori(float(base + (21 if _is_m32() else 14)) / ChunkData.SIZE)
 	var touched := 0
 	for chunk_z in range(min_chunk_z, max_chunk_z + 1):
 		for chunk_x in range(min_chunk_x, max_chunk_x + 1):
@@ -857,6 +1011,29 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 	var layer_radii: Array
 	if terrain_version == LEGACY_VERSION:
 		layer_radii = [1, 2, 2, 3, 3, 2, 1] if radius >= 3 else [0, 1, 1, 2, 2, 1, 0]
+	elif _is_m32() and radius >= 4:
+		# M32 broadleaf crowns keep a wide middle and an uneven shoulder.  The
+		# extra wide layer (and the per-layer shelf below) gives the stepped,
+		# many-cornered silhouette of the reference instead of one smooth dome.
+		match profile:
+			0:
+				layer_radii = [1, 2, 3, 4, 3, 3, 2, 2, 1]
+			1:
+				layer_radii = [0, 1, 2, 3, 4, 3, 2, 2, 1]
+			2:
+				layer_radii = [1, 2, 3, 3, 4, 3, 2, 1, 1]
+			_:
+				layer_radii = [1, 2, 4, 3, 3, 2, 2, 2, 1]
+	elif _is_m32() and radius >= 3:
+		match profile:
+			0:
+				layer_radii = [1, 2, 3, 3, 3, 2, 1]
+			1:
+				layer_radii = [0, 1, 2, 3, 3, 2, 1]
+			2:
+				layer_radii = [1, 2, 3, 2, 3, 2, 1]
+			_:
+				layer_radii = [1, 1, 2, 3, 2, 1, 1]
 	elif radius >= 4:
 		match profile:
 			0:
@@ -889,7 +1066,12 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 				layer_radii = [0, 1, 1, 2, 1, 1, 0]
 	for layer_index in layer_radii.size():
 		var layer_radius: int = int(layer_radii[layer_index])
-		var dy := layer_index - (4 if terrain_version != LEGACY_VERSION and radius >= 4 else 3)
+		var layer_centre := 4 if terrain_version != LEGACY_VERSION and radius >= 4 else 3
+		if _is_m32():
+			# Drop the crown one layer down the trunk.  The canopy then starts
+			# closer to the ground and the bare-pole silhouette disappears.
+			layer_centre = 5 if radius >= 4 else 4
+		var dy := layer_index - layer_centre
 		# Version 2 shifts each wide layer by up to one block, so the crown steps
 		# out in shelves rather than stacking into a single smooth dome.
 		var shelf_x := 0
@@ -903,22 +1085,32 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 					continue
 				if absi(dx) == layer_radius or absi(dz) == layer_radius:
 					# Trim the outer ring irregularly (and the far corners more).
+					# M32 trims a little harder so crowns read as rounded cubic
+					# masses rather than square shelves.
 					if absi(dx) == layer_radius and absi(dz) == layer_radius:
-						if _hash3(hash_x + dx, top + dy, hash_z + dz, 5) % 3 != 0:
+						if _hash3(hash_x + dx, top + dy, hash_z + dz, 5) % (2 if _is_m32() else 3) != 0:
 							continue
-					elif _hash3(hash_x + dx, top + dy, hash_z + dz, 6) % 5 == 0:
+					elif _hash3(hash_x + dx, top + dy, hash_z + dz, 6) % (4 if _is_m32() else 5) == 0:
 						continue
 				_place_block(chunk, local_x + dx + lean_x + shelf_x, top + dy, local_z + dz + lean_z + shelf_z, leaf_block, base_y, true)
 	# A short, broken skirt around the trunk softens the flat underside of the
-	# crown, which otherwise reads as a green slab floating over the trunk.
+	# crown, which otherwise reads as a green slab floating over the trunk.  M32
+	# continues the skirt two layers lower so the trunk-to-canopy transition is
+	# leafy rather than a bare pole with a ball on top.
 	if radius >= 3:
-		for dz in range(-2, 3):
-			for dx in range(-2, 3):
-				if dx * dx + dz * dz > 5:
-					continue
-				if _hash3(hash_x + dx, top - 4, hash_z + dz, 23) % 3 == 0:
-					_place_block(chunk, local_x + dx + lean_x, top - 4, local_z + dz + lean_z,
-						leaf_block, base_y, true)
+		var skirt_layers: Array = [top - 4]
+		if _is_m32():
+			skirt_layers = [top - 4, top - 3, top - 2]
+		for skirt_index in skirt_layers.size():
+			var skirt_y: int = int(skirt_layers[skirt_index])
+			var salt := 23 + skirt_index
+			for dz in range(-2, 3):
+				for dx in range(-2, 3):
+					if dx * dx + dz * dz > 5:
+						continue
+					if _hash3(hash_x + dx, skirt_y, hash_z + dz, salt) % (4 if _is_m32() else 3) == 0:
+						_place_block(chunk, local_x + dx + lean_x, skirt_y, local_z + dz + lean_z,
+							leaf_block, base_y, true)
 	# A short branch on each side of the upper trunk gives the silhouette a
 	# recognizable broadleaf shape instead of a single green blob.
 	if trunk >= 6:
@@ -942,6 +1134,14 @@ func _place_pine(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk:
 	var tier_radii: Array
 	if terrain_version == LEGACY_VERSION:
 		tier_radii = [1, 1, 2, 2, 3, 3, 2, 1]
+	elif _is_m32():
+		match profile:
+			0:
+				tier_radii = [1, 2, 2, 3, 3, 3, 2, 2, 1]
+			1:
+				tier_radii = [1, 2, 3, 3, 3, 2, 2, 1, 1]
+			_:
+				tier_radii = [1, 1, 2, 3, 3, 2, 2, 1, 1]
 	else:
 		match profile:
 			0:
@@ -952,7 +1152,7 @@ func _place_pine(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk:
 				tier_radii = [1, 1, 2, 3, 2, 2, 1, 1]
 	for tier in tier_radii.size():
 		var layer_radius: int = int(tier_radii[tier])
-		var dy := tier - 7
+		var dy := tier - (8 if _is_m32() else 7)
 		var lean := 1 if _hash3(hash_x, top + dy, hash_z, 909) % 5 == 0 else 0
 		for dz in range(-layer_radius, layer_radius + 1):
 			for dx in range(-layer_radius, layer_radius + 1):

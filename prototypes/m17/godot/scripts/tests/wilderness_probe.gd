@@ -209,7 +209,7 @@ func _print_points(seed_value: int, version: int, points: String) -> void:
 ## Fingerprints of a fixed chunk block for each generator version, so legacy and
 ## M30 output can be pinned by tests before and after generator changes.
 func _print_fingerprints(seed_value: int) -> void:
-	for version in [WorldGen.LEGACY_VERSION, 1, WorldGen.CURRENT_VERSION]:
+	for version in [WorldGen.LEGACY_VERSION, 1, 2, WorldGen.CURRENT_VERSION]:
 		var world := VoxelWorld.new(seed_value, version)
 		for chunk_z in range(-2, 3):
 			for chunk_x in range(-2, 3):

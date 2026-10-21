@@ -141,6 +141,12 @@ func _stream_until_settled(max_frames: int = 900) -> int:
 				break
 		if not dirty:
 			return guard
+	var dirty_names: Array[String] = []
+	for coord: Vector3i in world.chunks:
+		if (world.chunks[coord] as ChunkData).mesh_dirty:
+			dirty_names.append(str(coord))
+	print("M17_INT_SETTLE_TIMEOUT report=%s dirty=%d %s" % [
+		JSON.stringify(streamer.report()), dirty_names.size(), ", ".join(dirty_names.slice(0, 8))])
 	return -1
 
 

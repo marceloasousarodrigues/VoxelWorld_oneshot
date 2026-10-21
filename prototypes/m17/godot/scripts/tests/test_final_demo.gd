@@ -11,7 +11,9 @@ func name() -> String:
 
 
 func run(h: TestHarness) -> void:
-	var world := VoxelWorld.new(17017)
+	# Fixed showcase site near tall mountains: pin the M30 terrain so the authored
+	# roofs stay below WORLD_HEIGHT.  Building behaviour itself is terrain-agnostic.
+	var world := VoxelWorld.new(17017, 1)
 	var report := FinalDemo.build(world)
 	h.check(int(report["cottage"]) > 150, "the final demo includes the cottage home")
 	h.check(int(report["tower"]) > 80, "the final demo includes the stone/timber tower")

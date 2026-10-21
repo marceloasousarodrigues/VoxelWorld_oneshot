@@ -183,13 +183,19 @@ func run(h: TestHarness) -> void:
 	var river_columns := 0
 	var river_probe := Vector2i(1 << 30, 1 << 30)
 	var generator: WorldGen = m30_world.generator
+	var m32 := generator.terrain_version >= WorldGen.M32_VERSION
+	var terrace_size := WorldGen.M32_MOUNTAIN_TERRACE_SIZE if m32 else WorldGen.HIGHLAND_TERRACE_SIZE
+	var terrace_floor := WorldGen.M32_MOUNTAIN_FLOOR if m32 else WorldGen.SEA_LEVEL + 8
 	for x in range(-320, 321, 4):
 		for z in range(-320, 321, 4):
 			var height := m30_world.surface_height(x, z)
-			if height >= WorldGen.SEA_LEVEL + 8:
-				highland_columns += 1
-				if posmod(height, WorldGen.HIGHLAND_TERRACE_SIZE) == 0:
-					terraced_columns += 1
+			if height >= terrace_floor:
+				# The tapered river floodplain deliberately keeps one-block
+				# steps, so terrace consistency is measured outside that band.
+				if generator._river_distance(x, z) >= WorldGen.RIVER_BANK_LIMIT * 1.6:
+					highland_columns += 1
+					if posmod(height, terrace_size) == 0:
+						terraced_columns += 1
 			if height >= WorldGen.SEA_LEVEL + 40:
 				peak_columns += 1
 			if posmod(x, 32) == 0 and posmod(z, 32) == 0 and height >= WorldGen.SEA_LEVEL + 8:
@@ -212,7 +218,7 @@ func run(h: TestHarness) -> void:
 					river_probe = Vector2i(x, z)
 	h.greater(float(highland_columns), 100.0, "the region has substantial elevated terrain")
 	h.greater(float(terraced_columns), float(highland_columns) * 0.93,
-		"highlands use consistent three-block terraces outside tapered river and valley transitions")
+		"the mountain belt uses consistent %d-block terraces outside tapered river and valley transitions" % terrace_size)
 	h.greater(float(peak_columns), 10.0, "the region includes distinct mountain peaks")
 	h.greater(float(scenic_relief_columns), 20.0,
 		"nearby ridge and valley profiles have strong visible relief")
@@ -231,13 +237,14 @@ func run(h: TestHarness) -> void:
 	var dense_grove_columns := 0
 	var dense_grove_trees := 0
 	var dense_grove_species := {}
+	var clearing_threshold := -0.32 if generator.terrain_version >= WorldGen.M32_VERSION else -0.24
 	for x in range(-320, 321, 2):
 		for z in range(-320, 321, 2):
 			if m30_world.biome_at(x, z) != WorldGen.Biome.FOREST:
 				continue
 			var patch: float = generator._forest_patches.get_noise_2d(x, z)
 			var tree := generator.tree_at(x, z)
-			if patch < -0.24:
+			if patch < clearing_threshold:
 				forest_clearings += 1
 				if int(tree["type"]) != WorldGen.TreeType.NONE:
 					open_forest_columns_with_trees += 1
