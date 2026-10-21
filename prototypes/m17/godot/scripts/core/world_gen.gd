@@ -48,6 +48,9 @@ const M33_SNOW_TREE_LIMIT := SEA_LEVEL + 38
 const M33_CLEARING_SCORE := -0.16
 const M33_RIVER_CORE := 1.25
 const M33_RIVER_OUTER := 1.55
+## M34 grove-aware woodland thinning (version 5 only).
+const M34_GROVE_PATCH := 0.34
+const M34_WOODLAND_KEEP := 4
 
 ## Structures are placed one per "region" of this many blocks, at a deterministic
 ## offset inside it.  `STRUCTURE_MARGIN` keeps a footprint inside its own region,
@@ -660,12 +663,59 @@ func _forest_canopy_tree_v4(x: int, z: int, height: int) -> Dictionary:
 	return _pine(x, z, height)
 
 
+## M34 forest path.  It keeps the v4 candidate/river/score/slope/species/density
+## rules and adds a deterministic woodland thinning: dense groves keep every
+## candidate, open woodland keeps four of nine.
+func _forest_canopy_tree_v5(x: int, z: int, height: int) -> Dictionary:
+	var cell_x := floori(float(x) / CANOPY_CELL)
+	var cell_z := floori(float(z) / CANOPY_CELL)
+	var candidate_x := cell_x * CANOPY_CELL + _hash2(cell_x, cell_z, 4711) % CANOPY_CELL
+	var candidate_z := cell_z * CANOPY_CELL + _hash2(cell_x, cell_z, 4712) % CANOPY_CELL
+	if x != candidate_x or z != candidate_z:
+		return {"type": TreeType.NONE}
+	var patch := _forest_patches.get_noise_2d(x, z)
+	if patch <= M34_GROVE_PATCH \
+			and _hash2(cell_x, cell_z, 9101) % 9 >= M34_WOODLAND_KEEP:
+		return {"type": TreeType.NONE}
+	var river_distance := _river_distance(x, z)
+	if river_distance < RIVER_BANK_LIMIT * M33_RIVER_CORE:
+		return {"type": TreeType.NONE}
+	var river_outer := river_distance < RIVER_BANK_LIMIT * M33_RIVER_OUTER
+	var score := _vegetation_score(x, z)
+	if score < M33_CLEARING_SCORE:
+		return {"type": TreeType.NONE}
+	var slope := _column_slope(x, z, height)
+	var species_roll := _hash2(x, z, 4714) % 100
+	var broadleaf := float(species_roll) < _v4_broadleaf_share(height, patch) * 100.0
+	if broadleaf and (height > M33_BROADLEAF_LIMIT or slope >= 4):
+		broadleaf = false
+	var density := _v4_tree_density(height, slope, broadleaf, score)
+	if river_outer:
+		if slope > 1:
+			return {"type": TreeType.NONE}
+		density *= 0.25
+	if density <= 0.0:
+		return {"type": TreeType.NONE}
+	if _hash2(x, z, 4713) % 1000 >= int(density * 1000.0):
+		return {"type": TreeType.NONE}
+	if broadleaf:
+		var leaf_roll := _hash2(x, z, 4715) % 100
+		if leaf_roll < 75:
+			return _oak(x, z, height)
+		if leaf_roll < 95:
+			return _birch(x, z, height)
+		return _blossom(x, z, height)
+	return _pine(x, z, height)
+
+
 ## Non-forest v4 vegetation.  Grassland and savanna keep clumped, sparse trees;
 ## snow and mountain use a low pine cap below their treeline.
 func _biome_tree_v4(x: int, z: int, height: int, biome: int) -> Dictionary:
 	if height <= SEA_LEVEL:
 		return {"type": TreeType.NONE}
 	if biome == Biome.FOREST:
+		if _is_m34():
+			return _forest_canopy_tree_v5(x, z, height)
 		return _forest_canopy_tree_v4(x, z, height)
 	var river_distance := _river_distance(x, z)
 	if river_distance < RIVER_BANK_LIMIT * M33_RIVER_CORE:
