@@ -147,6 +147,7 @@ var _options := {
 	"hurt": -1.0,
 	"submerge": false,
 	"visual_test": "",
+	"show_target_marker": true,
 }
 
 ## Set when `--time-rate=` appears on the command line, so the capture harness
@@ -327,7 +328,7 @@ func _set_sun_angles(pitch: float, yaw: float) -> void:
 func _build_nodes() -> void:
 	player = VoxelPlayer.new()
 	player.name = "Player"
-	player.show_target_marker = str(_options["visual_test"]).is_empty()
+	player.show_target_marker = str(_options["visual_test"]).is_empty() and bool(_options["show_target_marker"])
 	player.gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 24.0))
 	player.can_interact = false
 	player.set_physics_process(false)
@@ -545,6 +546,10 @@ func _parse_arguments() -> void:
 				_options["spawn_hostiles"] = true
 			"--hide-hud":
 				_options["hide_hud"] = true
+			"--no-target-marker":
+				# Diagnostic: the block outline is a thin world-space box that can
+				# cross a close camera and read as a hairline in a screenshot.
+				_options["show_target_marker"] = false
 			"--fly":
 				_options["fly"] = true
 			"--no-shadows":

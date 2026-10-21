@@ -128,6 +128,20 @@ func _build_camera() -> void:
 	camera.make_current()
 
 
+## A target closer than this is not outlined.  When the camera is inside a block
+## (spectator/fly captures, or standing in a leaf cell) the raycast reports a hit
+## at distance zero and the 1 m outline surrounds the camera; its edges then read
+## as thin dark vertical lines across the whole frame.  Hiding the outline for
+## such near hits removes that artifact without changing normal block targeting.
+const MIN_MARKER_DISTANCE := 0.75
+
+
+static func target_marker_visible(hit: Dictionary, enabled: bool) -> bool:
+	if not enabled or not bool(hit.get("hit", false)):
+		return false
+	return float(hit.get("distance", 0.0)) >= MIN_MARKER_DISTANCE
+
+
 ## A thin 12-edge box outline that marks the targeted block.  It is a top-level
 ## node so the player's rotation never tilts it.
 func _build_marker() -> void:
@@ -163,11 +177,31 @@ func _build_marker() -> void:
 
 # --- spawn / teleport ----------------------------------------------------
 
+## Natural canopy and trunk blocks are not valid spawn ground: a dense M32 forest
+## can put a leaf layer above the real surface, and scanning down from the top
+## would otherwise start the player on top of a tree.
+static func is_spawn_foliage(block_id: int) -> bool:
+	return block_id == BlockDB.OAK_LEAVES or block_id == BlockDB.PINE_LEAVES \
+		or block_id == BlockDB.BIRCH_LEAVES or block_id == BlockDB.BLOSSOM_LEAVES \
+		or block_id == BlockDB.OAK_LOG or block_id == BlockDB.PINE_LOG \
+		or block_id == BlockDB.BIRCH_LOG
+
+
+## Topmost solid block in a column that is real ground or a player-built surface,
+## skipping natural foliage and trunks.
+static func spawn_ground_height(world: VoxelWorld, world_x: int, world_z: int, search_top: int = 110) -> int:
+	var ground := search_top
+	while ground > 1:
+		var block := world.get_block(Vector3i(world_x, ground, world_z))
+		if block != BlockDB.AIR and not is_spawn_foliage(block):
+			return ground
+		ground -= 1
+	return maxi(1, ground)
+
+
 ## Places the player with its feet on top of the first solid block in a column.
 func spawn_on_column(world_x: int, world_z: int, search_top: int = 110) -> void:
-	var ground := search_top
-	while ground > 1 and not world.is_solid(Vector3i(world_x, ground, world_z)):
-		ground -= 1
+	var ground := spawn_ground_height(world, world_x, world_z, search_top)
 	var spawn := Vector3(world_x + 0.5, float(ground) + 1.05, world_z + 0.5)
 	teleport_to(spawn)
 
@@ -323,9 +357,7 @@ func _update_target() -> void:
 	if found.get("hit", false):
 		var cell: Vector3i = found["block"]
 		marker.global_position = Vector3(cell) + Vector3.ONE * 0.5
-		marker.visible = show_target_marker
-	else:
-		marker.visible = false
+	marker.visible = target_marker_visible(found, show_target_marker)
 	var key := "%s|%s" % [str(found.get("hit", false)), str(found.get("block", Vector3i.ZERO))]
 	if key != _last_reported_key:
 		_last_reported_key = key
