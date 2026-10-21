@@ -224,6 +224,16 @@ Add a test that creates a version-3 world, streams a chunk outside the initially
 with threaded generation, and compares it with a synchronous v3 `ensure_chunk`. This proves
 old saves keep old terrain/vegetation through streaming, not only through direct generation.
 
+### D10. Starter spawn opening
+
+The existing starter house already levels its own footprint and path. Denser v4 canopy can put
+a crown or trunk over the adjacent spawn column and block the first-person view/target ray.
+Extend the starter house's existing site-clearing loop to clear a 9×9 opening around spawn to
+ground + 6. This is not a new structure, building feature, block ID or gameplay system: it is
+the same ordinary `world.set_block` site preparation the starter house already performs, and
+it only removes natural vegetation. It prevents a playability regression caused by the M33
+canopy while leaving the cottage design and all M29 systems unchanged.
+
 ## 3. Compatibility and determinism
 
 - v0, v1, v2 and v3 fingerprints remain pinned and byte-identical.
@@ -231,8 +241,8 @@ old saves keep old terrain/vegetation through streaming, not only through direct
 - No mutable remembered state, global scan, or streaming-order dependency.
 - Chunk-boundary tree pads stay at `M32_TREE_PAD = 8`; v4 crowns never exceed the pad.
 - Save files record generator version 4 for new worlds; old saves keep their version.
-- Block IDs, terrain heights, surface materials, water, player edits and M29 structures are
-  untouched.
+- Block IDs, terrain heights, surface materials, water, player edits and M29 building systems
+  are untouched. The starter site's existing clearing loop gains the D10 spawn opening.
 - v4 `height_at()` and `biome_at()` must equal v3 over a representative region; only
   `tree_at()` and decor decisions differ.
 

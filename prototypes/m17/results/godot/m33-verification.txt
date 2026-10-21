@@ -29,7 +29,7 @@ DISTRIBUTION, seed 17017, sample [-192,192] step 1
 v3: forest tree coverage 0.1260; lowland box 0.1460; p90 cell 0.1064;
     broadleaf above SEA+30 417; trees above SEA+40 90; slope>=3 0.066;
     clearing area 7703/43603=0.177; river core trees 85.
-v4: forest tree coverage 0.0944; lowland box 0.1103; p90 cell 0.0811;
+v4: forest tree coverage 0.0954; lowland box 0.1103; p90 cell 0.0811;
     broadleaf above SEA+30 0; trees above SEA+40 2; slope>=3 0.005;
     clearing area 9938/43603=0.228; river core trees 0; outer river 0.0155;
     crown-free connected opening 564 columns; clearing open ratio 0.884.

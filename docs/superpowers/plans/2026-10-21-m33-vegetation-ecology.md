@@ -14,7 +14,8 @@
 
 - New worlds use generator version 4; v0/v1/v2/v3 output stays byte-identical.
 - v3 pin: `8802792587028581708`; v0 `3214517825889907206`, v1 `5947596836865492245`, v2 `8397584315617538769`.
-- No terrain height, surface material, block ID, water, structure or save-format changes.
+- No terrain height, surface material, block ID, water, save-format or new-structure changes.
+  The starter site's existing clearing loop may clear the D10 spawn opening.
 - All placement is a pure function of seed, coordinates and generator version.
 - No global searches or per-frame vegetation work.
 - Tree crowns stay within `M32_TREE_PAD = 8`.
@@ -113,7 +114,7 @@ Add v4-only `_woodland` (`TYPE_SIMPLEX_SMOOTH`, 0.007, 2 octaves, gain 0.55). Im
 func _vegetation_score(x: int, z: int) -> float:
     return 0.68 * _forest_patches.get_noise_2d(x, z) + 0.32 * _woodland.get_noise_2d(x, z)
 ```
-Use the spec's elevation and slope factor tables exactly. Broadleaf hard limit `SEA+30`; conifer limit `SEA+44`. `_v4_tree_density` applies `0.95 * smoothstep(-0.16, 0.22, score) * elevation_factor * slope_factor`.
+Use the spec's elevation and slope factor tables exactly. Broadleaf hard limit `SEA+30`; conifer limit `SEA+44`. `_v4_tree_density` applies `smoothstep(-0.16, -0.06, score) * elevation_factor * slope_factor` with the +0.04 score bias.
 
 - [ ] **Step 4: Add v4 mode to the probe**
 
@@ -145,7 +146,7 @@ Assert:
 - clearing area >=20% of sampled forest columns;
 - `LOWLAND_BOX` coverage >=6% and <=20%, with oak/birch/pine/blossom present;
 - `LOWLAND_CANOPY_BOX` has >=100 clearing columns and a connected crown-free component of >=100 columns, with >=50% clearing columns crown-free;
-- river core `<1.25*RIVER_BANK_LIMIT` coverage <1%, outer `1.25..1.55` >0.5% and <20%, N>=100;
+- river core `<1.25*RIVER_BANK_LIMIT` has zero trees in every biome, outer `1.25..1.55` >0.5% and <20%, N>=100;
 - v4 chunks on both sides of the x=48 border match in both load orders, including a crown crossing the border;
 - bulk tree columns have smaller crown radii above `SEA+18` than in lowland;
 - upper slope `SEA+30..40` is pine-only; `LOWLAND_BOX` has at least three broadleaf/pine species;
@@ -171,7 +172,7 @@ Lowland broadleaf mix 62/16/17/5; pine dominates above `SEA+24`; upper slope pin
 
 - [ ] **Step 5: Implement v4 non-forest and decor rules**
 
-Plains/savanna sparse clumps with elevation/slope filters; snow/mountain pine cap 0.06 candidate probability below their limits and slope <=2; cactus unchanged. `decoration_at` uses `vegetation_score < -0.16` for v4 clearings; v3 keeps `_forest_patches < -0.32`. Update `test_generation.gd` to branch by version.
+Plains/savanna sparse clumps with elevation/slope filters; snow/mountain pine cap 0.006 per-column probability below their limits and slope <=2; cactus unchanged. `decoration_at` uses `vegetation_score < -0.16` for v4 clearings; v3 keeps `_forest_patches < -0.32`. Add the D10 starter spawn opening. Update `test_generation.gd` to branch by version.
 
 - [ ] **Step 6: Run unit tests and probe; tune**
 

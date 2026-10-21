@@ -306,25 +306,29 @@ func _test_clearings(h: TestHarness) -> void:
 		"a connected crown-free opening of >=100 columns exists")
 	h.greater(float(stats["clearing_open_ratio"]), 0.50,
 		"at least half of the clearing columns are outside crowns")
-	var sample := _find_clearing_column(LOWLAND_CANOPY_BOX)
-	h.check(sample.x >= 0, "a lowland clearing column exists for the decor sample")
-	if sample.x >= 0:
-		var height := _gen.height_at(sample.x, sample.y)
-		var biome := _gen.biome_at(sample.x, sample.y)
-		var surface := _gen._surface_block(biome, height)
-		var deco := _gen.decoration_at(sample.x, sample.y, height, surface, biome)
-		h.check(deco == BlockDB.AIR or BlockDB.is_deco(deco),
-			"clearing decor is air or a ground decoration, not a tree block")
-
-
-func _find_clearing_column(box: Rect2i) -> Vector2i:
-	for z in range(box.position.y, box.end.y):
-		for x in range(box.position.x, box.end.x):
+	var clearing_samples := 0
+	var clearing_decor := 0
+	var clearing_flowers := 0
+	for z in range(LOWLAND_CANOPY_BOX.position.y, LOWLAND_CANOPY_BOX.end.y):
+		for x in range(LOWLAND_CANOPY_BOX.position.x, LOWLAND_CANOPY_BOX.end.x):
 			if _gen.biome_at(x, z) != WorldGen.Biome.FOREST:
 				continue
-			if _gen._vegetation_score(x, z) < WorldGen.M33_CLEARING_SCORE:
-				return Vector2i(x, z)
-	return Vector2i(-1, -1)
+			if _gen._vegetation_score(x, z) >= WorldGen.M33_CLEARING_SCORE:
+				continue
+			clearing_samples += 1
+			var height := _gen.height_at(x, z)
+			var surface := _gen._surface_block(_gen.biome_at(x, z), height)
+			if surface != BlockDB.GRASS and surface != BlockDB.DRY_GRASS:
+				continue
+			var deco := _gen.decoration_at(x, z, height, surface, _gen.biome_at(x, z))
+			if deco != BlockDB.AIR:
+				clearing_decor += 1
+			if deco == BlockDB.FLOWER_RED or deco == BlockDB.FLOWER_YELLOW \
+					or deco == BlockDB.FLOWER_BLUE or deco == BlockDB.TALL_GRASS:
+				clearing_flowers += 1
+	h.greater(float(clearing_samples), 100.0, "the clearing decor sample has enough columns")
+	h.greater(float(clearing_decor), 0.0, "clearing columns receive ground decor")
+	h.greater(float(clearing_flowers), 0.0, "clearing decor includes flowers or tall grass")
 
 
 func _canopy_stats(generator: WorldGen, box: Rect2i) -> Dictionary:
