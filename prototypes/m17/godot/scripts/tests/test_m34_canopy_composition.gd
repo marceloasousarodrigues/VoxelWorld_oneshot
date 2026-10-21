@@ -274,8 +274,16 @@ func run(h: TestHarness) -> void:
 	h.eq(int(payload["terrain_generator_version"]), 5, "a v5 save records generator 5")
 	var v4_world := VoxelWorld.new(17017, 4)
 	v4_world.ensure_chunk(Vector3i(0, 4, 0))
-	var v4_payload: Dictionary = save.to_dictionary(v4_world, null, Inventory.new())
+	var v4_payload: Dictionary = save.to_dictionary(v4_world, null, Inventory.new(),
+		null, Health.new(), 1.0, 20.0)
 	h.eq(int(v4_payload["terrain_generator_version"]), 4, "a v4 save still records generator 4")
+	var mixed_world := VoxelWorld.new(17017, 5)
+	var mixed_player := _spawn_player(mixed_world)
+	var v4_result: Dictionary = save.apply({"ok": true, "data": v4_payload},
+		mixed_world, mixed_player, Inventory.new())
+	h.check(bool(v4_result.get("ok", false)), "a v4 save applies to a fresh world")
+	h.eq(mixed_world.generator.terrain_version, 4, "a v4 save restores generator 4")
+	_release_player(mixed_player)
 
 	h.section("M34 forest composition")
 	h.check(_region_hash(5) != PINNED_M33_HASH, "version 5 placement differs from version 4")

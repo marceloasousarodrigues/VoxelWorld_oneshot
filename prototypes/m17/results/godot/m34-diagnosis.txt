@@ -114,7 +114,12 @@ SIMGLOBAL cell=2 cap=2 all_columns=148225 forest_columns=43603 trees=2774 covera
 SIMGLOBAL_ALL p10=0.0000 p50=0.0000 p90=0.0586 max=0.1816 full_p50=0.0264 full_p90=0.0801 full_max=0.1816
 SIMGLOBAL_FOREST p10=0.0000 p50=0.0435 p90=0.1354 max=1.0000 full_n=64 full_p50=0.0565 full_p90=0.1285 full_max=0.2559 full_dense8=19 full_dense12=7 full_low1=11
 
-ACTUAL v5 MEASUREMENTS (implemented generator, seed 17017)
+ACTUAL v5 MEASUREMENTS (implemented generator, seed 17017, measured 2026-10-22)
+Commands:
+  Godot_v4.7.2-stable_mono_win64_console.exe --headless --path prototypes/m17/godot
+    --script res://scripts/tests/m33_vegetation_probe.gd -- --version=5 --radius=192 --step=1
+  Godot_v4.7.2-stable_mono_win64_console.exe --headless --path prototypes/m17/godot
+    --script res://scripts/tests/m34_canopy_probe.gd -- --version=5 --radius=192
 FINGERPRINT version=5 hash=5133898688464144157
 M33_VEG_PROBE version=5: forest columns 43603 trees 2418 coverage 0.0555
 LOCAL_CELLS (all-column): p50 0.0029 p90 0.0488 max 0.1797

@@ -1,4 +1,4 @@
-M34 verification summary (worktree C:\Users\Admin\Documents\Projects\VoxelWorld_m34)
+﻿M34 verification summary (worktree C:\Users\Admin\Documents\Projects\VoxelWorld_m34)
 Branch: codex/m34-canopy-composition
 Base: c0b58c3 (M33 tip)
 Head at verification: 73b6ef0 plus evidence commits
@@ -12,7 +12,7 @@ version=4 hash=2164503133686526591
 version=5 hash=5133898688464144157
 
 UNIT
-M17_TESTS_PASS 2770 assertions (exit 0)
+M17_TESTS_PASS 2777 assertions (exit 0)
 
 INTEGRATION
 M17_INTEGRATION_PASS 463 assertions (exit 0)
