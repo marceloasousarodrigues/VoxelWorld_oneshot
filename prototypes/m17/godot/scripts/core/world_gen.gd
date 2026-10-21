@@ -1285,6 +1285,34 @@ func _place_blossom(chunk: ChunkData, local_x: int, base: int, local_z: int, tru
 		BlockDB.OAK_LOG, BlockDB.BLOSSOM_LEAVES)
 
 
+## v5 broadleaf layer radii.  Radius 3 has six profiles, radius 2 has four.
+## Every profile tapers to a narrow top instead of repeating a wide plate.
+func _v5_layer_radii(radius: int, profile: int) -> Array:
+	if radius >= 3:
+		match profile % 6:
+			0:
+				return [0, 1, 2, 3, 3, 2, 1]
+			1:
+				return [1, 1, 2, 3, 2, 2, 1]
+			2:
+				return [0, 1, 2, 3, 2, 1, 1]
+			3:
+				return [1, 2, 2, 3, 3, 1, 0]
+			4:
+				return [1, 2, 3, 2, 3, 2, 1]
+			_:
+				return [0, 1, 3, 2, 3, 2, 1]
+	match profile % 4:
+		0:
+			return [0, 1, 2, 2, 1, 0]
+		1:
+			return [1, 1, 2, 2, 1, 1]
+		2:
+			return [0, 1, 2, 1, 2, 1]
+		_:
+			return [1, 2, 2, 1, 1, 0]
+
+
 func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk: int,
 		canopy_radius: int, base_y: int, log_block: int, leaf_block: int) -> void:
 	for offset in trunk:
@@ -1293,6 +1321,10 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 	var radius := clampi(canopy_radius, 2, 3 if terrain_version == LEGACY_VERSION else 4)
 	var tree_world_x := chunk.coord.x * ChunkData.SIZE + local_x
 	var tree_world_z := chunk.coord.z * ChunkData.SIZE + local_z
+	var height_class := 0
+	if _is_m34():
+		var crown_patch := _forest_patches.get_noise_2d(tree_world_x, tree_world_z)
+		height_class = _v5_height_class(tree_world_x, tree_world_z, base - 1, crown_patch)
 	# Per-tree lean and a ragged outline so a forest reads as varied trees rather
 	# than a field of identical domes.  The lean stays inside the TREE_PAD.
 	var hash_x := local_x if terrain_version == LEGACY_VERSION else tree_world_x
@@ -1301,9 +1333,12 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 	var lean_z := (_hash3(hash_x, top, hash_z, 72) % 3) - 1
 	# Several deterministic crown profiles vary broadleaf silhouettes: compact
 	# domes, fuller crowns, and narrower crowns with an uneven shoulder.
-	var profile := _hash3(tree_world_x, top, tree_world_z, 73) % 4
+	var profile_count := (6 if radius >= 3 else 4) if _is_m34() else 4
+	var profile := _hash3(tree_world_x, top, tree_world_z, 73) % profile_count
 	var layer_radii: Array
-	if terrain_version == LEGACY_VERSION:
+	if _is_m34():
+		layer_radii = _v5_layer_radii(radius, profile)
+	elif terrain_version == LEGACY_VERSION:
 		layer_radii = [1, 2, 2, 3, 3, 2, 1] if radius >= 3 else [0, 1, 1, 2, 2, 1, 0]
 	elif _is_m32() and radius >= 4:
 		# M32 broadleaf crowns keep a wide middle and an uneven shoulder.  The
@@ -1358,10 +1393,14 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 				layer_radii = [0, 0, 1, 2, 2, 1, 0]
 			_:
 				layer_radii = [0, 1, 1, 2, 1, 1, 0]
+	var corner_divisor := 3 if _is_m34() else (2 if _is_m32() else 3)
+	var edge_divisor := 3 if _is_m34() else (4 if _is_m32() else 5)
 	for layer_index in layer_radii.size():
 		var layer_radius: int = int(layer_radii[layer_index])
 		var layer_centre := 4 if terrain_version != LEGACY_VERSION and radius >= 4 else 3
-		if _is_m32():
+		if _is_m34() and radius == 2:
+			layer_centre = 3
+		elif _is_m32():
 			# Drop the crown one layer down the trunk.  The canopy then starts
 			# closer to the ground and the bare-pole silhouette disappears.
 			layer_centre = 5 if radius >= 4 else 4
@@ -1382,9 +1421,9 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 					# M32 trims a little harder so crowns read as rounded cubic
 					# masses rather than square shelves.
 					if absi(dx) == layer_radius and absi(dz) == layer_radius:
-						if _hash3(hash_x + dx, top + dy, hash_z + dz, 5) % (2 if _is_m32() else 3) != 0:
+						if _hash3(hash_x + dx, top + dy, hash_z + dz, 5) % corner_divisor != 0:
 							continue
-					elif _hash3(hash_x + dx, top + dy, hash_z + dz, 6) % (4 if _is_m32() else 5) == 0:
+					elif _hash3(hash_x + dx, top + dy, hash_z + dz, 6) % edge_divisor == 0:
 						continue
 				_place_block(chunk, local_x + dx + lean_x + shelf_x, top + dy, local_z + dz + lean_z + shelf_z, leaf_block, base_y, true)
 	# A short, broken skirt around the trunk softens the flat underside of the
@@ -1411,6 +1450,8 @@ func _place_broadleaf(chunk: ChunkData, local_x: int, base: int, local_z: int, t
 		_place_block(chunk, local_x + 1, top - 2, local_z, log_block, base_y, false)
 		_place_block(chunk, local_x - 1, top - 1, local_z, log_block, base_y, false)
 	_place_block(chunk, local_x, top + 2, local_z, leaf_block, base_y, true)
+	if _is_m34() and height_class == 1:
+		_place_block(chunk, local_x, top + 3, local_z, leaf_block, base_y, true)
 
 
 func _place_pine(chunk: ChunkData, local_x: int, base: int, local_z: int, trunk: int, base_y: int) -> void:

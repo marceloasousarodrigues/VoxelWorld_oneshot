@@ -8,6 +8,7 @@ const PINNED_M30_HASH := 5947596836865492245
 const PINNED_M31_HASH := 8397584315617538769
 const PINNED_M32_HASH := 8802792587028581708
 const PINNED_M33_HASH := 2164503133686526591
+const PINNED_M34_HASH := 5133898688464144157
 const SEA := WorldGen.SEA_LEVEL
 const SAMPLE_RADIUS := 192
 const LOWLAND_BOX := Rect2i(200, 280, 48, 24)
@@ -161,6 +162,18 @@ func _crown_stats(generator: WorldGen, box: Rect2i) -> Dictionary:
 	}
 
 
+func _leaf_blocks(world: VoxelWorld, box: Rect2i, y_min: int, y_max: int) -> int:
+	var count := 0
+	for z in range(box.position.y, box.end.y):
+		for x in range(box.position.x, box.end.x):
+			for y in range(y_min, y_max):
+				var block := world.get_block(Vector3i(x, y, z))
+				if block == BlockDB.OAK_LEAVES or block == BlockDB.BIRCH_LEAVES \
+						or block == BlockDB.BLOSSOM_LEAVES or block == BlockDB.PINE_LEAVES:
+					count += 1
+	return count
+
+
 func _full_cell_stats(generator: WorldGen) -> Dictionary:
 	var cells := {}
 	for z in range(-SAMPLE_RADIUS, SAMPLE_RADIUS + 1):
@@ -212,6 +225,7 @@ func run(h: TestHarness) -> void:
 	var v5_a := _region_hash(5)
 	var v5_b := _region_hash(5)
 	h.eq(v5_a, v5_b, "version 5 generation is deterministic")
+	h.eq(v5_a, PINNED_M34_HASH, "version 5 output is pinned")
 	var v4 := WorldGen.new(17017, 4)
 	var v5 := WorldGen.new(17017, 5)
 	var height_mismatch := 0
@@ -369,4 +383,67 @@ func run(h: TestHarness) -> void:
 	h.greater(float(open_stats["clearing_columns"]), 100.0, "the canopy box has enough clearing columns")
 	h.greater(float(open_stats["largest_open"]), 200.0, "a crown-free opening of >=200 columns exists")
 	h.greater(open_stats["clearing_open_ratio"], 0.50, "at least half of clearing columns are crown-free")
+
+	h.section("M34 crown profiles")
+	var distinct_profiles := {}
+	for profile in range(6):
+		var layer_radii: Array = v5._v5_layer_radii(3, profile)
+		h.eq(layer_radii.size(), 7, "a radius-3 v5 profile has seven layers")
+		h.less(float(layer_radii[5]), 3.0, "the upper shoulder is narrower than the widest layer")
+		h.less(float(layer_radii[6]), 2.0, "the top layer is at most one block wide")
+		distinct_profiles[str(layer_radii)] = true
+	h.eq(distinct_profiles.size(), 6, "six distinct radius-3 v5 profiles")
+
+	h.section("M34 crown voxel shape")
+	var v4_crown_world := VoxelWorld.new(17017, 4)
+	var v5_crown_world := VoxelWorld.new(17017, 5)
+	for cy in range(0, 7):
+		for cz in range(17, 20):
+			for cx in range(12, 15):
+				v4_crown_world.ensure_chunk(Vector3i(cx, cy, cz))
+				v5_crown_world.ensure_chunk(Vector3i(cx, cy, cz))
+	var sample_box := Rect2i(200, 280, 32, 24)
+	var v4_leaves := _leaf_blocks(v4_crown_world, sample_box, 60, 110)
+	var v5_leaves := _leaf_blocks(v5_crown_world, sample_box, 60, 110)
+	h.greater(float(v4_leaves), 100.0, "the v4 leaf sample is non-empty")
+	h.greater(float(v5_leaves), 100.0, "the v5 leaf sample is non-empty")
+	h.less(float(v5_leaves), float(v4_leaves), "v5 crowns use fewer leaf blocks in the sample")
+
+	h.section("M34 chunk boundary")
+	var seam_generator := WorldGen.new(17017, 5)
+	var seam_tree := Vector2i.ZERO
+	var found := false
+	for z in range(-64, 1):
+		for x in range(40, 57):
+			var data := seam_generator.tree_at(x, z)
+			var type := int(data["type"])
+			if not _is_tree(type):
+				continue
+			var radius := _crown_radius(data)
+			if x - radius <= 48 and x + radius >= 48:
+				seam_tree = Vector2i(x, z)
+				found = true
+				break
+		if found:
+			break
+	h.check(found, "a v5 crown crosses the x=48 border")
+	if found:
+		var height := seam_generator.height_at(seam_tree.x, seam_tree.y)
+		var coord := VoxelWorld.world_to_chunk(Vector3i(seam_tree.x, height, seam_tree.y))
+		var coords: Array[Vector3i] = []
+		for cy in range(maxi(0, coord.y - 1), mini(WorldGen.CHUNKS_Y, coord.y + 2)):
+			for cz in range(coord.z - 1, coord.z + 2):
+				for cx in range(coord.x - 1, coord.x + 2):
+					coords.append(Vector3i(cx, cy, cz))
+		var a := VoxelWorld.new(17017, 5)
+		var b := VoxelWorld.new(17017, 5)
+		for c: Vector3i in coords:
+			a.ensure_chunk(c)
+		for i in range(coords.size() - 1, -1, -1):
+			b.ensure_chunk(coords[i])
+		var seam_mismatch := 0
+		for c: Vector3i in coords:
+			if (a.get_chunk(c) as ChunkData).blocks != (b.get_chunk(c) as ChunkData).blocks:
+				seam_mismatch += 1
+		h.eq(seam_mismatch, 0, "v5 chunks across the border match in both load orders")
 	h.finish()
