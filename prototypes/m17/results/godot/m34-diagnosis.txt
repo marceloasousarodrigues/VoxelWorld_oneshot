@@ -1,0 +1,109 @@
+﻿M34 canopy diagnosis (read-only, pre-implementation)
+Worktree: C:/Users/Admin/Documents/Projects/VoxelWorld_m34
+Base: c0b58c3 (M33 tip)
+Command:
+  Godot_v4.7.2-stable_mono_win64_console.exe --headless --path prototypes/m17/godot
+    --script res://scripts/tests/m34_canopy_probe.gd -- --version=4 --radius=192
+
+Key v4 measurements (forest trees only, forest-column denominator):
+  GLOBAL forest tree coverage 0.0954; median trunk spacing 1.41
+  BOX forest columns 3552; open 0.340; 2+ crowns 0.616; 3+ crowns 0.576
+  BOX voxel leaf-top 0.585; median trunk spacing 1.41
+  V4GLOBAL full forest cells p50 0.0891 p90 0.1894 max 0.2559
+  V4GLOBAL all-column cells p50 0.0039 p90 0.0811 max 0.2139
+
+Chosen v5 simulation (2x2 candidates, woodland keep 5/9 when patch <= 0.34,
+crown cap 2 for the conservative run):
+  SIMGROVE keep=5/9 grove=0.34 cap=2: trees 213, coverage 0.060,
+    open 0.427, 2+ 0.460, 3+ 0.353, spacing p50 2.00
+  SIMGLOBAL cell=2 keep 5/9: global forest coverage 0.0636
+  SIMGLOBAL_FOREST full_n=64: p50 0.0565 p90 0.1285 max 0.2559
+  SIMGLOBAL_ALL full: p50 0.0264 p90 0.0801 max 0.1816
+
+The 3x3 and local-max rows below are rejected alternatives; they are kept as
+evidence for why the final design keeps the 2x2 grid and thins only open
+woodland. All values are deterministic for seed 17017.
+
+
+M34_CANOPY_PROBE version=4 radius=192
+GLOBAL all_trees=4327 forest_columns=43603 forest_trees=4158 forest_coverage=0.0954
+GLOBAL_CROWNS covered=46769 overlap2=34469 overlap3=29132 overlap2_ratio=0.737 overlap3_ratio=0.623
+GLOBAL_SPACING p10=1.00 p25=1.00 p50=1.41 p75=2.00 p90=2.24
+BOX_RADII { 6: 111, 5: 218, 4: 8 }
+BOX [P: (192, 256), S: (64, 64)] trees=337 overlap_pairs=7632 overlapping_trees=333 heavy_overlap_trees=326
+BOX_CANOPY forest_columns=3552 open=1208 single=157 multi=2187 triple=2047 open_ratio=0.340 multi_ratio=0.616 triple_ratio=0.576
+BOX_SPACING p10=1.00 p25=1.00 p50=1.41 p75=2.00 p90=2.24
+BOX_TOP_HEIGHT p10=81.0 p50=86.0 p90=91.0 min=74.0 max=101.0
+BOX_VOXEL_TOP forest_columns=3552 leaf_top=2077 leaf_ratio=0.585 local_maxima=540 top_p10=80.0 top_p50=85.0 top_p90=90.0
+PRIORITY_ROW 6146913730633606916 6438860250424394242 7239106670919496630 7536563317085585123 8341263426836279342 
+PRIORITY_ROW 7347990241280990549 7634614910636599219 7760929530004126007 8736608356722040619 8852053201967372576 
+PRIORITY_ROW 7859194305758810663 8156057671511024846 8960995306855213178 9198125989313572856 886882300237557151 
+PRIORITY_ROW 9064357838231071358 9089154006430338069 1471397814254892037 491345389382638213 368907752887187357 
+PRIORITY_ROW 1278320792740327181 1075751336931362553 266656537985574444 26561816880386185 826681325172420850 
+SIM d=3 cap=3 trees=147 open=0.374 multi=0.542 triple=0.438 spacing_p50=3.16
+SIM d=3 cap=4 trees=147 open=0.359 multi=0.564 triple=0.469 spacing_p50=3.16
+SIM d=4 cap=3 trees=96 open=0.399 multi=0.482 triple=0.282 spacing_p50=4.12
+SIM d=4 cap=4 trees=96 open=0.381 multi=0.503 triple=0.331 spacing_p50=4.12
+SIM d=5 cap=3 trees=67 open=0.430 multi=0.308 triple=0.108 spacing_p50=5.10
+SIM d=5 cap=4 trees=67 open=0.416 multi=0.361 triple=0.158 spacing_p50=5.10
+SIMGRID cell=2 d=3 cap=3 candidates=1312 wins=107 trees=36 coverage=0.010 open=0.632 multi=0.149 triple=0.039 spacing_p50=4.24
+SIMGRID cell=2 d=3 cap=4 candidates=1312 wins=107 trees=36 coverage=0.010 open=0.595 multi=0.173 triple=0.056 spacing_p50=4.24
+SIMGRID cell=2 d=4 cap=3 candidates=1312 wins=60 trees=20 coverage=0.006 open=0.736 multi=0.047 triple=0.002 spacing_p50=7.21
+SIMGRID cell=2 d=4 cap=4 candidates=1312 wins=60 trees=20 coverage=0.006 open=0.693 multi=0.058 triple=0.003 spacing_p50=7.21
+SIMGRID cell=3 d=3 cap=3 candidates=582 wins=234 trees=72 coverage=0.020 open=0.500 multi=0.311 triple=0.173 spacing_p50=3.61
+SIMGRID cell=3 d=3 cap=4 candidates=582 wins=234 trees=72 coverage=0.020 open=0.479 multi=0.348 triple=0.204 spacing_p50=3.61
+SIMGRID cell=3 d=4 cap=3 candidates=582 wins=74 trees=22 coverage=0.006 open=0.760 multi=0.035 triple=0.001 spacing_p50=6.71
+SIMGRID cell=3 d=4 cap=4 candidates=582 wins=74 trees=22 coverage=0.006 open=0.733 multi=0.056 triple=0.003 spacing_p50=6.71
+SIMGRID cell=4 d=3 cap=3 candidates=318 wins=218 trees=64 coverage=0.018 open=0.526 multi=0.293 triple=0.149 spacing_p50=3.61
+SIMGRID cell=4 d=3 cap=4 candidates=318 wins=218 trees=64 coverage=0.018 open=0.504 multi=0.327 triple=0.180 spacing_p50=3.61
+SIMGRID cell=4 d=4 cap=3 candidates=318 wins=116 trees=33 coverage=0.009 open=0.646 multi=0.139 triple=0.029 spacing_p50=5.39
+SIMGRID cell=4 d=4 cap=4 candidates=318 wins=116 trees=33 coverage=0.009 open=0.623 multi=0.168 triple=0.047 spacing_p50=5.39
+SIMJITTER cell=3 off=0..2 cap=2 trees=182 coverage=0.051 open=0.463 multi=0.431 triple=0.335 spacing_p50=2.24 components=2 largest=1968 large20=1
+SIMJITTER cell=3 off=1..2 cap=2 trees=176 coverage=0.050 open=0.444 multi=0.456 triple=0.353 spacing_p50=2.24 components=1 largest=2044 large20=1
+SIMJITTER cell=3 off=1..1 cap=2 trees=183 coverage=0.052 open=0.439 multi=0.436 triple=0.334 spacing_p50=3.00 components=1 largest=2062 large20=1
+SIMJITTER cell=3 off=0..2 cap=3 trees=182 coverage=0.051 open=0.399 multi=0.506 triple=0.434 spacing_p50=2.24 components=1 largest=2222 large20=1
+SIMJITTER cell=3 off=1..2 cap=3 trees=176 coverage=0.050 open=0.397 multi=0.518 triple=0.448 spacing_p50=2.24 components=1 largest=2242 large20=1
+SIMJITTER cell=3 off=1..1 cap=3 trees=183 coverage=0.052 open=0.389 multi=0.517 triple=0.428 spacing_p50=3.00 components=1 largest=2260 large20=1
+SIMJITTER cell=3 off=0..2 cap=4 trees=182 coverage=0.051 open=0.373 multi=0.536 triple=0.464 spacing_p50=2.24 components=1 largest=2320 large20=1
+SIMJITTER cell=3 off=1..2 cap=4 trees=176 coverage=0.050 open=0.376 multi=0.539 triple=0.470 spacing_p50=2.24 components=1 largest=2327 large20=1
+SIMJITTER cell=3 off=1..1 cap=4 trees=183 coverage=0.052 open=0.371 multi=0.542 triple=0.457 spacing_p50=3.00 components=1 largest=2330 large20=1
+SIMJITTER cell=4 off=0..3 cap=2 trees=94 coverage=0.026 open=0.524 multi=0.298 triple=0.172 spacing_p50=3.00 components=1 largest=1710 large20=1
+SIMJITTER cell=4 off=1..3 cap=2 trees=93 coverage=0.026 open=0.547 multi=0.301 triple=0.164 spacing_p50=3.16 components=1 largest=1628 large20=1
+SIMJITTER cell=4 off=1..2 cap=2 trees=97 coverage=0.027 open=0.511 multi=0.318 triple=0.170 spacing_p50=3.16 components=3 largest=1497 large20=3
+SIMJITTER cell=4 off=0..3 cap=3 trees=94 coverage=0.026 open=0.476 multi=0.382 triple=0.277 spacing_p50=3.00 components=1 largest=1885 large20=1
+SIMJITTER cell=4 off=1..3 cap=3 trees=93 coverage=0.026 open=0.483 multi=0.400 triple=0.276 spacing_p50=3.16 components=2 largest=1866 large20=1
+SIMJITTER cell=4 off=1..2 cap=3 trees=97 coverage=0.027 open=0.452 multi=0.408 triple=0.289 spacing_p50=3.16 components=2 largest=1660 large20=2
+SIMJITTER cell=4 off=0..3 cap=4 trees=94 coverage=0.026 open=0.457 multi=0.408 triple=0.307 spacing_p50=3.00 components=1 largest=1950 large20=1
+SIMJITTER cell=4 off=1..3 cap=4 trees=93 coverage=0.026 open=0.459 multi=0.434 triple=0.321 spacing_p50=3.16 components=2 largest=1960 large20=1
+SIMJITTER cell=4 off=1..2 cap=4 trees=97 coverage=0.027 open=0.422 multi=0.448 triple=0.328 spacing_p50=3.16 components=1 largest=2105 large20=1
+SIMJITTER cell=3 off=1..2 cap=2 trees=92 coverage=0.026 open=0.539 multi=0.293 triple=0.146 spacing_p50=3.00 components=3 largest=1318 large20=3
+SIMJITTER cell=3 off=1..2 cap=2 trees=92 coverage=0.026 open=0.539 multi=0.293 triple=0.146 spacing_p50=3.00 components=3 largest=1318 large20=3
+SIMJITTER cell=3 off=1..2 cap=3 trees=92 coverage=0.026 open=0.472 multi=0.383 triple=0.264 spacing_p50=3.00 components=2 largest=1478 large20=2
+SIMJITTER cell=3 off=1..2 cap=3 trees=92 coverage=0.026 open=0.472 multi=0.383 triple=0.264 spacing_p50=3.00 components=2 largest=1478 large20=2
+SIMLOCALMAX r=2.0 cap=2 trees=65 coverage=0.018 open=0.591 multi=0.180 triple=0.063 spacing_p50=2.24 components=6 largest=951 large20=6
+SIMLOCALMAX r=2.0 cap=3 trees=65 coverage=0.018 open=0.507 multi=0.285 triple=0.132 spacing_p50=2.24 components=2 largest=1761 large20=2
+SIMLOCALMAX r=2.5 cap=2 trees=26 coverage=0.007 open=0.769 multi=0.032 triple=0.000 spacing_p50=6.40 components=9 largest=239 large20=8
+SIMLOCALMAX r=2.5 cap=3 trees=26 coverage=0.007 open=0.695 multi=0.071 triple=0.002 spacing_p50=6.40 components=4 largest=906 large20=3
+SIMLOCALMAX r=3.0 cap=2 trees=26 coverage=0.007 open=0.769 multi=0.032 triple=0.000 spacing_p50=6.40 components=9 largest=239 large20=8
+SIMLOCALMAX r=3.0 cap=3 trees=26 coverage=0.007 open=0.695 multi=0.071 triple=0.002 spacing_p50=6.40 components=4 largest=906 large20=3
+SIMLOCALMAX r=3.5 cap=2 trees=20 coverage=0.006 open=0.786 multi=0.007 triple=0.000 spacing_p50=8.06 components=10 largest=199 large20=9
+SIMLOCALMAX r=3.5 cap=3 trees=20 coverage=0.006 open=0.717 multi=0.024 triple=0.001 spacing_p50=8.06 components=5 largest=594 large20=4
+SIMGLOBAL cell=3 cap=2 all_columns=148225 forest_columns=43603 trees=1863 coverage=0.0427 species={ 2: 475, 1: 1033, 4: 289, 5: 66 }
+SIMGLOBAL_ALL p10=0.0000 p50=0.0000 p90=0.0391 max=0.0947 full_p50=0.0195 full_p90=0.0566 full_max=0.0947
+SIMGLOBAL_FOREST p10=0.0000 p50=0.0311 p90=0.0986 max=0.1600 full_n=64 full_p50=0.0386 full_p90=0.0732 full_max=0.1211
+SIMGLOBAL cell=3 cap=3 all_columns=148225 forest_columns=43603 trees=1863 coverage=0.0427 species={ 2: 475, 1: 1033, 4: 289, 5: 66 }
+SIMGLOBAL_ALL p10=0.0000 p50=0.0000 p90=0.0391 max=0.0947 full_p50=0.0195 full_p90=0.0566 full_max=0.0947
+SIMGLOBAL_FOREST p10=0.0000 p50=0.0311 p90=0.0986 max=0.1600 full_n=64 full_p50=0.0386 full_p90=0.0732 full_max=0.1211
+V4GLOBAL all_columns=148225 forest_columns=43603 trees=4158 coverage=0.0954
+V4GLOBAL_ALL p10=0.0000 p50=0.0000 p90=0.0811 max=0.2139 full_p50=0.0439 full_p90=0.1260 full_max=0.2139
+V4GLOBAL_FOREST p10=0.0000 p50=0.0769 p90=0.2070 max=1.0000 full_n=64 full_p50=0.0891 full_p90=0.1894 full_max=0.2559
+SIMGROVE keep=4/9 grove=0.34 cap=2 trees=181 coverage=0.051 open=0.461 multi=0.432 triple=0.317 spacing_p50=2.00 components=1 largest=1984 large20=1
+SIMGROVE keep=4/9 grove=0.20 cap=2 trees=192 coverage=0.054 open=0.455 multi=0.440 triple=0.328 spacing_p50=2.00 components=1 largest=2007 large20=1
+SIMGLOBAL cell=2 cap=2 all_columns=148225 forest_columns=43603 trees=2418 coverage=0.0555 species={ 1: 1321, 4: 330, 2: 683, 5: 84 }
+SIMGLOBAL_ALL p10=0.0000 p50=0.0000 p90=0.0488 max=0.1797 full_p50=0.0225 full_p90=0.0742 full_max=0.1797
+SIMGLOBAL_FOREST p10=0.0000 p50=0.0330 p90=0.1038 max=1.0000 full_n=64 full_p50=0.0444 full_p90=0.1038 full_max=0.2559
+SIMGROVE keep=5/9 grove=0.34 cap=2 trees=213 coverage=0.060 open=0.427 multi=0.460 triple=0.353 spacing_p50=2.00 components=1 largest=2107 large20=1
+SIMGROVE keep=5/9 grove=0.20 cap=2 trees=224 coverage=0.063 open=0.421 multi=0.468 triple=0.362 spacing_p50=2.00 components=1 largest=2128 large20=1
+SIMGLOBAL cell=2 cap=2 all_columns=148225 forest_columns=43603 trees=2774 coverage=0.0636 species={ 1: 1517, 4: 399, 2: 764, 5: 94 }
+SIMGLOBAL_ALL p10=0.0000 p50=0.0000 p90=0.0586 max=0.1816 full_p50=0.0264 full_p90=0.0801 full_max=0.1816
+SIMGLOBAL_FOREST p10=0.0000 p50=0.0435 p90=0.1354 max=1.0000 full_n=64 full_p50=0.0565 full_p90=0.1285 full_max=0.2559
