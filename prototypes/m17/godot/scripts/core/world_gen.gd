@@ -829,6 +829,18 @@ func _forest_canopy_tree(x: int, z: int, height: int) -> Dictionary:
 	return _blossom(x, z, height)
 
 
+## Deterministic v5 broadleaf height class: 0 canopy, 1 emergent, 2 understory.
+func _v5_height_class(x: int, z: int, height: int, patch: float) -> int:
+	var understory := 25 if patch > M34_GROVE_PATCH else 20
+	var roll := _hash3(x, height, z, 9102) % 100
+	if roll < understory:
+		return 2
+	var emergent := 20 if patch > M34_GROVE_PATCH else 12
+	if roll < understory + emergent:
+		return 1
+	return 0
+
+
 func _oak(x: int, z: int, ground: int) -> Dictionary:
 	var trunk := 5 + _hash2(x, z, 4242) % 3
 	var canopy := 2 + _hash2(x, z, 555) % (2 if terrain_version == LEGACY_VERSION else 3)
@@ -844,6 +856,16 @@ func _oak(x: int, z: int, ground: int) -> Dictionary:
 			canopy = 2
 		elif delta > 18:
 			canopy = maxi(2, canopy - 1)
+	if _is_m34():
+		var patch := _forest_patches.get_noise_2d(x, z)
+		var height_class := _v5_height_class(x, z, ground, patch)
+		var height_adjust := 2 if height_class == 1 else (-1 if height_class == 2 else 0)
+		var crown := 2 + _hash2(x, z, 555) % 2
+		if height_class == 2:
+			crown = 2
+		trunk = maxi(4, trunk + height_adjust)
+		return {"type": TreeType.OAK, "base": ground + 1, "height": trunk,
+			"canopy": crown, "height_class": height_class}
 	return {"type": TreeType.OAK, "base": ground + 1, "height": trunk, "canopy": canopy}
 
 
@@ -859,6 +881,16 @@ func _birch(x: int, z: int, ground: int) -> Dictionary:
 			canopy = 2
 		elif delta > 18:
 			canopy = maxi(2, canopy - 1)
+	if _is_m34():
+		var patch := _forest_patches.get_noise_2d(x, z)
+		var height_class := _v5_height_class(x, z, ground, patch)
+		var height_adjust := 2 if height_class == 1 else (-1 if height_class == 2 else 0)
+		var crown := 2 + (1 if _hash2(x, z, 556) % 4 == 0 else 0)
+		if height_class == 2:
+			crown = 2
+		trunk = maxi(4, trunk + height_adjust)
+		return {"type": TreeType.BIRCH, "base": ground + 1, "height": trunk,
+			"canopy": crown, "height_class": height_class}
 	return {"type": TreeType.BIRCH, "base": ground + 1, "height": trunk, "canopy": canopy}
 
 
@@ -871,6 +903,16 @@ func _blossom(x: int, z: int, ground: int) -> Dictionary:
 			canopy = 2
 		elif delta > 18:
 			canopy = maxi(2, canopy - 1)
+	if _is_m34():
+		var patch := _forest_patches.get_noise_2d(x, z)
+		var height_class := _v5_height_class(x, z, ground, patch)
+		var height_adjust := 2 if height_class == 1 else (-1 if height_class == 2 else 0)
+		var crown := 2 + (1 if _hash2(x, z, 557) % 3 == 0 else 0)
+		if height_class == 2:
+			crown = 2
+		trunk = maxi(4, trunk + height_adjust)
+		return {"type": TreeType.BLOSSOM, "base": ground + 1, "height": trunk,
+			"canopy": crown, "height_class": height_class}
 	return {"type": TreeType.BLOSSOM, "base": ground + 1, "height": trunk, "canopy": canopy}
 
 

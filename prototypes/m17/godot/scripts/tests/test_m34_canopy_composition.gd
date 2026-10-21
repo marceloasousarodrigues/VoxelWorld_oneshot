@@ -51,6 +51,116 @@ func _forest_coverage(generator: WorldGen, box: Rect2i) -> float:
 	return float(trees) / maxf(1.0, float(columns))
 
 
+func _is_broadleaf(type: int) -> bool:
+	return type == WorldGen.TreeType.OAK or type == WorldGen.TreeType.BIRCH \
+		or type == WorldGen.TreeType.BLOSSOM
+
+
+func _crown_radius(tree: Dictionary) -> int:
+	var type := int(tree["type"])
+	if not _is_tree(type) or type == WorldGen.TreeType.CACTUS:
+		return 0
+	if _is_broadleaf(type):
+		return int(tree.get("canopy", 3)) + 2
+	return 5
+
+
+func _crown_stats(generator: WorldGen, box: Rect2i) -> Dictionary:
+	var trees: Array[Dictionary] = []
+	for z in range(box.position.y - 10, box.end.y + 10):
+		for x in range(box.position.x - 10, box.end.x + 10):
+			var tree := generator.tree_at(x, z)
+			var type := int(tree["type"])
+			if not _is_tree(type):
+				continue
+			var radius := _crown_radius(tree)
+			if radius <= 0:
+				continue
+			if x + radius < box.position.x or x - radius >= box.end.x \
+					or z + radius < box.position.y or z - radius >= box.end.y:
+				continue
+			trees.append({"x": x, "z": z, "r": radius})
+	var counts := {}
+	for entry: Dictionary in trees:
+		var r := int(entry["r"])
+		for dz in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if dx * dx + dz * dz > r * r:
+					continue
+				var key := Vector2i(int(entry["x"]) + dx, int(entry["z"]) + dz)
+				counts[key] = int(counts.get(key, 0)) + 1
+	var columns := 0
+	var open := 0
+	var multi := 0
+	var triple := 0
+	for z in range(box.position.y, box.end.y):
+		for x in range(box.position.x, box.end.x):
+			if generator.biome_at(x, z) != WorldGen.Biome.FOREST:
+				continue
+			columns += 1
+			var count := int(counts.get(Vector2i(x, z), 0))
+			if count == 0:
+				open += 1
+			if count >= 2:
+				multi += 1
+			if count >= 3:
+				triple += 1
+	var nearest: Array[float] = []
+	for i in trees.size():
+		var best := 999999.0
+		for j in trees.size():
+			if i == j:
+				continue
+			var dx := float(int(trees[i]["x"]) - int(trees[j]["x"]))
+			var dz := float(int(trees[i]["z"]) - int(trees[j]["z"]))
+			best = minf(best, sqrt(dx * dx + dz * dz))
+		if best < 999999.0:
+			nearest.append(best)
+	nearest.sort()
+	var open_cells := {}
+	var clearing_columns := 0
+	var clearing_open := 0
+	for z in range(box.position.y, box.end.y):
+		for x in range(box.position.x, box.end.x):
+			if generator.biome_at(x, z) != WorldGen.Biome.FOREST:
+				continue
+			var cell := Vector2i(x, z)
+			if int(counts.get(cell, 0)) == 0:
+				open_cells[cell] = true
+			if generator._vegetation_score(x, z) < WorldGen.M33_CLEARING_SCORE:
+				clearing_columns += 1
+				if int(counts.get(cell, 0)) == 0:
+					clearing_open += 1
+	var seen := {}
+	var largest_open := 0
+	for cell: Vector2i in open_cells:
+		if seen.has(cell):
+			continue
+		var stack: Array[Vector2i] = [cell]
+		seen[cell] = true
+		var count := 0
+		while not stack.is_empty():
+			var current: Vector2i = stack.pop_back()
+			count += 1
+			for offset: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var neighbour: Vector2i = current + offset
+				if open_cells.has(neighbour) and not seen.has(neighbour):
+					seen[neighbour] = true
+					stack.append(neighbour)
+		largest_open = maxi(largest_open, count)
+	return {
+		"columns": columns,
+		"open": float(open) / maxf(1.0, float(columns)),
+		"multi": float(multi) / maxf(1.0, float(columns)),
+		"triple": float(triple) / maxf(1.0, float(columns)),
+		"covered": float(columns - open) / maxf(1.0, float(columns)),
+		"spacing_p50": _percentile(nearest, 0.5),
+		"clearing_columns": clearing_columns,
+		"clearing_open_ratio": float(clearing_open) / maxf(1.0, float(clearing_columns)),
+		"largest_open": largest_open,
+	}
+
+
 func _full_cell_stats(generator: WorldGen) -> Dictionary:
 	var cells := {}
 	for z in range(-SAMPLE_RADIUS, SAMPLE_RADIUS + 1):
@@ -197,4 +307,66 @@ func run(h: TestHarness) -> void:
 	h.eq(clearing_trees, 0, "designated clearings contain no trees")
 	h.greater(float(clearing_columns), float(forest_columns) * 0.20,
 		"at least 20%% of forest columns are clearings")
+
+	h.section("M34 crown variation")
+	var radii := {}
+	var classes := {}
+	var heights := {}
+	for z in range(LOWLAND_BOX.position.y, LOWLAND_BOX.end.y):
+		for x in range(LOWLAND_BOX.position.x, LOWLAND_BOX.end.x):
+			if v5.biome_at(x, z) != WorldGen.Biome.FOREST:
+				continue
+			var tree := v5.tree_at(x, z)
+			var type := int(tree["type"])
+			if not _is_broadleaf(type):
+				continue
+			radii[int(tree["canopy"])] = int(radii.get(int(tree["canopy"]), 0)) + 1
+			classes[int(tree["height_class"])] = true
+			heights[int(tree["height"])] = true
+	var broadleaf_total := 0
+	for value: int in radii:
+		broadleaf_total += int(radii[value])
+		h.check(value >= 2 and value <= 3, "broadleaf canopy radius %d is within 2..3" % value)
+	h.check(radii.has(2) and radii.has(3), "both radius 2 and radius 3 occur")
+	h.greater(float(radii.get(2, 0)) / maxf(1.0, float(broadleaf_total)), 0.05, "radius 2 is at least 5%%")
+	h.greater(float(radii.get(3, 0)) / maxf(1.0, float(broadleaf_total)), 0.05, "radius 3 is at least 5%%")
+	h.check(classes.has(0) and classes.has(1) and classes.has(2), "all three height classes occur")
+	h.greater(float(heights.size()), 3.0, "trunk heights have at least four values")
+	var v5_second := WorldGen.new(17017, 5)
+	var tree_mismatch := 0
+	for z in range(-64, 65, 2):
+		for x in range(-64, 65, 2):
+			var a := v5.tree_at(x, z)
+			var b := v5_second.tree_at(x, z)
+			if int(a["type"]) != int(b["type"]) \
+					or int(a.get("canopy", -1)) != int(b.get("canopy", -1)) \
+					or int(a.get("height", -1)) != int(b.get("height", -1)) \
+					or int(a.get("height_class", -1)) != int(b.get("height_class", -1)):
+				tree_mismatch += 1
+	h.eq(tree_mismatch, 0, "two v5 generators produce identical tree dictionaries")
+	var other_seed := WorldGen.new(424242, 5)
+	var seed_difference := 0
+	for z in range(-32, 33, 4):
+		for x in range(-32, 33, 4):
+			if int(v5.tree_at(x, z)["type"]) != int(other_seed.tree_at(x, z)["type"]):
+				seed_difference += 1
+	h.greater(float(seed_difference), 0.0, "a different seed changes the v5 layout")
+
+	h.section("M34 crown overlap reduction")
+	var v4_stats := _crown_stats(v4, LOWLAND_CANOPY_BOX)
+	var v5_stats := _crown_stats(v5, LOWLAND_CANOPY_BOX)
+	h.less(v5_stats["multi"], v4_stats["multi"] - 0.08, "2+ crown overlap drops by >=0.08")
+	h.less(v5_stats["multi"], 0.50, "2+ crown overlap is <=0.50")
+	h.less(v5_stats["triple"], v4_stats["triple"] - 0.10, "3+ crown overlap drops by >=0.10")
+	h.less(v5_stats["triple"], 0.40, "3+ crown overlap is <=0.40")
+	h.greater(v5_stats["open"], v4_stats["open"] + 0.05, "open forest columns rise by >=0.05")
+	h.greater(v5_stats["open"], 0.40, "open forest columns are >=0.40")
+	h.greater(v5_stats["spacing_p50"], 1.9, "median trunk spacing is >=1.9")
+	h.greater(v5_stats["spacing_p50"], v4_stats["spacing_p50"] + 0.4, "median spacing rises by >=0.4")
+	h.greater(_crown_stats(v5, LOWLAND_BOX)["covered"], 0.55, "dense lowland crown union is >=55%%")
+	h.greater(_crown_stats(v5, LOWLAND_CANOPY_BOX)["covered"], 0.45, "open woodland crown union is >=45%%")
+	var open_stats := _crown_stats(v5, LOWLAND_CANOPY_BOX)
+	h.greater(float(open_stats["clearing_columns"]), 100.0, "the canopy box has enough clearing columns")
+	h.greater(float(open_stats["largest_open"]), 200.0, "a crown-free opening of >=200 columns exists")
+	h.greater(open_stats["clearing_open_ratio"], 0.50, "at least half of clearing columns are crown-free")
 	h.finish()
