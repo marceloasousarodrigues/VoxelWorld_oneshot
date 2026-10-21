@@ -201,6 +201,40 @@ func _forest_coverage(generator: WorldGen, box: Rect2i) -> float:
             if _is_tree(int(generator.tree_at(x, z)["type"])):
                 trees += 1
     return float(trees) / maxf(1.0, float(columns))
+
+func _full_cell_stats(generator: WorldGen) -> Dictionary:
+    var cells := {}
+    for z in range(-SAMPLE_RADIUS, SAMPLE_RADIUS + 1):
+        for x in range(-SAMPLE_RADIUS, SAMPLE_RADIUS + 1):
+            var key := Vector2i(floori(float(x) / 32.0), floori(float(z) / 32.0))
+            var entry: Dictionary = cells.get(key, {"all": 0, "forest": 0, "trees": 0})
+            entry["all"] = int(entry["all"]) + 1
+            if generator.biome_at(x, z) == WorldGen.Biome.FOREST:
+                entry["forest"] = int(entry["forest"]) + 1
+                if _is_tree(int(generator.tree_at(x, z)["type"])):
+                    entry["trees"] = int(entry["trees"]) + 1
+            cells[key] = entry
+    var coverages: Array[float] = []
+    var dense8 := 0
+    var dense12 := 0
+    for key: Vector2i in cells:
+        var entry: Dictionary = cells[key]
+        if int(entry["all"]) < 512 or int(entry["forest"]) < 256:
+            continue
+        var coverage := float(entry["trees"]) / float(entry["forest"])
+        coverages.append(coverage)
+        if coverage >= 0.08:
+            dense8 += 1
+        if coverage >= 0.12:
+            dense12 += 1
+    coverages.sort()
+    return {
+        "p50": _percentile(coverages, 0.50),
+        "p90": _percentile(coverages, 0.90),
+        "max": coverages[coverages.size() - 1] if not coverages.is_empty() else 0.0,
+        "dense8": dense8,
+        "dense12": dense12,
+    }
 ```
 
 Add these tests to `run()`:
@@ -233,6 +267,12 @@ for z in range(-SAMPLE_RADIUS, SAMPLE_RADIUS + 1):
 var global_coverage := float(global_trees) / maxf(1.0, float(global_columns))
 h.greater(global_coverage, 0.05, "global forest coverage stays >=5%% (%.4f)" % global_coverage)
 h.less(global_coverage, 0.08, "global forest coverage stays <=8%% (%.4f)" % global_coverage)
+var cells := _full_cell_stats(v5)
+h.less(cells["p50"], 0.08, "full forest-cell p50 is <=8%%")
+h.greater(cells["p90"], 0.09, "full forest-cell p90 is >=9%%")
+h.greater(cells["max"], 0.18, "full forest-cell max is >=18%%")
+h.greater(float(cells["dense8"]), 4.0, "at least five full cells are >=8%%")
+h.greater(float(cells["dense12"]), 1.0, "at least two full cells are >=12%%")
 ```
 
 Add the dense-grove direct comparison:
@@ -267,18 +307,21 @@ Add the clearing tests:
 
 ```gdscript
 h.section("M34 clearings")
+var forest_columns := 0
 var clearing_columns := 0
 var clearing_trees := 0
 for z in range(-SAMPLE_RADIUS, SAMPLE_RADIUS + 1):
     for x in range(-SAMPLE_RADIUS, SAMPLE_RADIUS + 1):
         if v5.biome_at(x, z) != WorldGen.Biome.FOREST:
             continue
+        forest_columns += 1
         if v5._vegetation_score(x, z) < WorldGen.M33_CLEARING_SCORE:
             clearing_columns += 1
             if _is_tree(int(v5.tree_at(x, z)["type"])):
                 clearing_trees += 1
 h.eq(clearing_trees, 0, "designated clearings contain no trees")
-h.greater(float(clearing_columns), 100.0, "clearings remain a real sample")
+h.greater(float(clearing_columns), float(forest_columns) * 0.20,
+    "at least 20%% of forest columns are clearings")
 ```
 
 - [ ] **Step 2: Run the unit suite and confirm failure**
@@ -444,6 +487,37 @@ func _crown_stats(generator: WorldGen, box: Rect2i) -> Dictionary:
         if best < 999999.0:
             nearest.append(best)
     nearest.sort()
+    var open_cells := {}
+    var clearing_columns := 0
+    var clearing_open := 0
+    for z in range(box.position.y, box.end.y):
+        for x in range(box.position.x, box.end.x):
+            if generator.biome_at(x, z) != WorldGen.Biome.FOREST:
+                continue
+            var cell := Vector2i(x, z)
+            if int(counts.get(cell, 0)) == 0:
+                open_cells[cell] = true
+            if generator._vegetation_score(x, z) < WorldGen.M33_CLEARING_SCORE:
+                clearing_columns += 1
+                if int(counts.get(cell, 0)) == 0:
+                    clearing_open += 1
+    var seen := {}
+    var largest_open := 0
+    for cell: Vector2i in open_cells:
+        if seen.has(cell):
+            continue
+        var stack: Array[Vector2i] = [cell]
+        seen[cell] = true
+        var count := 0
+        while not stack.is_empty():
+            var current: Vector2i = stack.pop_back()
+            count += 1
+            for offset: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+                var neighbour: Vector2i = current + offset
+                if open_cells.has(neighbour) and not seen.has(neighbour):
+                    seen[neighbour] = true
+                    stack.append(neighbour)
+        largest_open = maxi(largest_open, count)
     return {
         "columns": columns,
         "open": float(open) / maxf(1.0, float(columns)),
@@ -451,6 +525,9 @@ func _crown_stats(generator: WorldGen, box: Rect2i) -> Dictionary:
         "triple": float(triple) / maxf(1.0, float(columns)),
         "covered": float(columns - open) / maxf(1.0, float(columns)),
         "spacing_p50": _percentile(nearest, 0.5),
+        "clearing_columns": clearing_columns,
+        "clearing_open_ratio": float(clearing_open) / maxf(1.0, float(clearing_columns)),
+        "largest_open": largest_open,
     }
 ```
 
@@ -481,20 +558,43 @@ h.greater(float(radii.get(2, 0)) / maxf(1.0, float(broadleaf_total)), 0.05, "rad
 h.greater(float(radii.get(3, 0)) / maxf(1.0, float(broadleaf_total)), 0.05, "radius 3 is at least 5%%")
 h.check(classes.has(0) and classes.has(1) and classes.has(2), "all three height classes occur")
 h.greater(float(heights.size()), 3.0, "trunk heights have at least four values")
+var v5_second := WorldGen.new(17017, 5)
+var tree_mismatch := 0
+for z in range(-64, 65, 2):
+    for x in range(-64, 65, 2):
+        var a := v5.tree_at(x, z)
+        var b := v5_second.tree_at(x, z)
+        if int(a["type"]) != int(b["type"]) \
+                or int(a.get("canopy", -1)) != int(b.get("canopy", -1)) \
+                or int(a.get("height", -1)) != int(b.get("height", -1)) \
+                or int(a.get("height_class", -1)) != int(b.get("height_class", -1)):
+            tree_mismatch += 1
+h.eq(tree_mismatch, 0, "two v5 generators produce identical tree dictionaries")
+var other_seed := WorldGen.new(424242, 5)
+var seed_difference := 0
+for z in range(-32, 33, 4):
+    for x in range(-32, 33, 4):
+        if int(v5.tree_at(x, z)["type"]) != int(other_seed.tree_at(x, z)["type"]):
+            seed_difference += 1
+h.greater(float(seed_difference), 0.0, "a different seed changes the v5 layout")
 
 h.section("M34 crown overlap reduction")
 var v4_stats := _crown_stats(v4, LOWLAND_CANOPY_BOX)
 var v5_stats := _crown_stats(v5, LOWLAND_CANOPY_BOX)
 h.less(v5_stats["multi"], v4_stats["multi"] - 0.08, "2+ crown overlap drops by >=0.08")
-h.less(v5_stats["multi"], 0.51, "2+ crown overlap is <=0.50")
+h.less(v5_stats["multi"], 0.50, "2+ crown overlap is <=0.50")
 h.less(v5_stats["triple"], v4_stats["triple"] - 0.10, "3+ crown overlap drops by >=0.10")
-h.less(v5_stats["triple"], 0.41, "3+ crown overlap is <=0.40")
+h.less(v5_stats["triple"], 0.40, "3+ crown overlap is <=0.40")
 h.greater(v5_stats["open"], v4_stats["open"] + 0.05, "open forest columns rise by >=0.05")
-h.greater(v5_stats["open"], 0.39, "open forest columns are >=0.40")
+h.greater(v5_stats["open"], 0.40, "open forest columns are >=0.40")
 h.greater(v5_stats["spacing_p50"], 1.9, "median trunk spacing is >=1.9")
 h.greater(v5_stats["spacing_p50"], v4_stats["spacing_p50"] + 0.4, "median spacing rises by >=0.4")
-h.greater(_crown_stats(v5, LOWLAND_BOX)["covered"], 0.54, "dense lowland crown union is >=55%%")
-h.greater(_crown_stats(v5, LOWLAND_CANOPY_BOX)["covered"], 0.44, "open woodland crown union is >=45%%")
+h.greater(_crown_stats(v5, LOWLAND_BOX)["covered"], 0.55, "dense lowland crown union is >=55%%")
+h.greater(_crown_stats(v5, LOWLAND_CANOPY_BOX)["covered"], 0.45, "open woodland crown union is >=45%%")
+var open_stats := _crown_stats(v5, LOWLAND_CANOPY_BOX)
+h.greater(float(open_stats["clearing_columns"]), 100.0, "the canopy box has enough clearing columns")
+h.greater(float(open_stats["largest_open"]), 200.0, "a crown-free opening of >=200 columns exists")
+h.greater(open_stats["clearing_open_ratio"], 0.50, "at least half of clearing columns are crown-free")
 ```
 
 - [ ] **Step 2: Run the unit suite and confirm failure**
@@ -526,12 +626,14 @@ if _is_m34():
     var height_class := _v5_height_class(x, z, ground, patch)
     var height_adjust := 2 if height_class == 1 else (-1 if height_class == 2 else 0)
     var canopy := 2 + _hash2(x, z, 555) % 2
+    if height_class == 2:
+        canopy = 2
     trunk = maxi(4, trunk + height_adjust)
     return {"type": TreeType.OAK, "base": ground + 1, "height": trunk,
         "canopy": canopy, "height_class": height_class}
 ```
 
-For `_birch`, use `var canopy := 2 + (1 if _hash2(x, z, 556) % 4 == 0 else 0)`, `TreeType.BIRCH`, and the same trunk adjustment/`height_class`. For `_blossom`, use `var canopy := 2 + (1 if _hash2(x, z, 557) % 3 == 0 else 0)`, `TreeType.BLOSSOM`, and the same trunk adjustment/`height_class`. Do not add `height_class` to pine trees.
+For `_birch`, use `var canopy := 2 + (1 if _hash2(x, z, 556) % 4 == 0 else 0)`, `TreeType.BIRCH`, and the same understory cap/trunk adjustment/`height_class`. For `_blossom`, use `var canopy := 2 + (1 if _hash2(x, z, 557) % 3 == 0 else 0)`, `TreeType.BLOSSOM`, and the same understory cap/trunk adjustment/`height_class`. Do not add `height_class` to pine trees.
 
 - [ ] **Step 4: Run the unit suite**
 
@@ -578,6 +680,16 @@ func _leaf_blocks(world: VoxelWorld, box: Rect2i, y_min: int, y_max: int) -> int
 Add tests:
 
 ```gdscript
+h.section("M34 crown profiles")
+var distinct_profiles := {}
+for profile in range(6):
+    var radii := v5._v5_layer_radii(3, profile)
+    h.eq(radii.size(), 7, "a radius-3 v5 profile has seven layers")
+    h.less(float(radii[5]), 3.0, "the upper shoulder is narrower than the widest layer")
+    h.less(float(radii[6]), 2.0, "the top layer is at most one block wide")
+    distinct_profiles[str(radii)] = true
+h.eq(distinct_profiles.size(), 6, "six distinct radius-3 v5 profiles")
+
 h.section("M34 crown voxel shape")
 var v4_world := VoxelWorld.new(17017, 4)
 var v5_world := VoxelWorld.new(17017, 5)
@@ -607,9 +719,7 @@ for z in range(-64, 1):
         var type := int(data["type"])
         if not _is_tree(type):
             continue
-        var radius := 3
-        if _is_broadleaf(type):
-            radius = int(data.get("canopy", 3))
+        var radius := _crown_radius(data)
         if x - radius <= 48 and x + radius >= 48:
             seam_tree = Vector2i(x, z)
             found = true
@@ -651,26 +761,40 @@ var profile_count := 6 if _is_m34() else 4
 var profile := _hash3(tree_world_x, top, tree_world_z, 73) % profile_count
 ```
 
-Then, immediately after the `profile` assignment and before the existing `if terrain_version == LEGACY_VERSION` chain, add:
+Add a testable helper before `_place_broadleaf`:
 
 ```gdscript
-if _is_m34() and radius >= 3:
-    match profile % 6:
-        0: layer_radii = [0, 1, 2, 3, 3, 2, 1]
-        1: layer_radii = [1, 1, 2, 3, 2, 2, 1]
-        2: layer_radii = [0, 1, 2, 3, 2, 1, 1]
-        3: layer_radii = [1, 2, 2, 3, 3, 1, 0]
-        4: layer_radii = [1, 2, 3, 2, 3, 2, 1]
-        _: layer_radii = [0, 1, 3, 2, 3, 2, 1]
-elif _is_m34() and radius == 2:
+## v5 broadleaf layer radii.  Radius 3 has six profiles, radius 2 has four.
+## Every profile tapers to a narrow top instead of repeating a wide plate.
+func _v5_layer_radii(radius: int, profile: int) -> Array:
+    if radius >= 3:
+        match profile % 6:
+            0: return [0, 1, 2, 3, 3, 2, 1]
+            1: return [1, 1, 2, 3, 2, 2, 1]
+            2: return [0, 1, 2, 3, 2, 1, 1]
+            3: return [1, 2, 2, 3, 3, 1, 0]
+            4: return [1, 2, 3, 2, 3, 2, 1]
+            _: return [0, 1, 3, 2, 3, 2, 1]
     match profile % 4:
-        0: layer_radii = [0, 1, 2, 2, 1, 0]
-        1: layer_radii = [1, 1, 2, 2, 1, 1]
-        2: layer_radii = [0, 1, 2, 1, 2, 1]
-        _: layer_radii = [1, 2, 2, 1, 1, 0]
+        0: return [0, 1, 2, 2, 1, 0]
+        1: return [1, 1, 2, 2, 1, 1]
+        2: return [0, 1, 2, 1, 2, 1]
+        _: return [1, 2, 2, 1, 1, 0]
 ```
 
-Keep the existing `_is_m32()` branches below for v4. Add the trim divisors next to the profile variables:
+Then make the v5 branch the **first branch of the existing layer-radius chain**, so the later `_is_m32()` branch cannot overwrite it:
+
+```gdscript
+if _is_m34():
+    layer_radii = _v5_layer_radii(radius, profile)
+elif terrain_version == LEGACY_VERSION:
+    # existing legacy branch unchanged
+elif _is_m32() and radius >= 4:
+    # existing M32 branch unchanged
+...
+```
+
+Keep the existing `_is_m32()` branches below for v4, but they must be `elif` after the v5 branch, not a separate `if` chain. Add the trim divisors next to the profile variables:
 
 ```gdscript
 var corner_divisor := 3 if _is_m34() else (2 if _is_m32() else 3)
@@ -796,6 +920,8 @@ h.less(float(river_outer_trees) / maxf(1.0, float(river_outer_columns)), 0.20,
 
 For the save/edit round-trip, reuse the `SaveManager.to_dictionary` / `apply` pattern from `test_persistence.gd`: place a block in a v5 world, save, apply into a fresh v5 world, and assert the edited block and `terrain_generator_version == 5`. Also assert a v4 payload still records 4. Do not duplicate the full persistence fixture.
 
+Extend `test_streaming_lifecycle.gd` with a v5 case using the existing v3 streamed-vs-synchronous pattern: create a v5 world, stream a chunk outside the initially loaded area with threaded generation, compare `blocks`/`biomes` with a synchronous v5 `ensure_chunk`, and assert the worker generator version is 5. The existing v3 case must remain.
+
 - [ ] **Step 2: Run the unit suite**
 
 Run the unit command. Expected: `M17_TESTS_PASS`, exit 0. Record the assertion count.
@@ -820,6 +946,8 @@ Run twice; compare `world_hash`, `faces_hash`, `faces`, `edits`. They must match
 - [ ] **Step 5: Fix failures and re-run**
 
 If an existing test fails because of an intentional v5 change, update only the version-specific expectation; do not weaken the M33 v4 tests or the historical pins. Re-run the affected suite and then the full unit suite.
+
+If v5 river-outer coverage falls below 0.5% because the 4/9 woodland thinning also applies there, adjust the outer-band density factor within the existing `1.25..1.55` rule (for example from 0.25 to 0.35), record the measured before/after, and keep the river core at zero trees. Do not weaken the core exclusion.
 
 - [ ] **Step 6: Commit**
 
