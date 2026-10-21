@@ -1,0 +1,73 @@
+M33 verification summary (worktree C:\Users\Admin\Documents\Projects\VoxelWorld_m33)
+Branch: codex/m33-vegetation-ecology
+Base: e9120bb (M32 tip)
+
+FINGERPRINTS (wilderness_probe.gd --fingerprint, seed 17017)
+version=0 hash=3214517825889907206
+version=1 hash=5947596836865492245
+version=2 hash=8397584315617538769
+version=3 hash=8802792587028581708
+version=4 hash=2164503133686526591
+
+UNIT
+M17_TESTS_PASS 2654 assertions
+
+INTEGRATION
+M17_INTEGRATION_PASS 463 assertions
+
+REGRESSION
+M17_REGRESSION_PASS assertions=52
+
+SMOKE x2
+world_hash=6635924460699095029
+faces_hash=6522134789172171177
+faces=406787
+edits=865
+(stable in both runs)
+
+DISTRIBUTION, seed 17017, sample [-192,192] step 1
+v3: forest tree coverage 0.1260; lowland box 0.1460; p90 cell 0.1064;
+    broadleaf above SEA+30 417; trees above SEA+40 90; slope>=3 0.066;
+    clearing area 7703/43603=0.177; river core trees 85.
+v4: forest tree coverage 0.0944; lowland box 0.1103; p90 cell 0.0811;
+    broadleaf above SEA+30 0; trees above SEA+40 2; slope>=3 0.005;
+    clearing area 9938/43603=0.228; river core trees 0; outer river 0.0155;
+    crown-free connected opening 564 columns; clearing open ratio 0.884.
+
+PERFORMANCE (3 runs each; medians and ranges)
+Normal camera -7.3,101.5,-29 yaw 270:
+  before look FPS median 563.1 (519.8..564.2)
+  after  look FPS median 567.5 (561.6..568.4)
+  before p95/p99 2.145/2.537 ms; after 2.118/2.481 ms
+  before 1% low/worst 329.9/13.121; after 338.4/12.441
+  before draw 467.2; after 449.4
+  before settle FPS median 359.2; after 374.5
+  before settle p95/p99 5.956/13.524; after 5.849/12.471
+  before settle draw 657.4; after 600.1
+
+River camera 80,92,180 yaw 0:
+  before look FPS median 482.2 (439.8..482.9)
+  after  look FPS median 489.4 (488.5..489.9)
+  before p95/p99 2.327/2.895 ms; after 2.326/2.881 ms
+  before 1% low/worst 292.4/13.100; after 287.4/13.383
+  before draw 721.3; after 673.8
+  before settle FPS median 331.7; after 336.3
+  before settle p95/p99 6.085/10.622; after 6.009/9.734
+  before settle draw 760.2; after 722.1
+
+Generation/mesh settle totals:
+  normal before gen 801-848 ms, mesh 7520-7622 ms; after gen 839-865 ms, mesh 7408-7799 ms
+  river before gen 1153-1180 ms, mesh 10739-11442 ms; after gen 1164-1173 ms, mesh 10319-10433 ms
+Loaded/wanted: 678/678 normal, 791/791 river. Max queued 192/196.
+In-flight at settle: 0. Max draw during settle: 875/977 before, 791/917 after.
+
+VISUAL EVIDENCE
+m33-before-0..5.png (v3) and m33-final-0..5.png (v4), same seed/cameras:
+0 80,92,180 yaw 0 pitch -25 (river hero)
+1 80,72,160 yaw 90 pitch -8 (forest/clearing)
+2 76,140,-40 yaw 180 pitch -14 (mountain)
+3 -7.3,101.5,-29 yaw 270 pitch -12 (normal gameplay)
+4 224,92,288 yaw 75 pitch -24 (canopy)
+5 repeat of final camera
+m33-river-ground-before.png / m33-river-ground-after.png:
+80,72,160 yaw 0 pitch -8 (river/banks)
