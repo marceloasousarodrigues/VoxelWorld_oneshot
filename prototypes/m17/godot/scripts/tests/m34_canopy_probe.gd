@@ -53,6 +53,8 @@ func _initialize() -> void:
 	_simulate_global(3, 2)
 	_simulate_global(3, 3)
 	_report_v4_cells()
+	_report_actual_box(LOWLAND_CANOPY_BOX)
+	_report_actual_box(LOWLAND_BOX)
 	for keep: int in [4, 5]:
 		_simulate_grove_thin(LOWLAND_CANOPY_BOX, keep, 9, 0.34, 2)
 		_simulate_grove_thin(LOWLAND_BOX, keep, 9, 0.34, 2)
@@ -480,6 +482,18 @@ func _v5_canopy_radius(x: int, z: int, height: int, type: int, patch: float) -> 
 	if _generator._hash3(x, height, z, 9102) % 100 < understory:
 		canopy = 2
 	return canopy
+
+
+func _report_actual_box(box: Rect2i) -> void:
+	var trees: Array[Dictionary] = []
+	for z in range(box.position.y - 10, box.end.y + 10):
+		for x in range(box.position.x - 10, box.end.x + 10):
+			var tree := _generator.tree_at(x, z)
+			var type := int(tree["type"])
+			if not _is_tree(type) or type == WorldGen.TreeType.CACTUS:
+				continue
+			trees.append({"x": x, "z": z, "tree": tree, "r": _crown_radius(tree)})
+	_report_tree_set("ACTUAL v%d box=%s" % [_generator.terrain_version, box], box, trees)
 
 
 func _simulate_grove_thin(box: Rect2i, keep: int, out_of: int, grove_patch: float, crown_cap: int) -> void:

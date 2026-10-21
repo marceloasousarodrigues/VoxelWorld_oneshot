@@ -1,0 +1,83 @@
+M34 verification summary (worktree C:\Users\Admin\Documents\Projects\VoxelWorld_m34)
+Branch: codex/m34-canopy-composition
+Base: c0b58c3 (M33 tip)
+Head at verification: 73b6ef0 plus evidence commits
+
+FINGERPRINTS (wilderness_probe.gd --fingerprint, seed 17017)
+version=0 hash=3214517825889907206
+version=1 hash=5947596836865492245
+version=2 hash=8397584315617538769
+version=3 hash=8802792587028581708
+version=4 hash=2164503133686526591
+version=5 hash=5133898688464144157
+
+UNIT
+M17_TESTS_PASS 2770 assertions (exit 0)
+
+INTEGRATION
+M17_INTEGRATION_PASS 463 assertions (exit 0)
+
+REGRESSION
+M17_REGRESSION_PASS assertions=52 (exit 0)
+
+SMOKE x2
+world_hash=1188233828819198944
+faces_hash=3201666069178630801
+faces=365154
+edits=688
+(stable in both runs)
+
+DISTRIBUTION, seed 17017, sample [-192,192] step 1
+v5 global forest tree coverage 0.0555 (2418/43603)
+v5 LOWLAND_BOX in-box trunk coverage 0.0478 (55/1151)
+v5 LOWLAND_BOX crown union 0.632
+v5 LOWLAND_CANOPY_BOX in-box trunk coverage 0.0358
+v5 LOWLAND_CANOPY_BOX open / 2+ / 3+ 0.436 / 0.465 / 0.363
+v5 LOWLAND_CANOPY_BOX crown union 0.564
+v5 median nearest-trunk spacing 2.00 (v4 1.41)
+v5 full forest cells p50 / p90 / max 0.0444 / 0.1038 / 0.2559
+full cells >=8%: 13; >=12%: 5
+v5 clearings: 1042 columns, zero trees; largest crown-free component 726
+v5 river core trees 0; river-outer coverage test passes 0.5%-20%
+v5 no broadleaf above SEA+30; no tree above SEA+44
+
+PERFORMANCE (3 runs each; look phase medians and ranges)
+Normal camera -7.3,101.5,-29 yaw 270 pitch -12:
+  before look FPS median 518.6 (512.7..519.7)
+  after  look FPS median 516.5 (515.5..522.8)
+  before p95/p99 2.521/2.964 ms; after 2.530/3.013 ms
+  before draw calls 446.4; after 433.3
+  before settle gen/mesh 1043/8683 ms; after 806/7038 ms
+River camera 80,92,180 yaw 0 pitch -25:
+  before look FPS median 442.8 (422.6..443.6)
+  after  look FPS median 441.9 (441.8..445.9)
+  before p95/p99 2.932/3.475 ms; after 2.854/3.396 ms
+  before draw calls 672.4; after 651.4
+  before settle gen/mesh 1182/10505 ms; after 1183/10170 ms
+Chunk counts: normal loaded/wanted 678/678, max queued 216, in-flight 0 at settle;
+river loaded/wanted 791/791, max queued 205, in-flight 0 at settle.
+
+VISUAL EVIDENCE
+Before (v4, M33 worktree) / after (v5, M34 worktree), seed 17017, radius 6,
+--fly --hide-hud --settle=25, 1280x720, time 0.28:
+  0 224,92,288 yaw 75 pitch -24 (close elevated canopy)
+  1 224,110,288 yaw 75 pitch -35 (oblique canopy)
+  2 -7.3,101.5,-29 yaw 270 pitch -12 (normal gameplay)
+  3 80,72,160 yaw 90 pitch -8 (clearing / forest edge)
+  4 76,140,-40 yaw 180 pitch -14 (mountain / summit)
+  5 80,92,180 yaw 0 pitch -25 (river / forest)
+  6 80,72,160 yaw 0 pitch -8 (river ground)
+  extra 0 224,120,288 yaw 75 pitch -30 (higher elevated canopy)
+  extra 2 228,74,288 yaw 90 pitch 0 (forest interior; v4 camera at this point was
+          occupied by a trunk, so there is no matched v4 forest-interior image)
+Files: m34-before-*.png, m34-after-*.png, m34-before-extra-0.png,
+m34-extra-0.png, m34-extra-2.png.
+
+LIMITATIONS
+- Dense groves keep v4 density by design and may remain visually connected; the
+  elevated captures show smaller crowns, clearer gaps and layered silhouettes.
+- The close elevated camera (224,92,288) still has large foreground crowns; the
+  oblique/higher views show the individual crowns and openings more clearly.
+- No matched v4 forest-interior image at 228,74,288: a v4 trunk occupies that point.
+- Terrain, river, snow caps and biome boundaries are unchanged.
+- Performance measurements are on the local RTX 3080 and Windows build.
