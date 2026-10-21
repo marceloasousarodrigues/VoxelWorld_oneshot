@@ -33,7 +33,7 @@ A read-only diagnostic (`m34_canopy_probe.gd`, seed 17017, v4) measured the caus
 |---|---|
 | Forest columns in the box | 3,552 |
 | Trees in/intersecting the box | 337 |
-| Forest tree-column coverage | 9.54% |
+| Forest tree-column coverage | 9.49% |
 | Median nearest-trunk distance | **1.41 blocks** |
 | p25 / p75 nearest-trunk distance | 1.00 / 2.00 blocks |
 | Crown-covered forest columns | 66.0% |
@@ -171,9 +171,9 @@ crowns instead of a field of identical wide domes.
   **not** add a two-block lean, so the maximum horizontal reach stays
   `canopy radius 3 + lean 1 + shelf 1 = 5` and the crown-disc test (`canopy + 2`) matches
   the actual geometry.
-- About one v5 broadleaf tree in three gets one extra leaf block above the normal top,
-  producing a small emergent spire. This is a vertical silhouette cue, not a new tree
-  model or a new block type.
+- Emergent-class broadleaf trees (the ~12% open / ~20% dense share in the height-class
+  table below) get one extra leaf block above the normal top, producing a small spire.
+  This is a vertical silhouette cue, not a new tree model or a new block type.
 - The outer crown ring is trimmed slightly harder for v5 (at most one third of corner
   cells and two thirds of edge cells survive the hash test) so crown edges stay ragged and
   flat contact surfaces are reduced.
@@ -222,11 +222,11 @@ woodland is thinned. That is intentional spacing, not a blanket density change: 
 groves remain at v4 density, the clearings are unchanged, and the lowland crown-union floor
 below guards against a sparse world.
 
-If the measured v5 lowland crown coverage falls below 45%, or the dense-grove comparison
-shows that groves were thinned, the implementation is tuned by adjusting the woodland keep
-fraction (4/9 to 5/9), the crown radius distribution, or the height-class shares within
-this spec before completion. A blanket reduction of the density field is not an acceptable
-fix.
+If the measured `LOWLAND_BOX` crown union falls below 55%, the `LOWLAND_CANOPY_BOX` crown
+union falls below 45%, or the dense-grove comparison shows that groves were thinned, the
+implementation is tuned by adjusting the woodland keep fraction (4/9 to 5/9), the crown
+radius distribution, or the height-class shares within this spec before completion. A
+blanket reduction of the density field is not an acceptable fix.
 
 ### D6. Mountain, river and terrain preservation
 
@@ -307,11 +307,11 @@ Compare v4 and v5:
 ### 3.4 Dense forest, composition and clearings
 
 13. `LOWLAND_BOX` is the dense lowland sample: forest tree-column coverage is >=8% and
-    <=13%, and its crown union covers >=55% of forest columns (simulated 9.6% and 63.2%;
-    v4 was 11.03%). `LOWLAND_CANOPY_BOX` is the open-woodland sample: forest tree-column
-    coverage is >=4.5% and <=8.5%, and its crown union covers >=45% of forest columns
-    (simulated 5.1% and 56.4%). This proves that dense lowland forest is preserved while
-    the open woodland gains gaps.
+    <=13%, and its 2D crown-disc union (the same metric as tests 9–11) covers >=55% of
+    forest columns (simulated 9.6% and 63.2%; v4 was 11.03%). `LOWLAND_CANOPY_BOX` is the
+    open-woodland sample: forest tree-column coverage is >=4.5% and <=8.5%, and its crown
+    union covers >=45% of forest columns (simulated 5.1% and 56.4%). This proves that dense
+    lowland forest is preserved while the open woodland gains gaps.
 14. **Full** 32×32 forest cells — cells with at least 512 all-column samples and at least
     256 forest columns, so edge slivers are excluded — use forest columns as the
     denominator. Require p50 <=8%, p90 >=9%, max >=18%, at least five full cells >=8%,
@@ -335,9 +335,10 @@ Compare v4 and v5:
 
 The thresholds in tests 9–15 are derived from the committed diagnostic simulation, not
 from an implemented v5 generator. Before pinning them, run the actual v5 probe and record
-the measured values in `m34-diagnosis.txt`. Adjust a threshold only with the measured
-value and a stated margin; do not weaken the visual requirement to fit an implementation
-that still looks continuous.
+the measured values in `m34-diagnosis.txt`. Tests 7–8 (radius shares and height classes)
+must also be confirmed against the actual v5 probe before their minimum shares are pinned.
+Adjust a threshold only with the measured value and a stated margin; do not weaken the
+visual requirement to fit an implementation that still looks continuous.
 
 ### 3.5 Mountain, river, boundaries and persistence
 
@@ -437,8 +438,11 @@ before completion.
 - **Over-thinning**: lowland tree/crown coverage and dense-cell counts are measured; the
   density field is not reduced. If coverage falls below the thresholds, increase crown
   radius variation or adjust the woodland keep fraction within this spec.
-- **Grid regularity**: the 2×2 candidate jitter, per-tree lean/shelf and varied profiles
-  break the cell pattern; visual checklist rejects straight lines.
+- **Grid regularity / speckle**: the 2×2 candidate jitter, per-tree lean/shelf and varied
+  profiles break the cell pattern; visual checklist rejects straight lines. If the
+  per-cell thinning produces salt-and-pepper speckle, replace the thinning hash with a
+  low-frequency woodland noise threshold or raise the keep fraction to 5/9, then re-check
+  the open-woodland metrics.
 - **Still-continuous canopy**: if the elevated view remains a slab, reduce the broadleaf
   maximum to radius 2 in dense groves, trim the outer ring further, or adjust the woodland
   keep fraction within the 4/9–5/9 tuning range. Re-measure the crown-union floor; do not
