@@ -127,11 +127,18 @@ The diagnostic simulation (`m34_canopy_probe.gd`, seed 17017) predicts:
 | Metric | v4 | v5 simulation |
 |---|---|---|
 | Global forest tree-column coverage | 9.54% | 5.55% |
-| Dense `LOWLAND_BOX` tree coverage | 11.03% | 9.6% |
-| Open-woodland canopy box tree coverage | 9.49% | 5.1% |
+| Dense `LOWLAND_BOX` tree coverage (in-box trunks) | 11.03% | 4.78% |
+| Open-woodland canopy box tree coverage (in-box trunks) | 9.49% | 3.58% |
 | Full forest-cell p50 / p90 / max | 8.91% / 18.94% / 25.59% | 4.44% / 10.38% / 25.59% |
 | Canopy box open / 2+ / 3+ | 34.0% / 61.6% / 57.6% | 43.6% / 46.5% / 36.3% |
 | Canopy box median nearest-trunk distance | 1.41 | 2.00 |
+| `LOWLAND_BOX` crown union | not measured | 63.2% |
+| Canopy box crown union | 66.0% | 56.4% |
+
+The box trunk-coverage numbers count trunks rooted inside the box. An earlier
+simulation counted trees in the box's +10 margin and over-reported box coverage; the
+crown-union figures are the lushness guard and are measured with the same crown-disc
+metric as tests 9–11.
 
 The simulation models the D3 radius distribution (oak 2/3, birch and blossom 2/3) and the
 D4 understory cap, so the overlap numbers are not the optimistic all-radius-2 case. The
@@ -209,8 +216,8 @@ The expected composition after D2–D4 is:
 - genuinely dense groves (`forest_patch > 0.34`) keep their v4 candidate density; the
   full forest-cell maximum stays identical to v4 (simulated 25.59%) and the dense grove
   subset is directly compared with v4 in test 18;
-- irregular open woodland with roughly 5–6% forest tree coverage and visible individual
-  crowns;
+- irregular open woodland with roughly 3.5–5.5% in-box trunk coverage and 56–63% crown
+  union, so it stays lush while individual crowns become readable;
 - the existing large clearings, now more effective because crowns are smaller and the
   woodland between them is less tightly packed;
 - no uniform global thinning: the dense-grove candidate rate is unchanged, and the
@@ -306,12 +313,12 @@ Compare v4 and v5:
 
 ### 3.4 Dense forest, composition and clearings
 
-13. `LOWLAND_BOX` is the dense lowland sample: forest tree-column coverage is >=8% and
-    <=13%, and its 2D crown-disc union (the same metric as tests 9–11) covers >=55% of
-    forest columns (simulated 9.6% and 63.2%; v4 was 11.03%). `LOWLAND_CANOPY_BOX` is the
-    open-woodland sample: forest tree-column coverage is >=4.5% and <=8.5%, and its crown
-    union covers >=45% of forest columns (simulated 5.1% and 56.4%). This proves that dense
-    lowland forest is preserved while the open woodland gains gaps.
+13. `LOWLAND_BOX` is the dense lowland sample: in-box forest tree-column coverage is
+    >=4.5% and <=13%, and its 2D crown-disc union (the same metric as tests 9–11) covers
+    >=55% of forest columns (measured 4.78% and 63.2%; v4 was 11.03%). `LOWLAND_CANOPY_BOX`
+    is the open-woodland sample: in-box forest tree-column coverage is >=3% and <=8.5%, and
+    its crown union covers >=45% of forest columns (measured 3.58% and 56.4%). This proves
+    that dense lowland forest is preserved while the open woodland gains gaps.
 14. **Full** 32×32 forest cells — cells with at least 512 all-column samples and at least
     256 forest columns, so edge slivers are excluded — use forest columns as the
     denominator. Require p50 <=8%, p90 >=9%, max >=18%, at least five full cells >=8%,

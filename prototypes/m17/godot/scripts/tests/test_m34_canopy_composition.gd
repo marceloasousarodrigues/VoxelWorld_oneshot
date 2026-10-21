@@ -13,6 +13,35 @@ const SEA := WorldGen.SEA_LEVEL
 const SAMPLE_RADIUS := 192
 const LOWLAND_BOX := Rect2i(200, 280, 48, 24)
 const LOWLAND_CANOPY_BOX := Rect2i(192, 256, 64, 64)
+const TEST_DIRECTORY := "user://m34_canopy_test"
+
+
+func _clean() -> void:
+	var directory := DirAccess.open(TEST_DIRECTORY)
+	if directory == null:
+		return
+	for file_name: String in directory.get_files():
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_DIRECTORY.path_join(file_name)))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_DIRECTORY))
+
+
+func _spawn_player(world: VoxelWorld) -> VoxelPlayer:
+	var player := VoxelPlayer.new()
+	player.world = world
+	player.set_process(false)
+	player.set_physics_process(false)
+	var tree := Engine.get_main_loop() as SceneTree
+	tree.root.add_child(player)
+	return player
+
+
+func _release_player(player: VoxelPlayer) -> void:
+	if player == null:
+		return
+	var parent := player.get_parent()
+	if parent != null:
+		parent.remove_child(player)
+	player.free()
 
 
 func name() -> String:
@@ -446,4 +475,87 @@ func run(h: TestHarness) -> void:
 			if (a.get_chunk(c) as ChunkData).blocks != (b.get_chunk(c) as ChunkData).blocks:
 				seam_mismatch += 1
 		h.eq(seam_mismatch, 0, "v5 chunks across the border match in both load orders")
+
+	h.section("M34 v5 mountain and river")
+	var above30_broadleaf := 0
+	var band27_30_columns := 0
+	var band27_30_broadleaf := 0
+	var above40_columns := 0
+	var above40_trees := 0
+	var above44_trees := 0
+	var upper_slope_trees := 0
+	var upper_slope_non_pine := 0
+	var river_core_columns := 0
+	var river_core_trees := 0
+	var river_outer_columns := 0
+	var river_outer_trees := 0
+	for z in range(-SAMPLE_RADIUS, SAMPLE_RADIUS + 1):
+		for x in range(-SAMPLE_RADIUS, SAMPLE_RADIUS + 1):
+			var height := v5.height_at(x, z)
+			var type := int(v5.tree_at(x, z)["type"])
+			var tree := _is_tree(type)
+			if _is_broadleaf(type) and height > SEA + 30:
+				above30_broadleaf += 1
+			if height > SEA + 27 and height <= SEA + 30:
+				band27_30_columns += 1
+				if _is_broadleaf(type):
+					band27_30_broadleaf += 1
+			if height > SEA + 40:
+				above40_columns += 1
+				if tree:
+					above40_trees += 1
+			if height > SEA + 44 and tree:
+				above44_trees += 1
+			if tree and height > SEA + 30 and height <= SEA + 40:
+				upper_slope_trees += 1
+				if type != WorldGen.TreeType.PINE:
+					upper_slope_non_pine += 1
+			var distance := v5._river_distance(x, z)
+			if distance < WorldGen.RIVER_BANK_LIMIT * WorldGen.M33_RIVER_CORE:
+				river_core_columns += 1
+				if tree:
+					river_core_trees += 1
+			elif distance < WorldGen.RIVER_BANK_LIMIT * WorldGen.M33_RIVER_OUTER:
+				river_outer_columns += 1
+				if tree:
+					river_outer_trees += 1
+	h.eq(above30_broadleaf, 0, "no broadleaf above SEA+30")
+	h.greater(float(band27_30_columns), 100.0, "the broadleaf treeline band has a sample")
+	h.less(float(band27_30_broadleaf) / maxf(1.0, float(band27_30_columns)), 0.02,
+		"broadleaf is <=2%% in SEA+27..30")
+	h.greater(float(above40_columns), 100.0, "the summit sample has enough columns")
+	h.less(float(above40_trees) / maxf(1.0, float(above40_columns)), 0.02,
+		"tree coverage above SEA+40 is <2%%")
+	h.eq(above44_trees, 0, "no tree above SEA+44")
+	h.greater(float(upper_slope_trees), 10.0, "the upper slope has trees")
+	h.eq(upper_slope_non_pine, 0, "upper slopes are pine only")
+	h.greater(float(river_core_columns), 100.0, "the river core has a sample")
+	h.eq(river_core_trees, 0, "the river core has no trees")
+	h.greater(float(river_outer_columns), 100.0, "the river outer band has a sample")
+	h.greater(float(river_outer_trees) / maxf(1.0, float(river_outer_columns)), 0.005,
+		"river-outer vegetation is retained")
+	h.less(float(river_outer_trees) / maxf(1.0, float(river_outer_columns)), 0.20,
+		"river-outer vegetation stays below 20%%")
+
+	h.section("M34 v5 save/edit round-trip")
+	_clean()
+	var saves := SaveManager.new(TEST_DIRECTORY)
+	var edit_world := VoxelWorld.new(17017, 5)
+	edit_world.ensure_chunk(Vector3i(0, 3, 0))
+	var edited := Vector3i(8, 60, 8)
+	h.check(edit_world.set_block(edited, BlockDB.PLANKS), "a v5 block edit is placed")
+	var edit_player := _spawn_player(edit_world)
+	var edit_payload: Dictionary = saves.to_dictionary(edit_world, edit_player, Inventory.new(),
+		null, Health.new(), 1.0, 20.0)
+	var restored_world := VoxelWorld.new(17017, 5)
+	restored_world.ensure_chunk(Vector3i(0, 3, 0))
+	var restored_player := _spawn_player(restored_world)
+	var apply_result: Dictionary = saves.apply({"ok": true, "data": edit_payload},
+		restored_world, restored_player, Inventory.new())
+	h.check(bool(apply_result.get("ok", false)), "the v5 save applies")
+	h.eq(restored_world.get_block(edited), BlockDB.PLANKS, "the v5 edit survives save/load")
+	h.eq(restored_world.generator.terrain_version, 5, "the restored world uses generator 5")
+	_release_player(edit_player)
+	_release_player(restored_player)
+	_clean()
 	h.finish()

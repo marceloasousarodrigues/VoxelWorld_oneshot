@@ -122,25 +122,26 @@ func _test_clear_restarts_the_worker(h: TestHarness) -> void:
 ## not the current version.  This catches the latent `WorldGen.new(seed)` default
 ## in the background generation worker.
 func _test_generation_uses_world_version(h: TestHarness) -> void:
-	var streamer := _make_streamer(2, 3)
-	streamer.generation_budget = 64
-	_pump(streamer)
-	h.eq(streamer.world.generator.terrain_version, 3,
-		"the streamer world keeps its recorded generator version")
-	h.eq(streamer._gen_worker_gen.terrain_version, 3,
-		"the background generator uses the world's recorded version")
-	var coords := VoxelWorld.sorted_coords(streamer.world.chunks)
-	h.greater(float(coords.size()), 0.0, "the historical world streamed chunks")
-	var coord: Vector3i = coords[0]
-	var reference := VoxelWorld.new(17017, 3)
-	reference.ensure_chunk(coord)
-	var streamed: ChunkData = streamer.world.get_chunk(coord)
-	var expected: ChunkData = reference.get_chunk(coord)
-	h.eq(streamed.blocks, expected.blocks,
-		"streamed v3 chunk blocks match synchronous v3 generation")
-	h.eq(streamed.biomes, expected.biomes,
-		"streamed v3 chunk biomes match synchronous v3 generation")
-	_release(streamer)
+	for version: int in [3, 5]:
+		var streamer := _make_streamer(2, version)
+		streamer.generation_budget = 64
+		_pump(streamer)
+		h.eq(streamer.world.generator.terrain_version, version,
+			"the streamer world keeps its recorded generator version %d" % version)
+		h.eq(streamer._gen_worker_gen.terrain_version, version,
+			"the background generator uses the world's recorded version %d" % version)
+		var coords := VoxelWorld.sorted_coords(streamer.world.chunks)
+		h.greater(float(coords.size()), 0.0, "the v%d world streamed chunks" % version)
+		var coord: Vector3i = coords[0]
+		var reference := VoxelWorld.new(17017, version)
+		reference.ensure_chunk(coord)
+		var streamed: ChunkData = streamer.world.get_chunk(coord)
+		var expected: ChunkData = reference.get_chunk(coord)
+		h.eq(streamed.blocks, expected.blocks,
+			"streamed v%d chunk blocks match synchronous generation" % version)
+		h.eq(streamed.biomes, expected.biomes,
+			"streamed v%d chunk biomes match synchronous generation" % version)
+		_release(streamer)
 
 
 func run(h: TestHarness) -> void:

@@ -113,3 +113,14 @@ SIMGROVE v5radii box=[P: (192, 256), S: (64, 64)] keep=5/9 grove=0.20 trees=224 
 SIMGLOBAL cell=2 cap=2 all_columns=148225 forest_columns=43603 trees=2774 coverage=0.0636 species={ 1: 1517, 4: 399, 2: 764, 5: 94 }
 SIMGLOBAL_ALL p10=0.0000 p50=0.0000 p90=0.0586 max=0.1816 full_p50=0.0264 full_p90=0.0801 full_max=0.1816
 SIMGLOBAL_FOREST p10=0.0000 p50=0.0435 p90=0.1354 max=1.0000 full_n=64 full_p50=0.0565 full_p90=0.1285 full_max=0.2559 full_dense8=19 full_dense12=7 full_low1=11
+
+ACTUAL v5 MEASUREMENTS (implemented generator, seed 17017)
+FINGERPRINT version=5 hash=5133898688464144157
+M33_VEG_PROBE version=5: forest columns 43603 trees 2418 coverage 0.0555
+LOCAL_CELLS (all-column): p50 0.0029 p90 0.0488 max 0.1797
+LOWLAND box: columns 1151 trees 55 coverage 0.0478
+CANOPY box: forest 3552 covered 2077 open 1547 open_ratio 0.436 clearing 1042 crown_free_clearing 997 clearing_open_ratio 0.957 largest_open 726
+ACTUAL v5 canopy box: open 0.436 multi 0.465 triple 0.363 spacing_p50 2.00
+ACTUAL v5 lowland box: open 0.368 multi 0.558 triple 0.487 covered 0.632 spacing_p50 2.00
+ACTUAL v5 full forest cells (test _full_cell_stats): p50 0.0444 p90 0.1038 max 0.2559 dense8 13 dense12 5
+
