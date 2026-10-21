@@ -228,7 +228,7 @@ old saves keep old terrain/vegetation through streaming, not only through direct
 
 The existing starter house already levels its own footprint and path. Denser v4 canopy can put
 a crown or trunk over the adjacent spawn column and block the first-person view/target ray.
-Extend the starter house's existing site-clearing loop to clear a 9×9 opening around spawn to
+Extend the starter house's existing site-clearing loop to clear a 7×7 opening around spawn to
 ground + 6. This is not a new structure, building feature, block ID or gameplay system: it is
 the same ordinary `world.set_block` site preparation the starter house already performs, and
 it only removes natural vegetation. It prevents a playability regression caused by the M33

@@ -87,7 +87,7 @@ pre-filter.
 - `ChunkStreamer` now creates its worker with
   `WorldGen.new(world.world_seed, world.generator.terrain_version)`. A v3 save streams v3
   chunks; the streaming lifecycle test compares streamed and synchronous v3 blocks/biomes.
-- The starter house clears a small 9×9 spawn opening (ground + 6) so the denser v4 canopy
+- The starter house clears a small 7×7 spawn opening (ground + 6) so the denser v4 canopy
   cannot block the first-person view or creature targeting.
 
 ## Measured distribution
@@ -191,10 +191,10 @@ claimed as an improvement.
 
 | Suite | Result |
 |---|---|
-| Unit | `M17_TESTS_PASS 2654 assertions`, exit 0 |
+| Unit | `M17_TESTS_PASS 2657 assertions`, exit 0 |
 | Integration | `M17_INTEGRATION_PASS 463 assertions`, exit 0 |
 | Regression | `M17_REGRESSION_PASS assertions=52`, exit 0 |
-| Smoke ×2 | both `world_hash=6635924460699095029`, `faces_hash=6522134789172171177`, `faces=406787`, `edits=865` |
+| Smoke ×2 | both `world_hash=1166263243268247887`, `faces_hash=8413966639196070975`, `faces=407087`, `edits=813` |
 
 Generator pins:
 
@@ -250,7 +250,7 @@ last M33 commit message or `m33-verification.txt` for the resolved findings._
 - **No cascades / far-field**: out of scope and unchanged.
 - **Performance variance**: the normal-camera settle worst frame is higher in the M33 runs;
   p95/p99, river settle and draw counts improve. No sustained FPS regression was measured.
-- **Spawn clearing**: the starter house now clears a 9×9 opening. This is a playability fix
+- **Spawn clearing**: the starter house now clears a 7×7 opening. This is a playability fix
   for the denser canopy, not a vegetation rule.
 - **No new tree assets/models**; this is a placement and density pass on the existing art.
 

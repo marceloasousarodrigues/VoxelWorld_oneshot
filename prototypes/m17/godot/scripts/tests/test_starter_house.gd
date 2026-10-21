@@ -41,6 +41,21 @@ func run(h: TestHarness) -> void:
 		"the spawn foot cell is clear")
 	h.eq(world.get_block(Vector3i(spawn.x, height + 2, spawn.y)), BlockDB.AIR,
 		"the spawn head cell is clear")
+	# The spawn opening removes vegetation, never the solid terrain below it.
+	var elevated_columns := 0
+	var removed_surface := 0
+	for dz in range(-3, 4):
+		for dx in range(-3, 4):
+			var x := spawn.x + dx
+			var z := spawn.y + dz
+			var surface_height := world.generator.height_at(x, z)
+			if surface_height <= height:
+				continue
+			elevated_columns += 1
+			if world.get_block(Vector3i(x, surface_height, z)) == BlockDB.AIR:
+				removed_surface += 1
+	h.greater(float(elevated_columns), 0.0, "the spawn opening covers sloped ground")
+	h.eq(removed_surface, 0, "the spawn opening does not cut solid terrain")
 
 	# The house is ordinary recorded edits, so it saves and streams like player work.
 	h.greater(float(world.edits.size()), 100.0, "the starter house is recorded as player edits")

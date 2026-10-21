@@ -247,21 +247,28 @@ func _main() -> void:
 	var feet_fraction: float = landed.y - floorf(landed.y)
 	_check(feet_fraction < 0.2 or feet_fraction > 0.8,
 		"the player rests on a block boundary, not sunk into the terrain (fraction %.3f)" % feet_fraction)
+	# The close-range creature ray uses a flat interaction pad away from the
+	# starter cottage, so generated vegetation/slope cannot hide the target.
+	_prepare_test_pad(Vector2i(24, 24), 6)
 	# Exercise the creature damage/death/drop path through the real scene node and
 	# game inventory integration (three separate player attacks, one drop).
 	var meat_before: int = _game.inventory.count_of(ItemDB.RAW_MEAT)
 	var hide_before: int = _game.inventory.count_of(ItemDB.HIDE)
 	var oak_before: int = _game.inventory.count_of(BlockDB.OAK_LOG)
 	player.flying = true
-	player.teleport_to(landed)
+	# Use the flat interaction pad for the close-range creature ray.  Terrain and
+	# vegetation around the natural spawn are allowed to vary; the pad keeps this
+	# check about target priority, not about whether a slope blocks the ray.
+	player.teleport_to(Vector3(24.5, float(_test_pad_y) + 1.05, 24.5))
 	player.look_yaw(0.0)
 	player.look_pitch(-25.0)
 	await physics_frame
+	await process_frame
 	# Place the test target on the actual camera ray. Terrain profiles can change
 	# the settled player height; a fixed downward offset can put a close target
 	# below the ray or behind a voxel and make a failed attack loop forever.
 	var ray_forward: Vector3 = -player.camera.global_basis.z
-	var creature_position: Vector3 = player.camera.global_position + ray_forward * 1.8 - Vector3(0.0, 0.45, 0.0)
+	var creature_position: Vector3 = player.camera.global_position + ray_forward * 1.8
 	var creature_state := {"id": 9001, "species": "boar", "position": creature_position,
 		"health": CreatureDB.health("boar"), "alive": true, "wander": Vector3.ZERO, "key": "integration-boar"}
 	var test_creature = CreatureScript.new()
@@ -287,7 +294,8 @@ func _main() -> void:
 
 	# Hostile creatures: contact damage, player combat and loot through the real
 	# scene node and game inventory integration.
-	var hostile_state := {"id": 9100, "species": "grunt", "position": landed + Vector3(0.0, 0.0, -0.9),
+	var hostile_state := {"id": 9100, "species": "grunt",
+		"position": player.global_position + Vector3(0.0, 0.0, -0.9),
 		"health": HostileModel.HIT_POINTS, "alive": true, "key": "integration-grunt"}
 	var test_hostile = HostileScript.new()
 	test_hostile.configure(hostile_state, _game.world, player)
