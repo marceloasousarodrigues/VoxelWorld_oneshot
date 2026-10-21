@@ -8,6 +8,7 @@ extends SceneTree
 
 const SEA := WorldGen.SEA_LEVEL
 const LOWLAND_CANOPY_BOX := Rect2i(192, 256, 64, 64)
+const LOWLAND_BOX := Rect2i(200, 280, 48, 24)
 
 var _generator: WorldGen
 
@@ -54,6 +55,7 @@ func _initialize() -> void:
 	_report_v4_cells()
 	for keep: int in [4, 5]:
 		_simulate_grove_thin(LOWLAND_CANOPY_BOX, keep, 9, 0.34, 2)
+		_simulate_grove_thin(LOWLAND_BOX, keep, 9, 0.34, 2)
 		_simulate_grove_thin(LOWLAND_CANOPY_BOX, keep, 9, 0.20, 2)
 		_simulate_global(2, 2, keep, 9, 0.34)
 	quit(0)
@@ -530,7 +532,7 @@ func _simulate_grove_thin(box: Rect2i, keep: int, out_of: int, grove_patch: floa
 			else:
 				tree = _generator._pine(x, z, height)
 			trees.append({"x": x, "z": z, "tree": tree, "r": _crown_radius(tree)})
-	_report_tree_set("SIMGROVE v5radii keep=%d/%d grove=%.2f" % [keep, out_of, grove_patch], box, trees)
+	_report_tree_set("SIMGROVE v5radii box=%s keep=%d/%d grove=%.2f" % [box, keep, out_of, grove_patch], box, trees)
 
 
 func _report_v4_cells() -> void:
@@ -800,13 +802,40 @@ func _report_tree_set(label: String, box: Rect2i, trees: Array[Dictionary]) -> v
 	for component: int in components:
 		if component >= 20:
 			large_components += 1
-	print("%s trees=%d coverage=%.3f open=%.3f multi=%.3f triple=%.3f spacing_p50=%.2f components=%d largest=%d large20=%d" % [
+	var open_cells := {}
+	for z in range(box.position.y, box.end.y):
+		for x in range(box.position.x, box.end.x):
+			if _generator.biome_at(x, z) != WorldGen.Biome.FOREST:
+				continue
+			var cell := Vector2i(x, z)
+			if int(counts.get(cell, 0)) == 0:
+				open_cells[cell] = true
+	var open_seen := {}
+	var open_components: Array[int] = []
+	for cell: Vector2i in open_cells:
+		if open_seen.has(cell):
+			continue
+		var stack: Array[Vector2i] = [cell]
+		open_seen[cell] = true
+		var count := 0
+		while not stack.is_empty():
+			var current: Vector2i = stack.pop_back()
+			count += 1
+			for offset: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var neighbour: Vector2i = current + offset
+				if open_cells.has(neighbour) and not open_seen.has(neighbour):
+					open_seen[neighbour] = true
+					stack.append(neighbour)
+		open_components.append(count)
+	open_components.sort()
+	print("%s trees=%d coverage=%.3f open=%.3f multi=%.3f triple=%.3f spacing_p50=%.2f components=%d largest=%d large20=%d largest_open=%d" % [
 		label, trees.size(), float(trees.size()) / maxf(1.0, float(forest_columns)),
 		float(open) / maxf(1.0, float(forest_columns)),
 		float(multi) / maxf(1.0, float(forest_columns)),
 		float(triple) / maxf(1.0, float(forest_columns)),
 		_percentile(nearest, 0.50), components.size(),
-		components[components.size() - 1] if not components.is_empty() else 0, large_components])
+		components[components.size() - 1] if not components.is_empty() else 0, large_components,
+		open_components[open_components.size() - 1] if not open_components.is_empty() else 0])
 
 
 func _spacing_wins(x: int, z: int, cell: int, min_distance: int) -> bool:

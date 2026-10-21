@@ -127,7 +127,8 @@ The diagnostic simulation (`m34_canopy_probe.gd`, seed 17017) predicts:
 | Metric | v4 | v5 simulation |
 |---|---|---|
 | Global forest tree-column coverage | 9.54% | 5.55% |
-| Lowland canopy box tree coverage | 9.49% | 5.1% |
+| Dense `LOWLAND_BOX` tree coverage | 11.03% | 9.6% |
+| Open-woodland canopy box tree coverage | 9.49% | 5.1% |
 | Full forest-cell p50 / p90 / max | 8.91% / 18.94% / 25.59% | 4.44% / 10.38% / 25.59% |
 | Canopy box open / 2+ / 3+ | 34.0% / 61.6% / 57.6% | 43.6% / 46.5% / 36.3% |
 | Canopy box median nearest-trunk distance | 1.41 | 2.00 |
@@ -153,9 +154,9 @@ For v5 broadleaf trees only:
 - No v5 broadleaf crown exceeds radius 3. The v4 maximum of 4 is removed for v5 only.
 - Pines keep their v4 conical tiers and radii.
 
-This keeps the chunky voxel vocabulary and the existing species, while reducing the normal
-horizontal reach from 5–6 blocks to 4–5 blocks (up to 6 with the rare two-block lean). It
-also produces a mixed canopy with smaller understory crowns and occasional larger oak
+This keeps the chunky voxel vocabulary and the existing species, while reducing the
+horizontal reach from 5–6 blocks to 4–5 blocks (canopy radius 3 + lean 1 + shelf 1 = 5).
+It also produces a mixed canopy with smaller understory crowns and occasional larger oak
 crowns instead of a field of identical wide domes.
 
 ### D4. Crown silhouette and height-class variation
@@ -166,8 +167,10 @@ crowns instead of a field of identical wide domes.
   taller/narrower, bottom-heavy and asymmetric variants. Every profile tapers to a narrow
   top instead of repeating a radius-2 plate at two consecutive top layers.
 - Radius 2 uses four deterministic profiles with an uneven shoulder and a one-block top.
-- The existing per-layer shelf and per-tree lean remain. v5 additionally allows a rare
-  two-block lean (about one tree in five) while staying inside `M32_TREE_PAD = 8`.
+- The existing per-layer shelf and per-tree lean remain at their v4 ±1 limits. v5 does
+  **not** add a two-block lean, so the maximum horizontal reach stays
+  `canopy radius 3 + lean 1 + shelf 1 = 5` and the crown-disc test (`canopy + 2`) matches
+  the actual geometry.
 - About one v5 broadleaf tree in three gets one extra leaf block above the normal top,
   producing a small emergent spire. This is a vertical silhouette cue, not a new tree
   model or a new block type.
@@ -179,7 +182,7 @@ v5 also introduces three deterministic broadleaf height classes:
 
 | Class | Share (open woodland) | Share (dense grove) | Effect |
 |---|---|---|---|
-| Emergent | ~12% | ~20% | trunk +2, extra top leaf, larger crown end of the radius range |
+| Emergent | ~12% | ~20% | trunk +2, extra top leaf (radius follows the species rule) |
 | Canopy | ~68% | ~55% | existing trunk height |
 | Understory | ~20% | ~25% | trunk −1, crown radius capped at 2 |
 
@@ -188,6 +191,10 @@ The minimum trunk remains at least four blocks, so no tree floats or becomes a s
 purpose is to break the flat, coplanar top surface in dense groves even where the canopy is
 closed: emergents and understory trees create readable layers and crown peaks. This is a
 height/shape variation on the existing tree model, not a new asset or block type.
+
+For v5 broadleaf trees the class is exposed as a `height_class` key in the `tree_at`
+dictionary (`0` canopy, `1` emergent, `2` understory). Placement code ignores the extra
+key; tests use it to verify the three classes exist without re-deriving the hash.
 
 All variation is a pure hash of world coordinates, tree top and generator seed. No mutable
 state, no per-frame work and no non-deterministic randomness is introduced.
@@ -230,7 +237,11 @@ M34 does not change:
   `SEA+44`, snow limit `SEA+38`). v5 crown radii are a separate, elevation-independent
   geometry rule; the density table itself is unchanged;
 - the v4 slope factor table;
-- the v4 river core `<1.25 × RIVER_BANK_LIMIT` exclusion and outer `1.25..1.55` thinning;
+- the v4 river core `<1.25 × RIVER_BANK_LIMIT` exclusion and outer `1.25..1.55` thinning.
+  The woodland thinning applies to forest candidates in the outer band too, so v5
+  river-outer coverage is measured on the actual generator; it must stay above the
+  existing 0.5% floor. If it does not, the outer-band factor is adjusted within the
+  existing rule rather than weakening the river core;
 - the v4 snow/mountain 0.6% per-column pine cap;
 - the v4 decoration clearing rule and high-ground decor thinning.
 
@@ -239,8 +250,8 @@ reappear on upper slopes and no summit tree carpet may return.
 
 ### D7. Chunk boundaries and save compatibility
 
-- `M32_TREE_PAD = 8` is unchanged. The v5 maximum horizontal reach is radius 3 + lean 2 +
-  shelf 1 = 6, inside the pad.
+- `M32_TREE_PAD = 8` is unchanged. The v5 maximum horizontal reach is radius 3 + lean 1 +
+  shelf 1 = 5, inside the pad.
 - Tree placement remains a pure function of `(seed, x, z, generator_version)`. The 2×2
   candidate cell and the woodland-thinning hash are world-aligned and work in negative
   coordinates with floor division.
@@ -272,9 +283,9 @@ and explicit thresholds. Existing v4 tests remain in place and must still pass.
    a different seed changes the layout.
 7. Lowland broadleaf trees contain at least two distinct canopy radii (2 and 3) with each
    radius represented by at least 5% of the sample, and no broadleaf canopy radius >3.
-8. Broadleaf trunk heights contain at least four distinct values, including at least one
-   emergent and one understory class; no arbitrary/unstable randomness is used (all values
-   reproduce across generator instances).
+8. Broadleaf trunk heights contain at least four distinct values; the `height_class` key
+   contains all three classes (canopy, emergent, understory) in the lowland sample; no
+   arbitrary/unstable randomness is used (all values reproduce across generator instances).
 
 ### 3.3 Crown overlap and spacing reduction
 
@@ -295,9 +306,12 @@ Compare v4 and v5:
 
 ### 3.4 Dense forest, composition and clearings
 
-13. `LOWLAND_BOX` forest tree-column coverage is >=4.5% and <=8.5%; the v5
-    `LOWLAND_CANOPY_BOX` crown union covers >=45% of forest columns (simulated 5.1% and
-    about 56%).
+13. `LOWLAND_BOX` is the dense lowland sample: forest tree-column coverage is >=8% and
+    <=13%, and its crown union covers >=55% of forest columns (simulated 9.6% and 63.2%;
+    v4 was 11.03%). `LOWLAND_CANOPY_BOX` is the open-woodland sample: forest tree-column
+    coverage is >=4.5% and <=8.5%, and its crown union covers >=45% of forest columns
+    (simulated 5.1% and 56.4%). This proves that dense lowland forest is preserved while
+    the open woodland gains gaps.
 14. **Full** 32×32 forest cells — cells with at least 512 all-column samples and at least
     256 forest columns, so edge slivers are excluded — use forest columns as the
     denominator. Require p50 <=8%, p90 >=9%, max >=18%, at least five full cells >=8%,
@@ -309,13 +323,15 @@ Compare v4 and v5:
 16. `vegetation_score < -0.16` forest columns still contain zero trees; designated clearing
     area remains >=20% of forest columns.
 17. `LOWLAND_CANOPY_BOX` still has >=100 clearing columns, a crown-free connected component
-    of >=200 columns, and >=50% of clearing columns outside every crown footprint.
+    of >=200 columns (simulated 726), and >=50% of clearing columns outside every crown
+    footprint.
 18. Dense grove columns (`forest_patch > 0.34`) still contain trees of at least three species
     and at least 10 trees in the existing generation sample. For every sampled forest
-    column with `forest_patch > 0.34`, v5 and v4 must return the same `tree_at` tree type
-    and base height; the woodland thinning is skipped in this class, so tree presence and
-    species cannot change. This directly proves that dense groves were not thinned, instead
-    of relying on an arbitrary dense-cell definition.
+    column with `forest_patch > 0.34`, v5 and v4 must return the same `tree_at` `type` and
+    `base` fields (not `base + height`, because v5 height classes intentionally change
+    `height`); the woodland thinning is skipped in this class, so tree presence and species
+    cannot change. This directly proves that dense groves were not thinned, instead of
+    relying on an arbitrary dense-cell definition.
 
 The thresholds in tests 9–15 are derived from the committed diagnostic simulation, not
 from an implemented v5 generator. Before pinning them, run the actual v5 probe and record
@@ -395,6 +411,7 @@ Per-shot checklist:
 - dense groves still look lush, not uniformly sparse;
 - clearings expose terrain/undergrowth and have irregular edges;
 - no circular, grid-like or straight vegetation boundaries;
+- open woodland does not show a 2-block checkerboard or salt-and-pepper tree speckle;
 - no broadleaf on the upper mountain, no summit tree carpet;
 - river and banks remain readable and unchanged.
 
@@ -423,8 +440,9 @@ before completion.
 - **Grid regularity**: the 2×2 candidate jitter, per-tree lean/shelf and varied profiles
   break the cell pattern; visual checklist rejects straight lines.
 - **Still-continuous canopy**: if the elevated view remains a slab, reduce the broadleaf
-  maximum to radius 2 in dense groves, trim the outer ring further, or lower the woodland
-  keep fraction to 4/9. Re-measure the crown-union floor; do not blanket-thin the forest.
+  maximum to radius 2 in dense groves, trim the outer ring further, or adjust the woodland
+  keep fraction within the 4/9–5/9 tuning range. Re-measure the crown-union floor; do not
+  blanket-thin the forest.
 - **Dense groves stay closed by design**: dense groves keep v4 candidate density, so their
   canopy may remain connected. Height classes, smaller crowns and pointed profiles must
   make individual crowns readable inside that canopy; the elevated captures decide whether
