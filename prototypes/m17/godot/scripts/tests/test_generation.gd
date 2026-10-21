@@ -244,7 +244,10 @@ func run(h: TestHarness) -> void:
 				continue
 			var patch: float = generator._forest_patches.get_noise_2d(x, z)
 			var tree := generator.tree_at(x, z)
-			if patch < clearing_threshold:
+			var is_clearing := patch < clearing_threshold
+			if generator.terrain_version >= WorldGen.M33_VERSION:
+				is_clearing = generator._vegetation_score(x, z) < WorldGen.M33_CLEARING_SCORE
+			if is_clearing:
 				forest_clearings += 1
 				if int(tree["type"]) != WorldGen.TreeType.NONE:
 					open_forest_columns_with_trees += 1

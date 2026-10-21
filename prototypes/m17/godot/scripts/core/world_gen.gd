@@ -21,7 +21,8 @@ const LEGACY_VERSION := 0
 ## and 2 must keep producing their pinned output.
 const WILDERNESS_VERSION := 2
 const M32_VERSION := 3
-const CURRENT_VERSION := 3
+const M33_VERSION := 4
+const CURRENT_VERSION := 4
 const TREE_PAD := 5
 ## Wide enough for a radius-4 crown with one block of lean and one of shelf offset.
 const WILDERNESS_TREE_PAD := 7
@@ -39,6 +40,13 @@ const M32_MOUNTAIN_TERRACE_SIZE := 3
 ## summit profile is preserved above this floor.
 const M32_MOUNTAIN_FLOOR := SEA_LEVEL + 46
 const RIVER_BANK_LIMIT := 0.120
+## M33 vegetation ecology thresholds (version 4 only).
+const M33_BROADLEAF_LIMIT := SEA_LEVEL + 30
+const M33_CONIFER_LIMIT := SEA_LEVEL + 44
+const M33_SNOW_TREE_LIMIT := SEA_LEVEL + 38
+const M33_CLEARING_SCORE := -0.16
+const M33_RIVER_CORE := 1.25
+const M33_RIVER_OUTER := 1.55
 
 ## Structures are placed one per "region" of this many blocks, at a deterministic
 ## offset inside it.  `STRUCTURE_MARGIN` keeps a footprint inside its own region,
@@ -90,6 +98,7 @@ var _valley: FastNoiseLite
 var _river: FastNoiseLite
 var _forest_patches: FastNoiseLite
 var _flower_patches: FastNoiseLite
+var _woodland: FastNoiseLite
 var _detail: FastNoiseLite
 var _temperature: FastNoiseLite
 var _humidity: FastNoiseLite
@@ -118,6 +127,10 @@ func _init(world_seed_value: int = 17017, terrain_version_value: int = CURRENT_V
 			# Small deterministic relief that keeps the terraces from forming
 			# perfectly straight treads across a whole hillside.
 			_detail = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.047, 2, 0.5)
+		if terrain_version >= M33_VERSION:
+			# Second low-frequency field that breaks forest-patch thresholds into
+			# irregular clearings and woodland instead of one contour-shaped edge.
+			_woodland = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.007, 2, 0.55)
 	_temperature = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0016, 2, 0.5)
 	_humidity = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0021, 2, 0.5)
 	_cave_a = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.026, 2, 0.5)
@@ -133,6 +146,11 @@ func _is_wilderness() -> bool:
 ## True for generator version 3 and later (the M32 landscape pass).
 func _is_m32() -> bool:
 	return terrain_version >= M32_VERSION
+
+
+## True for generator version 4 and later (the M33 vegetation ecology pass).
+func _is_m33() -> bool:
+	return terrain_version >= M33_VERSION
 
 
 ## Horizontal reach of a tree's crown from its trunk, in blocks.  Version 0 and 1
@@ -456,6 +474,8 @@ func tree_at(x: int, z: int) -> Dictionary:
 	var biome := _world_biome(x, z)
 	if height <= SEA_LEVEL:
 		return {"type": TreeType.NONE}
+	if _is_m33():
+		return _biome_tree_v4(x, z, height, biome)
 	if _is_wilderness() and biome == Biome.FOREST:
 		return _forest_canopy_tree(x, z, height)
 	var roll := _hash2(x, z, 31337) % 1000
@@ -524,6 +544,140 @@ func tree_at(x: int, z: int) -> Dictionary:
 				return _pine(x, z, height)
 		Biome.DESERT:
 			if roll < 12:
+				return {"type": TreeType.CACTUS, "base": height + 1, "height": 1 + _hash2(x, z, 991) % 3}
+	return {"type": TreeType.NONE}
+
+
+## M33 two-scale density field.  The forest patch gives broad forest regions; the
+## slower woodland field bends their boundaries into irregular clearings.
+func _vegetation_score(x: int, z: int) -> float:
+	# The small positive bias keeps real woodland/forest above the clearing
+	# threshold while still leaving roughly a fifth of the forest open.
+	return 0.68 * _forest_patches.get_noise_2d(x, z) + 0.32 * _woodland.get_noise_2d(x, z) + 0.04
+
+
+## Elevation multiplier applied to the 0.95 forest candidate probability.
+func _elevation_factor(height: int, broadleaf: bool) -> float:
+	var delta := height - SEA_LEVEL
+	if broadleaf:
+		if delta <= 18:
+			return 1.0
+		if delta <= 24:
+			return lerpf(1.0, 0.55, float(delta - 18) / 6.0)
+		if delta <= 27:
+			return lerpf(0.55, 0.15, float(delta - 24) / 3.0)
+		if delta <= 30:
+			return lerpf(0.15, 0.0, float(delta - 27) / 3.0)
+		return 0.0
+	if delta <= 18:
+		return 1.0
+	if delta <= 24:
+		return lerpf(1.0, 0.80, float(delta - 18) / 6.0)
+	if delta <= 27:
+		return lerpf(0.80, 0.45, float(delta - 24) / 3.0)
+	if delta <= 30:
+		return lerpf(0.45, 0.25, float(delta - 27) / 3.0)
+	if delta <= 40:
+		return lerpf(0.25, 0.08, float(delta - 30) / 10.0)
+	if delta <= 44:
+		return lerpf(0.06, 0.02, float(delta - 40) / 4.0)
+	return 0.0
+
+
+func _slope_factor(slope: int, broadleaf: bool) -> float:
+	var band := clampi(slope, 0, 4)
+	if broadleaf:
+		return [1.0, 1.0, 0.65, 0.15, 0.0][band]
+	return [1.0, 1.0, 0.80, 0.40, 0.05][band]
+
+
+## Candidate probability for a v4 forest tree.  A candidate is chosen once per
+## 2x2 cell, so expected column coverage is roughly this value / 4.
+func _v4_tree_density(height: int, slope: int, broadleaf: bool, score: float) -> float:
+	if broadleaf and (height > M33_BROADLEAF_LIMIT or slope >= 4):
+		return 0.0
+	if not broadleaf and height > M33_CONIFER_LIMIT:
+		return 0.0
+	var base := 0.95 * smoothstep(M33_CLEARING_SCORE, 0.0, score)
+	return base * _elevation_factor(height, broadleaf) * _slope_factor(slope, broadleaf)
+
+
+## Broadleaf share of the candidate pool.  It fades out completely by SEA+30.
+func _v4_broadleaf_share(height: int, patch: float) -> float:
+	var delta := height - SEA_LEVEL
+	var share := 0.80
+	if delta > 18:
+		share = lerpf(0.80, 0.0, clampf(float(delta - 18) / 12.0, 0.0, 1.0))
+	if patch > 0.34:
+		share -= 0.10
+	elif patch < 0.02:
+		share += 0.05
+	return clampf(share, 0.0, 1.0)
+
+
+func _forest_canopy_tree_v4(x: int, z: int, height: int) -> Dictionary:
+	var cell_x := floori(float(x) / CANOPY_CELL)
+	var cell_z := floori(float(z) / CANOPY_CELL)
+	var candidate_x := cell_x * CANOPY_CELL + _hash2(cell_x, cell_z, 4711) % CANOPY_CELL
+	var candidate_z := cell_z * CANOPY_CELL + _hash2(cell_x, cell_z, 4712) % CANOPY_CELL
+	if x != candidate_x or z != candidate_z:
+		return {"type": TreeType.NONE}
+	var river_distance := _river_distance(x, z)
+	if river_distance < RIVER_BANK_LIMIT * M33_RIVER_CORE:
+		return {"type": TreeType.NONE}
+	var river_outer := river_distance < RIVER_BANK_LIMIT * M33_RIVER_OUTER
+	var score := _vegetation_score(x, z)
+	if score < M33_CLEARING_SCORE:
+		return {"type": TreeType.NONE}
+	var patch := _forest_patches.get_noise_2d(x, z)
+	var slope := _column_slope(x, z, height)
+	var species_roll := _hash2(x, z, 4714) % 100
+	var broadleaf := float(species_roll) < _v4_broadleaf_share(height, patch) * 100.0
+	if broadleaf and (height > M33_BROADLEAF_LIMIT or slope >= 4):
+		broadleaf = false
+	var density := _v4_tree_density(height, slope, broadleaf, score)
+	if river_outer:
+		if slope > 1:
+			return {"type": TreeType.NONE}
+		density *= 0.25
+	if density <= 0.0:
+		return {"type": TreeType.NONE}
+	if _hash2(x, z, 4713) % 1000 >= int(density * 1000.0):
+		return {"type": TreeType.NONE}
+	if broadleaf:
+		var leaf_roll := _hash2(x, z, 4715) % 100
+		if leaf_roll < 75:
+			return _oak(x, z, height)
+		if leaf_roll < 95:
+			return _birch(x, z, height)
+		return _blossom(x, z, height)
+	return _pine(x, z, height)
+
+
+## Non-forest v4 vegetation.  Grassland and savanna keep clumped, sparse trees;
+## snow and mountain use a low pine cap below their treeline.
+func _biome_tree_v4(x: int, z: int, height: int, biome: int) -> Dictionary:
+	if height <= SEA_LEVEL:
+		return {"type": TreeType.NONE}
+	if biome == Biome.FOREST:
+		return _forest_canopy_tree_v4(x, z, height)
+	var slope := _column_slope(x, z, height)
+	var roll := _hash2(x, z, 31337) % 1000
+	match biome:
+		Biome.PLAINS:
+			if height <= SEA_LEVEL + 18 and slope <= 1 and roll < 8:
+				return _oak(x, z, height) if roll % 3 != 0 else _birch(x, z, height)
+		Biome.SAVANNA:
+			if height <= SEA_LEVEL + 20 and slope <= 1 and roll < 15:
+				return _oak(x, z, height)
+		Biome.SNOW:
+			if height < M33_SNOW_TREE_LIMIT and slope <= 2 and roll < 6:
+				return _pine(x, z, height)
+		Biome.MOUNTAIN:
+			if height < M33_CONIFER_LIMIT and slope <= 2 and roll < 6:
+				return _pine(x, z, height)
+		Biome.DESERT:
+			if slope <= 1 and roll < 12:
 				return {"type": TreeType.CACTUS, "base": height + 1, "height": 1 + _hash2(x, z, 991) % 3}
 	return {"type": TreeType.NONE}
 
@@ -615,6 +769,12 @@ func _oak(x: int, z: int, ground: int) -> Dictionary:
 		# different heights so the forest does not become a flat canopy carpet.
 		trunk = 5 + _hash2(x, z, 4242) % 4 + _hash2(x, z, 4243) % 3
 		canopy = 3 + _hash2(x, z, 555) % 2
+	if _is_m33():
+		var delta := ground - SEA_LEVEL
+		if delta > 24:
+			canopy = 2
+		elif delta > 18:
+			canopy = maxi(2, canopy - 1)
 	return {"type": TreeType.OAK, "base": ground + 1, "height": trunk, "canopy": canopy}
 
 
@@ -624,12 +784,24 @@ func _birch(x: int, z: int, ground: int) -> Dictionary:
 	var canopy := 2 if terrain_version == LEGACY_VERSION else 2 + _hash2(x, z, 556) % 2
 	if _is_m32():
 		canopy = 3
+	if _is_m33():
+		var delta := ground - SEA_LEVEL
+		if delta > 24:
+			canopy = 2
+		elif delta > 18:
+			canopy = maxi(2, canopy - 1)
 	return {"type": TreeType.BIRCH, "base": ground + 1, "height": trunk, "canopy": canopy}
 
 
 func _blossom(x: int, z: int, ground: int) -> Dictionary:
 	var trunk := 5 + _hash2(x, z, 4666) % 2
 	var canopy := 3 if terrain_version == LEGACY_VERSION else 3 + _hash2(x, z, 557) % 2
+	if _is_m33():
+		var delta := ground - SEA_LEVEL
+		if delta > 24:
+			canopy = 2
+		elif delta > 18:
+			canopy = maxi(2, canopy - 1)
 	return {"type": TreeType.BLOSSOM, "base": ground + 1, "height": trunk, "canopy": canopy}
 
 
@@ -645,6 +817,9 @@ func decoration_at(x: int, z: int, surface_height: int, surface_block: int, biom
 	if surface_height <= SEA_LEVEL:
 		return BlockDB.AIR
 	var roll := _hash2(x, z, 6151) % 1000
+	if _is_m33() and surface_height > SEA_LEVEL + 30:
+		if surface_height > SEA_LEVEL + 40 or roll % 4 != 0:
+			return BlockDB.AIR
 	match biome:
 		Biome.FOREST:
 			if terrain_version == LEGACY_VERSION:
@@ -669,6 +844,9 @@ func decoration_at(x: int, z: int, surface_height: int, surface_block: int, biom
 			var river_distance := _river_distance(x, z)
 			var clearing_threshold := -0.32 if _is_m32() else -0.24
 			var clearing := forest_patch < clearing_threshold or river_distance < RIVER_BANK_LIMIT * 1.25
+			if _is_m33():
+				clearing = _vegetation_score(x, z) < M33_CLEARING_SCORE \
+					or river_distance < RIVER_BANK_LIMIT * M33_RIVER_CORE
 			var flower_patch: float = _flower_patches.get_noise_2d(x, z)
 			if clearing and flower_patch > 0.10:
 				if roll < 120:

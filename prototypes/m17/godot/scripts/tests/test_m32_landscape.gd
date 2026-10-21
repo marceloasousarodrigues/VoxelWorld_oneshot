@@ -10,6 +10,7 @@ extends RefCounted
 const PINNED_LEGACY_HASH := 3214517825889907206
 const PINNED_M30_HASH := 5947596836865492245
 const PINNED_M31_HASH := 8397584315617538769
+const PINNED_M32_HASH := 8802792587028581708
 ## The river cross-section measured by `m32_river_probe.gd`: z=152 cuts a narrow
 ## channel whose surface is at sea level.
 const RIVER_Z := 152
@@ -33,10 +34,10 @@ func _region_hash(version: int) -> int:
 func run(h: TestHarness) -> void:
 	h.section("M32 generator versions")
 	h.eq(WorldGen.M32_VERSION, 3, "the M32 landscape generator is version 3")
-	h.eq(WorldGen.CURRENT_VERSION, 3, "new worlds use the M32 generator")
-	for version in [0, 1, 2, 3]:
+	h.eq(WorldGen.CURRENT_VERSION, 4, "new worlds use the current M33 generator")
+	for version in [0, 1, 2, 3, 4]:
 		h.check(WorldGen.is_supported_version(version), "version %d remains loadable" % version)
-	h.check(not WorldGen.is_supported_version(4), "a future version is rejected")
+	h.check(not WorldGen.is_supported_version(5), "a future version is rejected")
 	h.check(not WorldGen.is_supported_version(-1), "a negative version is rejected")
 
 	h.eq(_region_hash(0), PINNED_LEGACY_HASH,
@@ -45,6 +46,8 @@ func run(h: TestHarness) -> void:
 		"version 1 terrain is byte-identical to the pinned M30 output")
 	h.eq(_region_hash(2), PINNED_M31_HASH,
 		"version 2 terrain is byte-identical to the pinned M31 output")
+	h.eq(_region_hash(3), PINNED_M32_HASH,
+		"version 3 generation is byte-identical to the pinned M32 output")
 	h.check(_region_hash(3) != PINNED_M31_HASH, "version 3 is a distinct landscape")
 
 	# M31's three-block terraces stay intact on its highlands and on the v3

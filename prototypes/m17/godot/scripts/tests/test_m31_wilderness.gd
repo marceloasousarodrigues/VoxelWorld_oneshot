@@ -32,7 +32,8 @@ func run(h: TestHarness) -> void:
 	h.check(WorldGen.is_supported_version(1), "version 1 (M30) remains a supported save")
 	h.check(WorldGen.is_supported_version(2), "version 2 is a supported save")
 	h.check(WorldGen.is_supported_version(3), "version 3 (M32) is a supported save")
-	h.check(not WorldGen.is_supported_version(4), "a future version is rejected")
+	h.check(WorldGen.is_supported_version(4), "version 4 (M33) is a supported save")
+	h.check(not WorldGen.is_supported_version(WorldGen.CURRENT_VERSION + 1), "a future version is rejected")
 	h.check(not WorldGen.is_supported_version(-1), "a negative version is rejected")
 
 	h.eq(_region_hash(WorldGen.LEGACY_VERSION), PINNED_LEGACY_HASH,

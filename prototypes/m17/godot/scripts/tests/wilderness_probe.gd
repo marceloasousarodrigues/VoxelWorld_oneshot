@@ -119,7 +119,7 @@ func _print_seam(seed_value: int) -> void:
 ## Full-resolution tree coverage of forest columns for versions 1 and 2, over a
 ## 256x256 window that contains forest, river corridors and clearings.
 func _print_density(seed_value: int) -> void:
-	for version in [1, WorldGen.CURRENT_VERSION]:
+	for version in [1, 2, 3, WorldGen.CURRENT_VERSION]:
 		var generator := WorldGen.new(seed_value, version)
 		var forest := 0
 		var trees := 0
@@ -209,7 +209,7 @@ func _print_points(seed_value: int, version: int, points: String) -> void:
 ## Fingerprints of a fixed chunk block for each generator version, so legacy and
 ## M30 output can be pinned by tests before and after generator changes.
 func _print_fingerprints(seed_value: int) -> void:
-	for version in [WorldGen.LEGACY_VERSION, 1, 2, WorldGen.CURRENT_VERSION]:
+	for version in [WorldGen.LEGACY_VERSION, 1, 2, 3, WorldGen.CURRENT_VERSION]:
 		var world := VoxelWorld.new(seed_value, version)
 		for chunk_z in range(-2, 3):
 			for chunk_x in range(-2, 3):

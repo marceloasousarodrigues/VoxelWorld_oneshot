@@ -87,7 +87,7 @@ Version pins after implementation:
 - v1 `5947596836865492245`
 - v2 `8397584315617538769`
 - v3 `8802792587028581708` (measured at `e9120bb`)
-- v4 a new pinned hash measured after the thresholds are final
+- v4 `5539560940374133755` (measured after the M33 thresholds were final)
 
 `test_m31_wilderness.gd`, `test_m32_landscape.gd` and `wilderness_probe.gd` version
 assertions must use `CURRENT_VERSION` / `CURRENT_VERSION + 1` rather than hard-coded 4/5 where
@@ -99,18 +99,20 @@ Keep `_forest_patches` and add a v4-only `_woodland` noise (`TYPE_SIMPLEX_SMOOTH
 frequency `0.007`, 2 octaves, gain 0.55). Define:
 
 ```
-vegetation_score(x,z) = 0.68 * forest_patches(x,z) + 0.32 * woodland(x,z)
+vegetation_score(x,z) = 0.68 * forest_patches(x,z) + 0.32 * woodland(x,z) + 0.04
 ```
 
-This is still a local, deterministic noise evaluation. The second field breaks the single
-threshold line into irregular lobes so clearings do not become circular or grid-aligned.
-No global search or per-frame vegetation work is introduced.
+The small positive bias keeps real woodland/forest above the clearing threshold while still
+leaving roughly a fifth of the forest open in the measured sample. This is still a local,
+deterministic noise evaluation. The second field breaks the single threshold line into
+irregular lobes so clearings do not become circular or grid-aligned. No global search or
+per-frame vegetation work is introduced.
 
 Density is expressed as **candidate probability** (one candidate per 2×2 cell, so expected
 column coverage is roughly probability / 4):
 
 ```
-base_density = 0.95 * smoothstep(-0.16, 0.22, vegetation_score)
+base_density = 0.95 * smoothstep(-0.16, 0.0, vegetation_score)
 density = base_density * elevation_factor * slope_factor
 if vegetation_score < -0.16: density = 0
 ```
@@ -253,8 +255,9 @@ Fixed regions:
 4. **Summit sparsity** — all columns above `SEA+40` (N>=100): tree coverage <2%, broadleaf 0;
    all columns above `SEA+44`: zero trees.
 5. **Lowland density** — `LOWLAND_BOX`: forest tree-column coverage >=6% and <=20%.
-6. **Spatial variation** — global 32×32 cells: p10 <=2%, p50 <=6%, p90 >=8%; at least five
-   cells <=1% and at least five cells >=8%. At least ten cells are required.
+6. **Spatial variation** — global 32×32 cells: p10 <=2%, p50 <=5%, p90 >=7%, max >=12%;
+   at least five cells <=1%, at least five cells >=8%, and at least three cells >=12%.
+   At least ten cells are required.
 7. **Steep terrain** — global forest columns below `SEA+30`, slope <=1 vs slope >=3, each
    N>=100: steep tree coverage <50% of flat coverage.
 8. **Clearings** — global forest columns: `vegetation_score < -0.16` has zero trunks/trees

@@ -22,6 +22,7 @@ const MODULES := [
 	"res://scripts/tests/test_generation.gd",
 	"res://scripts/tests/test_m31_wilderness.gd",
 	"res://scripts/tests/test_m32_landscape.gd",
+	"res://scripts/tests/test_m33_vegetation.gd",
 	"res://scripts/tests/test_structures.gd",
 	"res://scripts/tests/test_npcs.gd",
 	"res://scripts/tests/test_raids.gd",

@@ -118,7 +118,7 @@ func _start_worker() -> void:
 func _start_generation_worker() -> void:
 	if not threaded_generation or world == null or _gen_thread != null:
 		return
-	_gen_worker_gen = WorldGen.new(world.world_seed)
+	_gen_worker_gen = WorldGen.new(world.world_seed, world.generator.terrain_version)
 	_gen_busy_ms = 0.0
 	_gen_stopping = false
 	_gen_thread = Thread.new()

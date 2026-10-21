@@ -24,6 +24,7 @@ func _initialize() -> void:
 			"--step":
 				step = maxi(1, value.to_int())
 	var generator := WorldGen.new(17017, version)
+	var v4 := version >= WorldGen.M33_VERSION
 	print("M33_VEG_PROBE version=%d radius=%d step=%d sea=%d" % [version, radius, step, SEA])
 	var bands := {}
 	var bands_total := {}
@@ -33,6 +34,7 @@ func _initialize() -> void:
 	var biomes_total := {}
 	var species := {}
 	var cells := {}
+	var scores: Array[float] = []
 	var total := 0
 	var trees := 0
 	var forest := 0
@@ -44,6 +46,10 @@ func _initialize() -> void:
 	var summit_broadleaf := 0
 	var river_trees := 0
 	var river_columns := 0
+	var river_core_trees := 0
+	var river_core_columns := 0
+	var river_outer_trees := 0
+	var river_outer_columns := 0
 	var clearing_columns := 0
 	var clearing_trees := 0
 	for z in range(-radius, radius + 1, step):
@@ -78,13 +84,27 @@ func _initialize() -> void:
 					summit_any += 1
 			if biome == WorldGen.Biome.FOREST:
 				forest += 1
+				if v4:
+					scores.append(generator._vegetation_score(x, z))
 				if is_tree:
 					forest_trees += 1
-			if generator._river_distance(x, z) < WorldGen.RIVER_BANK_LIMIT * 1.55:
+			var river_distance := generator._river_distance(x, z)
+			if river_distance < WorldGen.RIVER_BANK_LIMIT * 1.55:
 				river_columns += 1
 				if is_tree:
 					river_trees += 1
-			if biome == WorldGen.Biome.FOREST and generator._forest_patches.get_noise_2d(x, z) < -0.32:
+			if river_distance < WorldGen.RIVER_BANK_LIMIT * 1.25:
+				river_core_columns += 1
+				if is_tree:
+					river_core_trees += 1
+			elif river_distance < WorldGen.RIVER_BANK_LIMIT * 1.55:
+				river_outer_columns += 1
+				if is_tree:
+					river_outer_trees += 1
+			var clearing := generator._forest_patches.get_noise_2d(x, z) < -0.32
+			if v4:
+				clearing = generator._vegetation_score(x, z) < WorldGen.M33_CLEARING_SCORE
+			if biome == WorldGen.Biome.FOREST and clearing:
 				clearing_columns += 1
 				if is_tree:
 					clearing_trees += 1
@@ -101,19 +121,27 @@ func _initialize() -> void:
 	print("BIOME_BANDS %s" % _ratio_table(biomes, biomes_total))
 	print("HIGH broadleaf_above_sea+30=%d any_above_30=%d summit_broadleaf_above_sea+40=%d summit_any=%d" % [
 		high_broadleaf, high_any, summit_broadleaf, summit_any])
-	print("RIVER columns=%d trees=%d coverage=%.4f" % [river_columns, river_trees,
-		float(river_trees) / maxf(1.0, river_columns)])
+	print("RIVER columns=%d trees=%d coverage=%.4f core=%d/%d=%.4f outer=%d/%d=%.4f" % [
+		river_columns, river_trees, float(river_trees) / maxf(1.0, river_columns),
+		river_core_trees, river_core_columns, float(river_core_trees) / maxf(1.0, river_core_columns),
+		river_outer_trees, river_outer_columns, float(river_outer_trees) / maxf(1.0, river_outer_columns)])
 	print("CLEARING columns=%d trees=%d coverage=%.4f" % [clearing_columns, clearing_trees,
 		float(clearing_trees) / maxf(1.0, clearing_columns)])
 	var coverages: Array[float] = []
 	var empty_cells := 0
 	var full_cells := 0
+	var dense_cells := 0
+	var very_dense_cells := 0
 	for cell: Vector2i in cells:
 		var entry: Dictionary = cells[cell]
 		var coverage := float(entry["trees"]) / maxf(1.0, float(entry["columns"]))
 		coverages.append(coverage)
 		if coverage <= 0.01:
 			empty_cells += 1
+		if coverage >= 0.08:
+			dense_cells += 1
+		if coverage >= 0.12:
+			very_dense_cells += 1
 		if coverage >= 0.60:
 			full_cells += 1
 	coverages.sort()
@@ -121,9 +149,18 @@ func _initialize() -> void:
 	for value: float in coverages:
 		mean += value
 	mean /= maxf(1.0, coverages.size())
-	print("LOCAL_CELLS count=%d mean=%.4f p10=%.4f p50=%.4f p90=%.4f empty=%d full60=%d" % [
+	print("LOCAL_CELLS count=%d mean=%.4f p10=%.4f p50=%.4f p90=%.4f max=%.4f empty=%d dense8=%d dense12=%d full60=%d" % [
 		coverages.size(), mean, _percentile(coverages, 0.10),
-		_percentile(coverages, 0.50), _percentile(coverages, 0.90), empty_cells, full_cells])
+		_percentile(coverages, 0.50), _percentile(coverages, 0.90),
+		coverages[coverages.size() - 1] if not coverages.is_empty() else 0.0,
+		empty_cells, dense_cells, very_dense_cells, full_cells])
+	if v4 and not scores.is_empty():
+		scores.sort()
+		print("SCORE_PERCENTILES p10=%.3f p20=%.3f p25=%.3f p50=%.3f p75=%.3f p80=%.3f p90=%.3f" % [
+			_percentile(scores, 0.10), _percentile(scores, 0.20), _percentile(scores, 0.25),
+			_percentile(scores, 0.50), _percentile(scores, 0.75), _percentile(scores, 0.80),
+			_percentile(scores, 0.90)])
+	_report_lowland(generator, v4)
 	for center: Vector2i in [Vector2i(224, 288), Vector2i(40, 120), Vector2i(76, -40),
 			Vector2i(80, 152), Vector2i(-7, -29)]:
 		var window_columns := 0
@@ -167,6 +204,82 @@ func _initialize() -> void:
 			generator._forest_patches.get_noise_2d(point.x, point.y),
 			generator._river_distance(point.x, point.y)])
 	quit(0)
+
+
+func _report_lowland(generator: WorldGen, v4: bool) -> void:
+	var lowland := Rect2i(200, 280, 48, 24)
+	var columns := 0
+	var trees := 0
+	var species := {}
+	for z in range(lowland.position.y, lowland.end.y):
+		for x in range(lowland.position.x, lowland.end.x):
+			if generator.biome_at(x, z) != WorldGen.Biome.FOREST:
+				continue
+			columns += 1
+			var type := int(generator.tree_at(x, z)["type"])
+			if type != WorldGen.TreeType.NONE:
+				trees += 1
+				species[type] = int(species.get(type, 0)) + 1
+	print("LOWLAND box=%s columns=%d trees=%d coverage=%.4f species=%s" % [
+		lowland, columns, trees, float(trees) / maxf(1.0, columns), species])
+	if not v4:
+		return
+	var canopy_box := Rect2i(192, 256, 64, 64)
+	var covered := {}
+	for z in range(canopy_box.position.y - 5, canopy_box.end.y + 5):
+		for x in range(canopy_box.position.x - 5, canopy_box.end.x + 5):
+			var tree := generator.tree_at(x, z)
+			var type := int(tree["type"])
+			if type == WorldGen.TreeType.NONE:
+				continue
+			var radius := 3
+			if type == WorldGen.TreeType.OAK or type == WorldGen.TreeType.BIRCH \
+					or type == WorldGen.TreeType.BLOSSOM:
+				radius = int(tree.get("canopy", 3))
+			for dz in range(-radius, radius + 1):
+				for dx in range(-radius, radius + 1):
+					if dx * dx + dz * dz > radius * radius:
+						continue
+					var probe := Vector2i(x + dx, z + dz)
+					if canopy_box.has_point(probe):
+						covered[probe] = true
+	var open := {}
+	var clearing_columns := 0
+	var crown_free_clearing := 0
+	var canopy_columns := 0
+	for z in range(canopy_box.position.y, canopy_box.end.y):
+		for x in range(canopy_box.position.x, canopy_box.end.x):
+			if generator.biome_at(x, z) != WorldGen.Biome.FOREST:
+				continue
+			canopy_columns += 1
+			var cell := Vector2i(x, z)
+			if not covered.has(cell):
+				open[cell] = true
+			if generator._vegetation_score(x, z) < WorldGen.M33_CLEARING_SCORE:
+				clearing_columns += 1
+				if not covered.has(cell):
+					crown_free_clearing += 1
+	var seen := {}
+	var largest := 0
+	for cell: Vector2i in open:
+		if seen.has(cell):
+			continue
+		var stack: Array[Vector2i] = [cell]
+		seen[cell] = true
+		var count := 0
+		while not stack.is_empty():
+			var current: Vector2i = stack.pop_back()
+			count += 1
+			for offset: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var neighbour: Vector2i = current + offset
+				if open.has(neighbour) and not seen.has(neighbour):
+					seen[neighbour] = true
+					stack.append(neighbour)
+		largest = maxi(largest, count)
+	print("CANOPY box=%s forest_columns=%d covered=%d open=%d open_ratio=%.3f clearing=%d crown_free_clearing=%d clearing_open_ratio=%.3f largest_open_component=%d" % [
+		canopy_box, canopy_columns, covered.size(), open.size(),
+		float(open.size()) / maxf(1.0, canopy_columns), clearing_columns, crown_free_clearing,
+		float(crown_free_clearing) / maxf(1.0, clearing_columns), largest])
 
 
 func _elevation_band(height: int) -> String:

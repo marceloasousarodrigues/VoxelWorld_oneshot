@@ -28,8 +28,8 @@ func _setup() -> void:
 	_mesher = ChunkMesher.new(_library, VoxelMaterials.new(_library))
 
 
-func _make_streamer(radius: int = 2) -> ChunkStreamer:
-	var world := VoxelWorld.new(17017)
+func _make_streamer(radius: int = 2, version: int = WorldGen.CURRENT_VERSION) -> ChunkStreamer:
+	var world := VoxelWorld.new(17017, version)
 	var streamer := ChunkStreamer.new()
 	streamer.render_radius = radius
 	streamer.vertical_radius = 1
@@ -118,10 +118,36 @@ func _test_clear_restarts_the_worker(h: TestHarness) -> void:
 	_release(streamer)
 
 
+## A loaded historical save must keep streaming its recorded generator version,
+## not the current version.  This catches the latent `WorldGen.new(seed)` default
+## in the background generation worker.
+func _test_generation_uses_world_version(h: TestHarness) -> void:
+	var streamer := _make_streamer(2, 3)
+	streamer.generation_budget = 64
+	_pump(streamer)
+	h.eq(streamer.world.generator.terrain_version, 3,
+		"the streamer world keeps its recorded generator version")
+	h.eq(streamer._gen_worker_gen.terrain_version, 3,
+		"the background generator uses the world's recorded version")
+	var coords := VoxelWorld.sorted_coords(streamer.world.chunks)
+	h.greater(float(coords.size()), 0.0, "the historical world streamed chunks")
+	var coord: Vector3i = coords[0]
+	var reference := VoxelWorld.new(17017, 3)
+	reference.ensure_chunk(coord)
+	var streamed: ChunkData = streamer.world.get_chunk(coord)
+	var expected: ChunkData = reference.get_chunk(coord)
+	h.eq(streamed.blocks, expected.blocks,
+		"streamed v3 chunk blocks match synchronous v3 generation")
+	h.eq(streamed.biomes, expected.biomes,
+		"streamed v3 chunk biomes match synchronous v3 generation")
+	_release(streamer)
+
+
 func run(h: TestHarness) -> void:
 	_setup()
 	h.check(_mesher != null, "creates a mesher")
 	_test_in_flight_is_bounded(h)
 	_test_stale_generation_is_not_adopted(h)
 	_test_clear_restarts_the_worker(h)
+	_test_generation_uses_world_version(h)
 	h.finish()

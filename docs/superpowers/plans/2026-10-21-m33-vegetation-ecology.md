@@ -99,7 +99,7 @@ Use the global `[-192,192]` step-1 sample. Assert:
 - all columns >`SEA+40`: tree coverage <2%, broadleaf 0;
 - all columns >`SEA+44`: zero trees;
 - slope >=3 forest coverage below `SEA+30` is <50% of slope <=1 coverage, N>=100 per class;
-- 32×32 cells: p10 <=2%, p50 <=6%, p90 >=8%, at least five low cells and five dense cells;
+- 32×32 cells: p10 <=2%, p50 <=5%, p90 >=7%, max >=12%, at least five low cells, five cells >=8% and three cells >=12%;
 - v4 `height_at` and `biome_at` equal v3 over the same sample.
 
 - [ ] **Step 2: Run and confirm failure**
