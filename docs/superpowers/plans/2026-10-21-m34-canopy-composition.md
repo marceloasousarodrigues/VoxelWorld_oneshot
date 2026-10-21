@@ -114,6 +114,8 @@ func run(h: TestHarness) -> void:
     h.finish()
 ```
 
+The snippets in Tasks 2–5 are fragments of this same `run()` function. Reuse the `v4`/`v5` generator variables declared here instead of re-declaring them, and use distinct local names for any new arrays or dictionaries.
+
 - [ ] **Step 2: Run the unit suite and confirm failure**
 
 Run:
@@ -637,7 +639,7 @@ For `_birch`, use `var canopy := 2 + (1 if _hash2(x, z, 556) % 4 == 0 else 0)`, 
 
 - [ ] **Step 4: Run the unit suite**
 
-Expected: PASS. If the overlap thresholds are missed by less than 0.02, first verify the probe/implementation use the same `canopy + 2` radius and that the thinning is `4/9`; do not weaken the visual requirement without recording the measured value.
+Expected: PASS. Before pinning anything, run `m34_canopy_probe.gd --version=5` and record the actual `GLOBAL`/`BOX`/`LOWLAND` rows; the simulation rows are not actual v5 output. If the overlap thresholds are missed by less than 0.02, first verify the probe/implementation use the same `canopy + 2` radius, the understory cap and the `4/9` thinning; do not weaken the visual requirement without recording the measured value.
 
 - [ ] **Step 5: Commit**
 
@@ -683,22 +685,22 @@ Add tests:
 h.section("M34 crown profiles")
 var distinct_profiles := {}
 for profile in range(6):
-    var radii := v5._v5_layer_radii(3, profile)
-    h.eq(radii.size(), 7, "a radius-3 v5 profile has seven layers")
-    h.less(float(radii[5]), 3.0, "the upper shoulder is narrower than the widest layer")
-    h.less(float(radii[6]), 2.0, "the top layer is at most one block wide")
-    distinct_profiles[str(radii)] = true
+    var layer_radii := v5._v5_layer_radii(3, profile)
+    h.eq(layer_radii.size(), 7, "a radius-3 v5 profile has seven layers")
+    h.less(float(layer_radii[5]), 3.0, "the upper shoulder is narrower than the widest layer")
+    h.less(float(layer_radii[6]), 2.0, "the top layer is at most one block wide")
+    distinct_profiles[str(layer_radii)] = true
 h.eq(distinct_profiles.size(), 6, "six distinct radius-3 v5 profiles")
 
 h.section("M34 crown voxel shape")
 var v4_world := VoxelWorld.new(17017, 4)
 var v5_world := VoxelWorld.new(17017, 5)
 for cy in range(0, 7):
-    for cz in range(14, 20):
-        for cx in range(12, 18):
+    for cz in range(17, 20):
+        for cx in range(12, 15):
             v4_world.ensure_chunk(Vector3i(cx, cy, cz))
             v5_world.ensure_chunk(Vector3i(cx, cy, cz))
-var sample_box := Rect2i(192, 224, 32, 32)
+var sample_box := Rect2i(200, 280, 32, 24)
 var v4_leaves := _leaf_blocks(v4_world, sample_box, 60, 110)
 var v5_leaves := _leaf_blocks(v5_world, sample_box, 60, 110)
 h.greater(float(v4_leaves), 100.0, "the v4 leaf sample is non-empty")
@@ -757,7 +759,7 @@ Expected: FAIL because v5 still uses the M32 profile branch and there is no `PIN
 First change the profile count in `_place_broadleaf`:
 
 ```gdscript
-var profile_count := 6 if _is_m34() else 4
+var profile_count := (6 if radius >= 3 else 4) if _is_m34() else 4
 var profile := _hash3(tree_world_x, top, tree_world_z, 73) % profile_count
 ```
 
@@ -829,7 +831,7 @@ Expected: PASS, including the v5 pin and boundary test.
 
 - [ ] **Step 5: Update the diagnosis file**
 
-Run the v5 probe and append the actual v5 measurements to `m34-diagnosis.txt` with the command and date. Do not overwrite the v4 baseline. Record the v5 pin.
+Run the v5 probe and append the actual v5 measurements to `m34-diagnosis.txt` with the command and date. Record only the `GLOBAL`, `BOX`, `LOWLAND`, `V4GLOBAL`/`V5GLOBAL` rows as actual generator measurements; the `SIMGROVE`/`SIMGLOBAL` rows are pre-implementation simulations and must not be presented as actual v5 results. Do not overwrite the v4 baseline. Record the v5 pin.
 
 - [ ] **Step 6: Commit**
 
@@ -918,7 +920,7 @@ h.less(float(river_outer_trees) / maxf(1.0, float(river_outer_columns)), 0.20,
     "river-outer vegetation stays below 20%%")
 ```
 
-For the save/edit round-trip, reuse the `SaveManager.to_dictionary` / `apply` pattern from `test_persistence.gd`: place a block in a v5 world, save, apply into a fresh v5 world, and assert the edited block and `terrain_generator_version == 5`. Also assert a v4 payload still records 4. Do not duplicate the full persistence fixture.
+For the save/edit round-trip, reuse the `SaveManager.to_dictionary` / `apply` pattern from `test_persistence.gd`: place a block in a v5 world, build `{"ok": true, "data": payload}` (the `apply()` precondition in `save_manager.gd`), apply it into a fresh v5 world, and assert the edited block and `terrain_generator_version == 5`. Also assert a v4 payload records 4 and that applying it to a fresh default world restores generator 4. Do not duplicate the full persistence fixture.
 
 Extend `test_streaming_lifecycle.gd` with a v5 case using the existing v3 streamed-vs-synchronous pattern: create a v5 world, stream a chunk outside the initially loaded area with threaded generation, compare `blocks`/`biomes` with a synchronous v5 `ensure_chunk`, and assert the worker generator version is 5. The existing v3 case must remain.
 
