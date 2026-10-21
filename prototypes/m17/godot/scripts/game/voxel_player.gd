@@ -193,7 +193,7 @@ static func spawn_ground_height(world: VoxelWorld, world_x: int, world_z: int, s
 	var ground := search_top
 	while ground > 1:
 		var block := world.get_block(Vector3i(world_x, ground, world_z))
-		if block != BlockDB.AIR and not is_spawn_foliage(block):
+		if BlockDB.is_solid(block) and not is_spawn_foliage(block):
 			return ground
 		ground -= 1
 	return maxi(1, ground)

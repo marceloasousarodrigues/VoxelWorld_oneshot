@@ -659,10 +659,9 @@ func _demos(h: TestHarness) -> void:
 	h.eq(roof_world.get_block(anchor + Vector3i(1, 6, -1)), CHIMNEY,
 		"the chimney rises above the ridge")
 
-	# The M25 cottage is the starter house as well, so this covers both.  This is
-	# an architecture fixture, so pin the historical M30 terrain: the fixed site
-	# is near tall v3 mountains and would run into the world height ceiling.
-	var build_world := VoxelWorld.new(17017, 1)
+	# The M25 cottage is the starter house as well, so this covers both.  The
+	# builder caps its levelled base so the fixed site also fits on v3 highlands.
+	var build_world := VoxelWorld.new(17017)
 	var build_report: Dictionary = BuildDemo.build(build_world)
 	h.check(int(build_report["cottage"]) > 180, "the M25 cottage is rebuilt with the M29 palette")
 	var base: Vector3i = build_report["base_y"]
@@ -726,8 +725,8 @@ func _demos(h: TestHarness) -> void:
 		"the starter house door is still editable")
 
 	# Final showcase: the longhouse, market row and keep use the same roof kit.
-	# Pinned to the M30 terrain: the keep finial cell is asserted on that layout.
-	var final_world := VoxelWorld.new(17017, 1)
+	# It must also fit on the current v3 highlands, not only the old fixed site.
+	var final_world := VoxelWorld.new(17017)
 	var final_report: Dictionary = FinalDemo.build(final_world)
 	h.check(int(final_report["longhouse"]) > 250, "the longhouse is rebuilt with the new palette")
 	h.check(int(final_report["market"]) > 70, "the market stalls are rebuilt")

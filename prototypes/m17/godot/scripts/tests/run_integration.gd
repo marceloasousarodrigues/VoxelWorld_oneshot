@@ -121,11 +121,15 @@ func _face_centre(cell: Vector3i, outward: Vector3i) -> Vector3:
 
 ## Waits until generation, queued edits and in-flight mesh builds are all
 ## finished, so the geometry inspected below is the final streamed state.
-func _stream_until_settled(max_frames: int = 900) -> int:
+func _stream_until_settled(max_frames: int = 2400) -> int:
 	var streamer: ChunkStreamer = _game.streamer
 	var world: VoxelWorld = _game.world
 	var guard := 0
-	while guard < max_frames:
+	var started := Time.get_ticks_msec()
+	# The M32 canopy emits more faces per chunk, so a fixed frame count alone is
+	# too tight under CPU contention.  Keep a frame cap for determinism and a
+	# wall-clock cap so a genuinely stuck streamer still fails in bounded time.
+	while guard < max_frames and Time.get_ticks_msec() - started < 45000:
 		await process_frame
 		guard += 1
 		if guard < 2:

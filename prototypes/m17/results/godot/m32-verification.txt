@@ -1,0 +1,69 @@
+M32 verification summary (final code on codex/m32-landscape-quality)
+
+Environment: Godot 4.7.2 stable mono, Vulkan, NVIDIA GeForce RTX 3080.
+Seed 17017. Final generator version 3.
+
+FINGERPRINTS (wilderness_probe.gd --fingerprint)
+version=0 hash=3214517825889907206
+version=1 hash=5947596836865492245
+version=2 hash=8397584315617538769
+version=3 hash=8802792587028581708
+
+UNIT
+M17_TESTS_PASS 2578 assertions (final unit run before the review-fix test addition)
+M17_TESTS_PASS 2579 assertions (after adding the water/flower spawn-ground assertion)
+
+INTEGRATION (5 consecutive runs)
+M17_INTEGRATION_PASS 463 assertions (all 5, exit 0)
+
+REGRESSION
+M17_REGRESSION_PASS assertions=52
+
+SMOKE x2
+world_hash=5495814557571427371
+faces_hash=3989804036799183035
+faces=468281
+edits=563
+(stable in both runs)
+
+MATCHED PERFORMANCE, camera 80,92,180, render radius 6, fly
+M31 baseline look runs: 448.9 / 496.5 avg FPS; p95 2.823 / 2.270 ms;
+p99 3.222 / 2.843 ms; 1% low 173.5 / 282.4; worst 30.0 / 13.9 ms;
+draw calls 665.3 / 666.0.
+M32 final look runs: 439.8 / 482.9 avg FPS; p95 2.906 / 2.327 ms;
+p99 3.286 / 2.895 ms; 1% low 168.0 / 292.4; worst 30.1 / 13.1 ms;
+draw calls 711.5 / 721.3.
+
+M31 baseline settle: avg 296.3 / 332.2 FPS; p95 6.918 / 6.158 ms;
+p99 11.484 / 9.993 ms; worst 36.8 / 24.5 ms; draw 740.6 / 741.6.
+M32 final settle: avg 305.5 / 331.7 FPS; p95 6.492 / 6.085 ms;
+p99 11.732 / 10.622 ms; worst 40.6 / 30.4 ms; draw 756.5 / 760.2.
+
+Settle generation/mesh totals (pair B)
+M31: generated 464, meshed 659, generation 1176.2 ms, mesh 10193.6 ms,
+      attach 940.9 ms, max loaded 791, max queued 217, max draw 920.
+M32: generated 465, meshed 642, generation 1153.1 ms, mesh 10739.0 ms,
+      attach 1090.1 ms, max loaded 791, max queued 196, max draw 977.
+
+Hero-view geometry at settle
+M31: faces 305242, draw calls 782, primitives 572438 (ground view 904 chunks)
+M32: faces 355349, draw calls 864, primitives 828426 (ground view 904 chunks)
+Ground-view faces: 544309 -> 618533 (+13.6%).
+
+RIVER PROBE (m32_river_probe.gd --version=3 --radius=512 --step=4)
+WET_COLUMNS total=19536 inland_components=173
+COMPONENT 0 area_cells=317 x=-304..-192 z=4..140 h=55..61
+
+CANOPY
+Global density probe: forest_columns=22749 tree_columns=3023 coverage=0.133
+Focused forest box (test): coverage=0.146
+
+ARTIFACT CONTROL
+m32-artifact-before.png: thin full-frame vertical lines at the M31 camera.
+m32-artifact-after.png: same camera, marker on, lines absent.
+The same build also showed no lines with --no-target-marker, identifying the
+block target outline as the source.
+
+WATER CONTROL
+m32-water-before.png / m32-water-after.png: same camera, seed, current build and
+--no-target-marker; only the water shader differs (depth_scale/alpha_deep/grain).

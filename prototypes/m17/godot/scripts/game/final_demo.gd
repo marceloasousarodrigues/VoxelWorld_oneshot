@@ -17,6 +17,9 @@ const MedievalKit = preload("res://scripts/game/medieval_kit.gd")
 
 const CENTER := Vector3i(40, 0, 40)
 const HALF := 30
+## Tallest authored block is base + 14 (keep roof/chimney).  Cap the levelled
+## site so the showcase remains complete on the taller v3 highlands.
+const BUILD_HEADROOM := 16
 const COTTAGE_OFFSET := Vector2i(-24, 7)
 const TOWER_OFFSET := Vector2i(16, 8)
 const LONGHOUSE_OFFSET := Vector2i(-10, 2)
@@ -51,7 +54,7 @@ static func _level_site(world: VoxelWorld, report: Dictionary) -> Vector3i:
 	for dz in range(-HALF, HALF + 1):
 		for dx in range(-HALF, HALF + 1):
 			highest = maxi(highest, world.generator.height_at(CENTER.x + dx, CENTER.z + dz))
-	var base := Vector3i(CENTER.x, highest + 1, CENTER.z)
+	var base := Vector3i(CENTER.x, mini(highest + 1, WorldGen.WORLD_HEIGHT - BUILD_HEADROOM), CENTER.z)
 	for dz in range(-HALF, HALF + 1):
 		for dx in range(-HALF, HALF + 1):
 			var x := base.x + dx

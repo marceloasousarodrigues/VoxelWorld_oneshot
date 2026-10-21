@@ -368,6 +368,11 @@ static func tint_for_version(version: int, biome: int) -> Color:
 
 
 func biome_tint(biome: int) -> Color:
+	# Keep the historical M29 helper value for callers that ask the generator
+	# directly.  The mesher uses `tint_for_version` and therefore keeps the
+	# pre-M32 mesh palette for v0/v1/v2.
+	if terrain_version == LEGACY_VERSION and biome == Biome.FOREST:
+		return Color(0.872, 0.960, 0.840)
 	return tint_for_version(terrain_version, biome)
 
 

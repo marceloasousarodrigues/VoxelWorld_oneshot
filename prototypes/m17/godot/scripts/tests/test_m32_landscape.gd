@@ -204,4 +204,8 @@ func run(h: TestHarness) -> void:
 		spawn_world.set_block(Vector3i(2, leaf_y, 2), BlockDB.OAK_LEAVES)
 	h.eq(VoxelPlayer.spawn_ground_height(spawn_world, 2, 2, 72), 63,
 		"the player spawns on the ground below a tree canopy, not on the leaves")
+	spawn_world.set_block(Vector3i(2, 71, 2), BlockDB.WATER)
+	spawn_world.set_block(Vector3i(2, 72, 2), BlockDB.FLOWER_RED)
+	h.eq(VoxelPlayer.spawn_ground_height(spawn_world, 2, 2, 73), 63,
+		"water and flowers above the surface are not accepted as spawn ground")
 	h.finish()

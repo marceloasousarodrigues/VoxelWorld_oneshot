@@ -5,8 +5,8 @@
 **PASS with documented limitations.** A continuous winding river is now demonstrated in
 runtime captures, the forest canopy and riverbanks are visibly closer to the primary
 reference, the thin dark vertical lines are explained and fixed, generator versions 0/1/2
-remain byte-identical, and matched performance measurements show no frame-time regression
-at the cost of more foliage geometry and draw calls.
+remain byte-identical, and matched performance measurements show stable average/median
+frame pacing at the cost of more foliage geometry, draw calls and mesh-build time.
 
 ## Preflight
 
@@ -51,7 +51,8 @@ not a chunk seam, material or shadow artifact.
 
 The matched water view showed a strong checkerboard from the transparent water revealing the
 blocky riverbed. This is a material issue, not chunk seams. The shader was changed to reach
-opaque water closer to shore and to reduce the atlas grain; the matched before/after is
+opaque water closer to shore and to reduce the atlas grain. Both captures use the same
+camera, seed, generator and `--no-target-marker`, with only the water shader differing:
 `m32-water-before.png` / `m32-water-after.png`.
 
 ## What changed
@@ -68,16 +69,23 @@ keep their exact output.
   detail field breaks long straight terrace edges. Upper mountain slopes below the snow line
   now carry grass and a conifer treeline instead of a bare grey belt.
 - **Forest**: highland plains/savanna become forest above `SEA + 8`, clearings are slightly
-  smaller, canopy candidates are denser (measured 13.3% tree coverage over forest columns,
-  versus 13.7% in M31), clearings still stay open, and broadleaf crowns are larger, lower on
+  smaller, canopy candidates are denser (global probe 13.3% tree coverage over forest
+  columns, 14.6% in the focused forest box; M31 measured 13.7%), clearings still stay open,
+  and broadleaf crowns are larger, lower on
   the trunk, more varied in height, and more heavily trimmed at the corners. Trees on slopes
   get a small height lift so the crown clears the uphill tread. Pines are less frequent in
   lowland forest and no longer receive the slope lift.
 - **Foliage tint**: tint is now version-aware through `ChunkData.terrain_version`, so v3 can
   use a brighter lime canopy without changing the palette of v0/v1/v2 chunks or fixtures.
-- **Spawn**: `VoxelPlayer.spawn_on_column` skips natural leaves and trunks, so the new dense
-  canopy cannot spawn the player on top of a tree. This was a real regression found during
-  the performance run (spawn y=101 on leaves); it now spawns on the ground at y=81.
+- **Spawn**: `VoxelPlayer.spawn_on_column` requires a solid block and skips natural leaves and
+  trunks, so the new dense canopy cannot spawn the player on top of a tree (or on water or a
+  flower). This was a real regression found during the performance run (spawn y=101 on
+  leaves); it now spawns on the ground at y=81.
+- **Showcase height fitting**: the fixed M25/M28 demo sites now cap their levelled base at
+  `WORLD_HEIGHT - 16`. On v3 the surrounding highlands are about 6 blocks taller than the
+  M30 terrain the fixed site was chosen on; without the cap the keep roof and cottage chimney
+  were silently dropped at the world ceiling. The M29/M28 tests now run on the **current v3**
+  generator again instead of being pinned to v1.
 - **Target marker**: the outline is hidden when the hit is closer than 0.75 m, which removes
   the full-frame hairline artifact without changing normal targeting.
 - **Water material**: `depth_scale` 7.0 → 2.5, `alpha_deep` 0.985 → 1.0, atlas grain
@@ -132,9 +140,10 @@ on this machine.
 Hero-view geometry at settle: 305,242 faces (M31) → 355,349 faces (M32), +16.4%. At the
 ground river view: 544,309 → 618,533 faces (+13.6%), draw calls 782 → 864 (+10.5%),
 primitives 572,438 → 828,426 (+44.7%). The extra primitives are the cost of the denser,
-larger canopy. Frame pacing is unchanged because the streamer's per-frame budgets absorb the
-work; the visible regression is GPU geometry and mesh-build time, not average/worst frame
-time. No canopy or river feature was removed to hide this trade-off.
+larger canopy. Median average FPS and the 1% low stay within run-to-run variance, while
+p95/p99 are 2–3% higher, the settle worst frame is 4–6 ms higher, and mesh-build time is
+5–12% higher. The trade-off is therefore real but bounded: more foliage geometry and mesh
+work, not a sustained frame-rate collapse. No canopy or river feature was removed to hide it.
 
 ## Verification
 
@@ -144,10 +153,16 @@ Commands run from the M32 worktree with
 | Suite | Command | Result |
 |---|---|---|
 | Unit | `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd` | `M17_TESTS_PASS 2578 assertions`, exit 0 |
-| Integration | `--headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game` | `M17_INTEGRATION_PASS 463 assertions`, exit 0 |
+| Integration | `--headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game` | 5/5 runs `M17_INTEGRATION_PASS 463 assertions`, exit 0 |
 | Regression | `--headless --path prototypes/m17/godot --script res://scripts/regression.gd` | `M17_REGRESSION_PASS assertions=52`, exit 0 |
 | Smoke ×2 | `--headless --path prototypes/m17/godot -- --straight-to-game --seed=17017 --render-distance=6 --quit-after=30` | both `world_hash=5495814557571427371`, `faces_hash=3989804036799183035`, `faces=468281`, exit 0 |
-| River probe | `--headless ... --script res://scripts/tests/m32_river_probe.gd -- --version=3 --radius=512 --step=4` | 150 inland water components; largest `x=-304..-192 z=4..136`, height 55..61 |
+| River probe | `--headless ... --script res://scripts/tests/m32_river_probe.gd -- --version=3 --radius=512 --step=4` | 173 inland water components; largest `x=-304..-192 z=4..140`, height 55..61 |
+
+The integration settle wait is now 2400 frames **and** a 45 s wall-clock cap. The M32 canopy
+raises mesh work by 5–12%, so the old 900-frame-only cap failed intermittently under CPU
+contention even though streaming finished. The pass condition (all queued work finished, no
+dirty meshes) is unchanged; only the bounded wait is larger and now also time-based. Five
+consecutive runs passed.
 
 Focused tests in `test_m32_landscape.gd`:
 - version 3 is current and supported; version 4 is rejected;
@@ -157,8 +172,8 @@ Focused tests in `test_m32_landscape.gd`:
   not quantised into 2-block bands;
 - the river reach at `z=152` has a continuous exposed water surface, returns grass and soil
   outside the sand edge, and is not an all-sand apron;
-- canopy coverage is 13.3% (dense but not a carpet), crowns span at least five blocks in x, z
-  and y, and the M32 tree pad is 8;
+- canopy coverage is 13.3% globally and 14.6% in the focused box (dense but not a carpet),
+  crowns span at least five blocks in x, z and y, and the M32 tree pad is 8;
 - the target marker is hidden at 0 and 0.5 m, shown at 0.75 m and 3 m, and can be disabled;
 - spawn ground skips leaves and trunks but accepts grass and a player-built plank surface.
 
@@ -169,11 +184,34 @@ Generator fingerprint (`wilderness_probe.gd --fingerprint`, seed 17017):
 | 0 (M29) | `3214517825889907206` |
 | 1 (M30) | `5947596836865492245` |
 | 2 (M31) | `8397584315617538769` |
-| 3 (M32) | `8299345369586821846` |
+| 3 (M32) | `8802792587028581708` |
 
 Version 0/1/2 is unchanged; a v2 save still records and restores the M31 generator. Save
 loading, player edits, block IDs, chunk streaming, collision, water propagation and the M29
 build systems are covered by the existing suites.
+
+## Independent review findings addressed
+
+The first independent review returned **FAIL** with three blocking findings. They were
+resolved on the branch before this report was finalized:
+
+1. **Integration settle flake**: five consecutive integration runs were failing or flaky at
+   the 900-frame-only wait. The wait now has a 2400-frame cap plus a 45 s wall-clock cap; the
+   pass condition is unchanged. Five consecutive runs passed. The underlying mesh-cost
+   increase is disclosed rather than hidden.
+2. **v3 showcase clipping**: the fixed M25/M28 sites were being re-pinned to v1 in tests,
+   which hid ~1,500 dropped showcase blocks on v3. `BuildDemo` and `FinalDemo` now cap their
+   levelled base at `WORLD_HEIGHT - 16`; both showcase tests run on the current v3 generator
+   again and pass, including the keep ridge and cottage chimney.
+3. **Stale report numbers**: v3 fingerprint, river-probe components and canopy coverage were
+   re-measured on the final code and corrected. The v3 hash is
+   `8802792587028581708`; the river probe reports 173 inland components with the largest
+   `z=4..140`; the canopy is 13.3% globally and 14.6% in the focused test box.
+
+The review's non-blocking notes were also addressed: spawn ground now requires a solid
+block, the legacy tint helper value is preserved, the water A/B now uses `--no-target-marker`
+on both sides and differs only by the shader, and the performance wording no longer claims
+"no regression."
 
 ## Limitations
 
@@ -199,12 +237,14 @@ build systems are covered by the existing suites.
 - `prototypes/m17/godot/scripts/core/world_gen.gd` (v3)
 - `prototypes/m17/godot/scripts/core/chunk_data.gd` (per-chunk generator version)
 - `prototypes/m17/godot/scripts/core/chunk_mesher.gd` (version-aware tint)
+- `prototypes/m17/godot/scripts/game/build_demo.gd` (showcase height cap)
+- `prototypes/m17/godot/scripts/game/final_demo.gd` (showcase height cap)
 - `prototypes/m17/godot/scripts/game/voxel_player.gd` (marker distance, spawn ground)
 - `prototypes/m17/godot/scripts/game/game.gd` (`--no-target-marker` diagnostic)
 - `prototypes/m17/godot/shaders/voxel_water.gdshader`
 - `prototypes/m17/godot/scripts/tests/test_m32_landscape.gd` (new)
 - `prototypes/m17/godot/scripts/tests/m32_river_probe.gd` (new diagnostic)
 - `prototypes/m17/godot/scripts/tests/{run_tests,run_integration,test_generation,test_m31_wilderness,test_m29_architecture,test_final_demo,wilderness_probe}.gd`
-- `prototypes/m17/results/godot/m32-*.png`, `m32-matched-*.json`, this report
+- `prototypes/m17/results/godot/m32-*.png`, `m32-matched-*.json`, `m32-verification.txt`, this report
 
 Generated `.import`/`.uid` files from the Godot import pass are not part of the commit.
