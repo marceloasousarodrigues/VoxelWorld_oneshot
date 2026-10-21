@@ -22,7 +22,8 @@ const LEGACY_VERSION := 0
 const WILDERNESS_VERSION := 2
 const M32_VERSION := 3
 const M33_VERSION := 4
-const CURRENT_VERSION := 4
+const M34_VERSION := 5
+const CURRENT_VERSION := 5
 const TREE_PAD := 5
 ## Wide enough for a radius-4 crown with one block of lean and one of shelf offset.
 const WILDERNESS_TREE_PAD := 7
@@ -151,6 +152,11 @@ func _is_m32() -> bool:
 ## True for generator version 4 and later (the M33 vegetation ecology pass).
 func _is_m33() -> bool:
 	return terrain_version >= M33_VERSION
+
+
+## True for generator version 5 and later (the M34 canopy composition pass).
+func _is_m34() -> bool:
+	return terrain_version >= M34_VERSION
 
 
 ## Horizontal reach of a tree's crown from its trunk, in blocks.  Version 0 and 1

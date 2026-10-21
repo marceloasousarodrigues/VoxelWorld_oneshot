@@ -24,7 +24,7 @@ func _initialize() -> void:
 			"--step":
 				step = maxi(1, value.to_int())
 	var generator := WorldGen.new(17017, version)
-	var v4 := version >= WorldGen.M33_VERSION
+	var modern := version >= WorldGen.M33_VERSION
 	print("M33_VEG_PROBE version=%d radius=%d step=%d sea=%d" % [version, radius, step, SEA])
 	var bands := {}
 	var bands_total := {}
@@ -84,7 +84,7 @@ func _initialize() -> void:
 					summit_any += 1
 			if biome == WorldGen.Biome.FOREST:
 				forest += 1
-				if v4:
+				if modern:
 					scores.append(generator._vegetation_score(x, z))
 				if is_tree:
 					forest_trees += 1
@@ -102,7 +102,7 @@ func _initialize() -> void:
 				if is_tree:
 					river_outer_trees += 1
 			var clearing := generator._forest_patches.get_noise_2d(x, z) < -0.32
-			if v4:
+			if modern:
 				clearing = generator._vegetation_score(x, z) < WorldGen.M33_CLEARING_SCORE
 			if biome == WorldGen.Biome.FOREST and clearing:
 				clearing_columns += 1
@@ -154,13 +154,13 @@ func _initialize() -> void:
 		_percentile(coverages, 0.50), _percentile(coverages, 0.90),
 		coverages[coverages.size() - 1] if not coverages.is_empty() else 0.0,
 		empty_cells, dense_cells, very_dense_cells, full_cells])
-	if v4 and not scores.is_empty():
+	if modern and not scores.is_empty():
 		scores.sort()
 		print("SCORE_PERCENTILES p10=%.3f p20=%.3f p25=%.3f p50=%.3f p75=%.3f p80=%.3f p90=%.3f" % [
 			_percentile(scores, 0.10), _percentile(scores, 0.20), _percentile(scores, 0.25),
 			_percentile(scores, 0.50), _percentile(scores, 0.75), _percentile(scores, 0.80),
 			_percentile(scores, 0.90)])
-	_report_lowland(generator, v4)
+	_report_lowland(generator, modern)
 	for center: Vector2i in [Vector2i(224, 288), Vector2i(40, 120), Vector2i(76, -40),
 			Vector2i(80, 152), Vector2i(-7, -29)]:
 		var window_columns := 0
@@ -206,7 +206,7 @@ func _initialize() -> void:
 	quit(0)
 
 
-func _report_lowland(generator: WorldGen, v4: bool) -> void:
+func _report_lowland(generator: WorldGen, modern: bool) -> void:
 	var lowland := Rect2i(200, 280, 48, 24)
 	var columns := 0
 	var trees := 0
@@ -222,7 +222,7 @@ func _report_lowland(generator: WorldGen, v4: bool) -> void:
 				species[type] = int(species.get(type, 0)) + 1
 	print("LOWLAND box=%s columns=%d trees=%d coverage=%.4f species=%s" % [
 		lowland, columns, trees, float(trees) / maxf(1.0, columns), species])
-	if not v4:
+	if not modern:
 		return
 	var canopy_box := Rect2i(192, 256, 64, 64)
 	var covered := {}
