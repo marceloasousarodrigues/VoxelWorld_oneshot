@@ -152,7 +152,7 @@ Commands run from the M32 worktree with
 
 | Suite | Command | Result |
 |---|---|---|
-| Unit | `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd` | `M17_TESTS_PASS 2578 assertions`, exit 0 |
+| Unit | `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd` | `M17_TESTS_PASS 2579 assertions`, exit 0 |
 | Integration | `--headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game` | 5/5 runs `M17_INTEGRATION_PASS 463 assertions`, exit 0 |
 | Regression | `--headless --path prototypes/m17/godot --script res://scripts/regression.gd` | `M17_REGRESSION_PASS assertions=52`, exit 0 |
 | Smoke ×2 | `--headless --path prototypes/m17/godot -- --straight-to-game --seed=17017 --render-distance=6 --quit-after=30` | both `world_hash=5495814557571427371`, `faces_hash=3989804036799183035`, `faces=468281`, exit 0 |
@@ -211,7 +211,8 @@ resolved on the branch before this report was finalized:
 The review's non-blocking notes were also addressed: spawn ground now requires a solid
 block, the legacy tint helper value is preserved, the water A/B now uses `--no-target-marker`
 on both sides and differs only by the shader, and the performance wording no longer claims
-"no regression."
+"no regression." A re-review returned **PASS WITH NOTES**, confirming 5/5 integration runs,
+the v3 showcase counts, the pinned fingerprints and the corrected evidence numbers.
 
 ## Limitations
 
@@ -225,6 +226,9 @@ on both sides and differs only by the shader, and the performance wording no lon
   stepped crowns and clearings.
 - **Mountain silhouette**: the snow cap is a stepped white plateau rather than a sharp peak;
   the M31 stepped profile was retained rather than redesigned.
+- **Showcase site cut**: on v3 the capped M28 site clears 762 of its 3,721 footprint columns
+  down to the levelled base. The structure assertions and counts match v1, but no new capture
+  of the demo site was taken, so its surrounding scenic cut is not visually verified.
 - **Performance variance**: FPS varies by several percent between runs. The matched medians
   and both runs are reported; single-run figures are not used as proof.
 - **Water A/B**: the water before/after is a same-camera, same-seed comparison with only the
