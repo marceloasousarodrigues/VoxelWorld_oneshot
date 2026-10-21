@@ -2,11 +2,11 @@
 
 ## Status
 
-**PASS with documented limitations**, subject to the final independent re-review recorded at
-the end of this report. The v3 canopy carpet on steep slopes and summits is replaced by a
-spatially varied v4 ecology: dense lowland forest, irregular openings, sparse upper slopes,
-and no broadleaf above `SEA+30`. Generator versions 0–3 remain byte-identical, v4 is pinned,
-and old saves stream their recorded generator version.
+**PASS with documented limitations.** The final independent re-review returned PASS WITH
+NOTES with no blocking findings. The v3 canopy carpet on steep slopes and summits is replaced
+by a spatially varied v4 ecology: dense lowland forest, irregular openings, sparse upper
+slopes, and no broadleaf above `SEA+30`. Generator versions 0–3 remain byte-identical, v4 is
+pinned, and old saves stream their recorded generator version.
 
 ## Preflight
 
@@ -87,7 +87,7 @@ pre-filter.
 - `ChunkStreamer` now creates its worker with
   `WorldGen.new(world.world_seed, world.generator.terrain_version)`. A v3 save streams v3
   chunks; the streaming lifecycle test compares streamed and synchronous v3 blocks/biomes.
-- The starter house clears a small 7×7 spawn opening (ground + 6) so the denser v4 canopy
+- The starter house clears a 7×7 spawn opening up to 14 blocks above each column surface so the denser v4 canopy
   cannot block the first-person view or creature targeting.
 
 ## Measured distribution
@@ -237,8 +237,13 @@ are vegetation-score clumps, the border test requires a crown crossing within ei
 clearing decor is asserted, crown footprints include lean/shelf margin, the probe uses floor
 cell indexing, and version assertions use `CURRENT_VERSION`.
 
-**Final independent re-review verdict:** _pending in the committed report history; see the
-last M33 commit message or `m33-verification.txt` for the resolved findings._
+**Final independent re-review verdict: PASS WITH NOTES — M33 is complete.** All mandatory
+M33 requirements and prior blockers are resolved. The D10 starter spawn opening preserves
+solid terrain and creates no cavities. Evidence: unit 2657 assertions, integration 463,
+regression 52; smoke `world_hash=1166263243268247887`,
+`faces_hash=8413966639196070975`, `faces=407087`, `edits=813`; p90 = 8.11%; river core
+trees = 0. Non-blocking note: the document originally said “ground + 6” while the loop clears
+14 blocks above each column’s surface; the wording now matches the implementation.
 
 ## Limitations
 
@@ -250,7 +255,7 @@ last M33 commit message or `m33-verification.txt` for the resolved findings._
 - **No cascades / far-field**: out of scope and unchanged.
 - **Performance variance**: the normal-camera settle worst frame is higher in the M33 runs;
   p95/p99, river settle and draw counts improve. No sustained FPS regression was measured.
-- **Spawn clearing**: the starter house now clears a 7×7 opening. This is a playability fix
+- **Spawn clearing**: the starter house clears a 7×7 opening up to 14 blocks above each column surface. This is a playability fix
   for the denser canopy, not a vegetation rule.
 - **No new tree assets/models**; this is a placement and density pass on the existing art.
 

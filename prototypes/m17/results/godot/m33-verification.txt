@@ -71,3 +71,6 @@ m33-before-0..5.png (v3) and m33-final-0..5.png (v4), same seed/cameras:
 5 repeat of final camera
 m33-river-ground-before.png / m33-river-ground-after.png:
 80,72,160 yaw 0 pitch -8 (river/banks)
+
+FINAL REVIEW: PASS WITH NOTES (no blocking findings)
+
