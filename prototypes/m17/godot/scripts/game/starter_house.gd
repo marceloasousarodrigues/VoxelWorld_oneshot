@@ -34,6 +34,14 @@ static func build(world: VoxelWorld, spawn_column: Vector2i) -> Dictionary:
 			for clear_y in range(y + 1, y + 12):
 				report["blocks"] += _change(world, Vector3i(x, clear_y, z), BlockDB.AIR)
 	report["house"] = BuildDemo._build_cottage(world, anchor)
+	# The v4 canopy can grow a crown over the spawn path; clear a small start
+	# clearing so the first view, head space and the path to the door are never
+	# inside leaves or a trunk.
+	for dz in range(-4, 5):
+		for dx in range(-4, 5):
+			for clear_y in range(base_y + 1, base_y + 7):
+				report["blocks"] += _change(world,
+					Vector3i(spawn_column.x + dx, clear_y, spawn_column.y + dz), BlockDB.AIR)
 	# A short packed path from the door south, then east to the spawn point.
 	for z in range(anchor.z + 4, spawn_column.y + 1):
 		report["blocks"] += _change(world, Vector3i(anchor.x, base_y, z), BlockDB.PATH)

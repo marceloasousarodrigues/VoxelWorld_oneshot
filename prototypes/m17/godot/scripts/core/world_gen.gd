@@ -598,7 +598,7 @@ func _v4_tree_density(height: int, slope: int, broadleaf: bool, score: float) ->
 		return 0.0
 	if not broadleaf and height > M33_CONIFER_LIMIT:
 		return 0.0
-	var base := 0.95 * smoothstep(M33_CLEARING_SCORE, 0.0, score)
+	var base := smoothstep(M33_CLEARING_SCORE, -0.06, score)
 	return base * _elevation_factor(height, broadleaf) * _slope_factor(slope, broadleaf)
 
 
@@ -661,14 +661,27 @@ func _biome_tree_v4(x: int, z: int, height: int, biome: int) -> Dictionary:
 		return {"type": TreeType.NONE}
 	if biome == Biome.FOREST:
 		return _forest_canopy_tree_v4(x, z, height)
-	var slope := _column_slope(x, z, height)
+	var river_distance := _river_distance(x, z)
+	if river_distance < RIVER_BANK_LIMIT * M33_RIVER_CORE:
+		return {"type": TreeType.NONE}
+	var river_outer := river_distance < RIVER_BANK_LIMIT * M33_RIVER_OUTER
 	var roll := _hash2(x, z, 31337) % 1000
+	# Highest non-forest tree chance is 1.5%; skip the slope computation for the
+	# other 98.5% of columns.
+	if roll >= 15:
+		return {"type": TreeType.NONE}
+	var slope := _column_slope(x, z, height)
+	if river_outer and slope > 1:
+		return {"type": TreeType.NONE}
+	if river_outer and _hash2(x, z, 771) % 4 != 0:
+		return {"type": TreeType.NONE}
+	var score := _vegetation_score(x, z)
 	match biome:
 		Biome.PLAINS:
-			if height <= SEA_LEVEL + 18 and slope <= 1 and roll < 8:
+			if height <= SEA_LEVEL + 18 and slope <= 1 and roll < 8 and score > -0.10:
 				return _oak(x, z, height) if roll % 3 != 0 else _birch(x, z, height)
 		Biome.SAVANNA:
-			if height <= SEA_LEVEL + 20 and slope <= 1 and roll < 15:
+			if height <= SEA_LEVEL + 20 and slope <= 1 and roll < 15 and score > -0.10:
 				return _oak(x, z, height)
 		Biome.SNOW:
 			if height < M33_SNOW_TREE_LIMIT and slope <= 2 and roll < 6:

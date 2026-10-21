@@ -108,7 +108,7 @@ func _initialize() -> void:
 				clearing_columns += 1
 				if is_tree:
 					clearing_trees += 1
-			var cell := Vector2i(x / 32, z / 32)
+			var cell := Vector2i(floori(float(x) / 32.0), floori(float(z) / 32.0))
 			var entry: Dictionary = cells.get(cell, {"columns": 0, "trees": 0})
 			entry["columns"] = int(entry["columns"]) + 1
 			entry["trees"] = int(entry["trees"]) + (1 if is_tree else 0)
@@ -226,16 +226,16 @@ func _report_lowland(generator: WorldGen, v4: bool) -> void:
 		return
 	var canopy_box := Rect2i(192, 256, 64, 64)
 	var covered := {}
-	for z in range(canopy_box.position.y - 5, canopy_box.end.y + 5):
-		for x in range(canopy_box.position.x - 5, canopy_box.end.x + 5):
+	for z in range(canopy_box.position.y - 9, canopy_box.end.y + 9):
+		for x in range(canopy_box.position.x - 9, canopy_box.end.x + 9):
 			var tree := generator.tree_at(x, z)
 			var type := int(tree["type"])
 			if type == WorldGen.TreeType.NONE:
 				continue
-			var radius := 3
+			var radius := 5
 			if type == WorldGen.TreeType.OAK or type == WorldGen.TreeType.BIRCH \
 					or type == WorldGen.TreeType.BLOSSOM:
-				radius = int(tree.get("canopy", 3))
+				radius = int(tree.get("canopy", 3)) + 2
 			for dz in range(-radius, radius + 1):
 				for dx in range(-radius, radius + 1):
 					if dx * dx + dz * dz > radius * radius:

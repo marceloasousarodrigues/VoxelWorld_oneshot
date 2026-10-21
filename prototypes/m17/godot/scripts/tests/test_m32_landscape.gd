@@ -35,9 +35,9 @@ func run(h: TestHarness) -> void:
 	h.section("M32 generator versions")
 	h.eq(WorldGen.M32_VERSION, 3, "the M32 landscape generator is version 3")
 	h.eq(WorldGen.CURRENT_VERSION, 4, "new worlds use the current M33 generator")
-	for version in [0, 1, 2, 3, 4]:
+	for version in range(0, WorldGen.CURRENT_VERSION + 1):
 		h.check(WorldGen.is_supported_version(version), "version %d remains loadable" % version)
-	h.check(not WorldGen.is_supported_version(5), "a future version is rejected")
+	h.check(not WorldGen.is_supported_version(WorldGen.CURRENT_VERSION + 1), "a future version is rejected")
 	h.check(not WorldGen.is_supported_version(-1), "a negative version is rejected")
 
 	h.eq(_region_hash(0), PINNED_LEGACY_HASH,

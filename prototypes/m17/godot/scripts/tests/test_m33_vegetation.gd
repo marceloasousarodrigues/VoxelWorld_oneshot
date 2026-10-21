@@ -7,7 +7,7 @@ const PINNED_LEGACY_HASH := 3214517825889907206
 const PINNED_M30_HASH := 5947596836865492245
 const PINNED_M31_HASH := 8397584315617538769
 const PINNED_M32_HASH := 8802792587028581708
-const PINNED_M33_HASH := 5539560940374133755
+const PINNED_M33_HASH := 2164503133686526591
 const SAMPLE_RADIUS := 192
 const LOWLAND_BOX := Rect2i(200, 280, 48, 24)
 const LOWLAND_CANOPY_BOX := Rect2i(192, 256, 64, 64)
@@ -88,9 +88,9 @@ func run(h: TestHarness) -> void:
 	h.section("M33 generator versions")
 	h.eq(WorldGen.M33_VERSION, 4, "the M33 vegetation generator is version 4")
 	h.eq(WorldGen.CURRENT_VERSION, 4, "new worlds use the M33 generator")
-	for version in [0, 1, 2, 3, 4]:
+	for version in range(0, WorldGen.CURRENT_VERSION + 1):
 		h.check(WorldGen.is_supported_version(version), "version %d remains loadable" % version)
-	h.check(not WorldGen.is_supported_version(5), "a future version is rejected")
+	h.check(not WorldGen.is_supported_version(WorldGen.CURRENT_VERSION + 1), "a future version is rejected")
 	h.check(not WorldGen.is_supported_version(-1), "a negative version is rejected")
 
 	h.eq(_region_hash(0), PINNED_LEGACY_HASH,
@@ -251,8 +251,8 @@ func _test_variation(h: TestHarness) -> void:
 	values.sort()
 	h.greater(float(values.size()), 10.0, "the variation sample has enough cells")
 	h.less(_percentile(values, 0.10), 0.02, "p10 cell coverage is <=2%%")
-	h.less(_percentile(values, 0.50), 0.05, "p50 cell coverage is <=5%%")
-	h.greater(_percentile(values, 0.90), 0.07, "p90 cell coverage is >=7%%")
+	h.less(_percentile(values, 0.50), 0.06, "p50 cell coverage is <=6%%")
+	h.greater(_percentile(values, 0.90), 0.08, "p90 cell coverage is >=8%%")
 	h.greater(values[values.size() - 1], 0.12, "the densest cell is >=12%%")
 	h.greater(float(low), 5.0, "at least five cells are effectively open")
 	h.greater(float(dense8), 5.0, "at least five cells are dense forest")
@@ -306,19 +306,39 @@ func _test_clearings(h: TestHarness) -> void:
 		"a connected crown-free opening of >=100 columns exists")
 	h.greater(float(stats["clearing_open_ratio"]), 0.50,
 		"at least half of the clearing columns are outside crowns")
+	var sample := _find_clearing_column(LOWLAND_CANOPY_BOX)
+	h.check(sample.x >= 0, "a lowland clearing column exists for the decor sample")
+	if sample.x >= 0:
+		var height := _gen.height_at(sample.x, sample.y)
+		var biome := _gen.biome_at(sample.x, sample.y)
+		var surface := _gen._surface_block(biome, height)
+		var deco := _gen.decoration_at(sample.x, sample.y, height, surface, biome)
+		h.check(deco == BlockDB.AIR or BlockDB.is_deco(deco),
+			"clearing decor is air or a ground decoration, not a tree block")
+
+
+func _find_clearing_column(box: Rect2i) -> Vector2i:
+	for z in range(box.position.y, box.end.y):
+		for x in range(box.position.x, box.end.x):
+			if _gen.biome_at(x, z) != WorldGen.Biome.FOREST:
+				continue
+			if _gen._vegetation_score(x, z) < WorldGen.M33_CLEARING_SCORE:
+				return Vector2i(x, z)
+	return Vector2i(-1, -1)
 
 
 func _canopy_stats(generator: WorldGen, box: Rect2i) -> Dictionary:
 	var covered := {}
-	for z in range(box.position.y - 5, box.end.y + 5):
-		for x in range(box.position.x - 5, box.end.x + 5):
+	# Include crown lean/shelf and trees rooted just outside the box.
+	for z in range(box.position.y - 9, box.end.y + 9):
+		for x in range(box.position.x - 9, box.end.x + 9):
 			var tree := generator.tree_at(x, z)
 			var type := int(tree["type"])
 			if not _is_tree(type):
 				continue
-			var radius := 3
+			var radius := 5
 			if _is_broadleaf(type):
-				radius = int(tree.get("canopy", 3))
+				radius = int(tree.get("canopy", 3)) + 2
 			for dz in range(-radius, radius + 1):
 				for dx in range(-radius, radius + 1):
 					if dx * dx + dz * dz > radius * radius:
@@ -382,8 +402,7 @@ func _test_river(h: TestHarness) -> void:
 				outer_trees += 1
 	h.greater(float(core), 100.0, "the river core sample has enough columns")
 	h.greater(float(outer), 100.0, "the river outer sample has enough columns")
-	h.less(float(core_trees) / maxf(1.0, float(core)), 0.01,
-		"river core tree coverage is <1%%")
+	h.eq(core_trees, 0, "the river core contains no trees in any biome")
 	var outer_coverage := float(outer_trees) / maxf(1.0, float(outer))
 	h.greater(outer_coverage, 0.005, "riverside vegetation is retained outside the core")
 	h.less(outer_coverage, 0.20, "riverside vegetation stays below 20%%")
@@ -432,15 +451,23 @@ func _test_chunk_boundary(h: TestHarness) -> void:
 	var found := false
 	for z in range(-64, 1):
 		for x in range(40, 57):
-			if int(generator.tree_at(x, z)["type"]) != WorldGen.TreeType.NONE:
+			var data := generator.tree_at(x, z)
+			var type := int(data["type"])
+			if not _is_tree(type):
+				continue
+			var radius := 3
+			if _is_broadleaf(type):
+				radius = int(data.get("canopy", 3))
+			if x - radius <= 48 and x + radius >= 48:
 				tree = Vector2i(x, z)
 				found = true
 				break
 		if found:
 			break
-	h.check(found, "a tree exists near the x=48 border for the seam fixture")
+	h.check(found, "a crown crosses the x=48 border for the seam fixture")
 	if not found:
 		return
+	h.check(absi(tree.x - 48) <= 8, "the seam tree is within eight blocks of the border")
 	var height := generator.height_at(tree.x, tree.y)
 	var coord := VoxelWorld.world_to_chunk(Vector3i(tree.x, height, tree.y))
 	var coords: Array[Vector3i] = []

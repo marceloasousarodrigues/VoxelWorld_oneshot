@@ -87,7 +87,7 @@ Version pins after implementation:
 - v1 `5947596836865492245`
 - v2 `8397584315617538769`
 - v3 `8802792587028581708` (measured at `e9120bb`)
-- v4 `5539560940374133755` (measured after the M33 thresholds were final)
+- v4 `2164503133686526591` (measured after the M33 thresholds were final)
 
 `test_m31_wilderness.gd`, `test_m32_landscape.gd` and `wilderness_probe.gd` version
 assertions must use `CURRENT_VERSION` / `CURRENT_VERSION + 1` rather than hard-coded 4/5 where
@@ -112,7 +112,7 @@ Density is expressed as **candidate probability** (one candidate per 2×2 cell, 
 column coverage is roughly probability / 4):
 
 ```
-base_density = 0.95 * smoothstep(-0.16, 0.0, vegetation_score)
+base_density = smoothstep(-0.16, -0.06, vegetation_score)
 density = base_density * elevation_factor * slope_factor
 if vegetation_score < -0.16: density = 0
 ```
@@ -152,7 +152,8 @@ has passed the candidate and river checks, so the cost is bounded to actual cand
 
 Biome precedence:
 - `SNOW` and `MOUNTAIN` do not use the forest base density or the elevation factor table.
-  They use the explicit D4 candidate cap of `0.06`, falling to 0 at their elevation limit.
+  They use the explicit D4 per-column probability of `0.006`, falling to 0 at their elevation
+  limit.
 - `PLAINS` target 0.5–2% column coverage with clumped placement and the same elevation/slope
   filters.
 - `SAVANNA` target 1–3% column coverage, oak/woodland only.
@@ -165,9 +166,9 @@ Biome precedence:
 - `SEA+19..+30`: broadleaf share fades; pine becomes dominant above `SEA+24`.
 - `SEA+31..+40`: pine only.
 - `> SEA+44`: no tree.
-- Snow: pines only below `SEA+38`, slope <=2, explicit candidate probability `0.06`
-  (≈1.5% column coverage after the 2×2 grid); no trees above.
-- Mountain: pines only below `SEA+44`, slope <=2, explicit candidate probability `0.06`;
+- Snow: pines only below `SEA+38`, slope <=2, explicit per-column probability `0.006`
+  (0.6% column coverage); no trees above.
+- Mountain: pines only below `SEA+44`, slope <=2, explicit per-column probability `0.006`;
   no trees on the snowy summit. This cap replaces the forest base density; it is not an
   additional multiplier.
 
@@ -255,7 +256,7 @@ Fixed regions:
 4. **Summit sparsity** — all columns above `SEA+40` (N>=100): tree coverage <2%, broadleaf 0;
    all columns above `SEA+44`: zero trees.
 5. **Lowland density** — `LOWLAND_BOX`: forest tree-column coverage >=6% and <=20%.
-6. **Spatial variation** — global 32×32 cells: p10 <=2%, p50 <=5%, p90 >=7%, max >=12%;
+6. **Spatial variation** — global 32×32 cells: p10 <=2%, p50 <=6%, p90 >=8%, max >=12%;
    at least five cells <=1%, at least five cells >=8%, and at least three cells >=12%.
    At least ten cells are required.
 7. **Steep terrain** — global forest columns below `SEA+30`, slope <=1 vs slope >=3, each
