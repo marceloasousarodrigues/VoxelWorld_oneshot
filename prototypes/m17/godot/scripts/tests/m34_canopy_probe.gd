@@ -423,6 +423,9 @@ func _simulate_global(cell: int, crown_cap: int, keep: int = 0, out_of: int = 9,
 	var forest_coverages: Array[float] = []
 	var full_all_coverages: Array[float] = []
 	var full_forest_coverages: Array[float] = []
+	var full_dense8 := 0
+	var full_dense12 := 0
+	var full_low1 := 0
 	for key: Vector2i in cells:
 		var entry: Dictionary = cells[key]
 		var all_count := int(entry["all"])
@@ -433,8 +436,15 @@ func _simulate_global(cell: int, crown_cap: int, keep: int = 0, out_of: int = 9,
 		if forest_count > 0:
 			forest_coverages.append(float(tree_count) / float(forest_count))
 		if all_count >= 512 and forest_count >= 256:
+			var forest_coverage := float(tree_count) / float(forest_count)
 			full_all_coverages.append(all_coverage)
-			full_forest_coverages.append(float(tree_count) / float(forest_count))
+			full_forest_coverages.append(forest_coverage)
+			if forest_coverage >= 0.08:
+				full_dense8 += 1
+			if forest_coverage >= 0.12:
+				full_dense12 += 1
+			if forest_coverage <= 0.01:
+				full_low1 += 1
 	all_coverages.sort()
 	forest_coverages.sort()
 	full_all_coverages.sort()
@@ -447,12 +457,27 @@ func _simulate_global(cell: int, crown_cap: int, keep: int = 0, out_of: int = 9,
 		_percentile(all_coverages, 0.90), all_coverages[all_coverages.size() - 1],
 		_percentile(full_all_coverages, 0.50), _percentile(full_all_coverages, 0.90),
 		full_all_coverages[full_all_coverages.size() - 1]])
-	print("SIMGLOBAL_FOREST p10=%.4f p50=%.4f p90=%.4f max=%.4f full_n=%d full_p50=%.4f full_p90=%.4f full_max=%.4f" % [
+	print("SIMGLOBAL_FOREST p10=%.4f p50=%.4f p90=%.4f max=%.4f full_n=%d full_p50=%.4f full_p90=%.4f full_max=%.4f full_dense8=%d full_dense12=%d full_low1=%d" % [
 		_percentile(forest_coverages, 0.10), _percentile(forest_coverages, 0.50),
 		_percentile(forest_coverages, 0.90), forest_coverages[forest_coverages.size() - 1],
 		full_forest_coverages.size(),
 		_percentile(full_forest_coverages, 0.50), _percentile(full_forest_coverages, 0.90),
-		full_forest_coverages[full_forest_coverages.size() - 1]])
+		full_forest_coverages[full_forest_coverages.size() - 1],
+		full_dense8, full_dense12, full_low1])
+
+
+func _v5_canopy_radius(x: int, z: int, height: int, type: int, patch: float) -> int:
+	var canopy := 2
+	if type == WorldGen.TreeType.OAK:
+		canopy = 2 + _generator._hash2(x, z, 555) % 2
+	elif type == WorldGen.TreeType.BIRCH:
+		canopy = 2 + (1 if _generator._hash2(x, z, 556) % 4 == 0 else 0)
+	elif type == WorldGen.TreeType.BLOSSOM:
+		canopy = 2 + (1 if _generator._hash2(x, z, 557) % 3 == 0 else 0)
+	var understory := 25 if patch > 0.34 else 20
+	if _generator._hash3(x, height, z, 9102) % 100 < understory:
+		canopy = 2
+	return canopy
 
 
 func _simulate_grove_thin(box: Rect2i, keep: int, out_of: int, grove_patch: float, crown_cap: int) -> void:
@@ -501,11 +526,11 @@ func _simulate_grove_thin(box: Rect2i, keep: int, out_of: int, grove_patch: floa
 					tree = _generator._birch(x, z, height)
 				else:
 					tree = _generator._blossom(x, z, height)
-				tree["canopy"] = mini(crown_cap, int(tree["canopy"]))
+				tree["canopy"] = _v5_canopy_radius(x, z, height, int(tree["type"]), patch)
 			else:
 				tree = _generator._pine(x, z, height)
 			trees.append({"x": x, "z": z, "tree": tree, "r": _crown_radius(tree)})
-	_report_tree_set("SIMGROVE keep=%d/%d grove=%.2f cap=%d" % [keep, out_of, grove_patch, crown_cap], box, trees)
+	_report_tree_set("SIMGROVE v5radii keep=%d/%d grove=%.2f" % [keep, out_of, grove_patch], box, trees)
 
 
 func _report_v4_cells() -> void:
@@ -532,6 +557,9 @@ func _report_v4_cells() -> void:
 	var forest_coverages: Array[float] = []
 	var full_all: Array[float] = []
 	var full_forest: Array[float] = []
+	var full_dense8 := 0
+	var full_dense12 := 0
+	var full_low1 := 0
 	for key: Vector2i in cells:
 		var entry: Dictionary = cells[key]
 		var all_count := int(entry["all"])
@@ -542,8 +570,15 @@ func _report_v4_cells() -> void:
 		if forest_count > 0:
 			forest_coverages.append(float(tree_count) / float(forest_count))
 		if all_count >= 512 and forest_count >= 256:
+			var forest_coverage := float(tree_count) / float(forest_count)
 			full_all.append(all_coverage)
-			full_forest.append(float(tree_count) / float(forest_count))
+			full_forest.append(forest_coverage)
+			if forest_coverage >= 0.08:
+				full_dense8 += 1
+			if forest_coverage >= 0.12:
+				full_dense12 += 1
+			if forest_coverage <= 0.01:
+				full_low1 += 1
 	all_coverages.sort()
 	forest_coverages.sort()
 	full_all.sort()
@@ -554,11 +589,12 @@ func _report_v4_cells() -> void:
 		_percentile(all_coverages, 0.10), _percentile(all_coverages, 0.50),
 		_percentile(all_coverages, 0.90), all_coverages[all_coverages.size() - 1],
 		_percentile(full_all, 0.50), _percentile(full_all, 0.90), full_all[full_all.size() - 1]])
-	print("V4GLOBAL_FOREST p10=%.4f p50=%.4f p90=%.4f max=%.4f full_n=%d full_p50=%.4f full_p90=%.4f full_max=%.4f" % [
+	print("V4GLOBAL_FOREST p10=%.4f p50=%.4f p90=%.4f max=%.4f full_n=%d full_p50=%.4f full_p90=%.4f full_max=%.4f full_dense8=%d full_dense12=%d full_low1=%d" % [
 		_percentile(forest_coverages, 0.10), _percentile(forest_coverages, 0.50),
 		_percentile(forest_coverages, 0.90), forest_coverages[forest_coverages.size() - 1],
 		full_forest.size(),
-		_percentile(full_forest, 0.50), _percentile(full_forest, 0.90), full_forest[full_forest.size() - 1]])
+		_percentile(full_forest, 0.50), _percentile(full_forest, 0.90), full_forest[full_forest.size() - 1],
+		full_dense8, full_dense12, full_low1])
 
 
 func _simulate_localmax(box: Rect2i, radius: float, crown_cap: int) -> void:

@@ -101,7 +101,7 @@ expensive density/species work:
 
 ```gdscript
 const M34_GROVE_PATCH := 0.34
-const M34_WOODLAND_KEEP := 5   # out of 9
+const M34_WOODLAND_KEEP := 4   # out of 9
 
 var patch := _forest_patches.get_noise_2d(x, z)
 if patch <= M34_GROVE_PATCH \
@@ -112,9 +112,10 @@ if patch <= M34_GROVE_PATCH \
 - `patch > 0.34` is the existing M33 dense-grove class (`test_generation.gd` already uses
   this threshold). Dense groves keep **all** v4 candidates, so their tree density is not
   reduced.
-- Open and transition woodland keeps 5 of 9 candidates (about 56%), so it gains larger
+- Open and transition woodland keeps 4 of 9 candidates (about 44%), so it gains larger
   gaps and a more irregular tree distribution. The hash is on the candidate cell, not on
-  the column, so the thinning pattern is spatially coherent and deterministic.
+  the column; it is deterministic but deliberately irregular at the 2-block cell scale,
+  which the visual checklist checks for speckle.
 - Clearings (`vegetation_score < -0.16`) still return no tree before this step matters.
 
 This is deliberately **not** a uniform density-field reduction: dense groves keep their v4
@@ -125,14 +126,16 @@ The diagnostic simulation (`m34_canopy_probe.gd`, seed 17017) predicts:
 
 | Metric | v4 | v5 simulation |
 |---|---|---|
-| Global forest tree-column coverage | 9.54% | 6.36% |
-| Lowland canopy box tree coverage | 9.49% | 6.0% |
-| Full forest-cell p50 / p90 / max | 8.91% / 18.94% / 26.26% | 5.65% / 12.85% / 25.59% |
-| Canopy box open / 2+ / 3+ | 34.0% / 61.6% / 57.6% | 42.7% / 46.0% / 35.3% |
+| Global forest tree-column coverage | 9.54% | 5.55% |
+| Lowland canopy box tree coverage | 9.49% | 5.1% |
+| Full forest-cell p50 / p90 / max | 8.91% / 18.94% / 25.59% | 4.44% / 10.38% / 25.59% |
+| Canopy box open / 2+ / 3+ | 34.0% / 61.6% / 57.6% | 43.6% / 46.5% / 36.3% |
 | Canopy box median nearest-trunk distance | 1.41 | 2.00 |
 
-The dense-grove p90 and maximum stay close to v4, while the open woodland and the canopy
-box improve substantially. The actual v5 generator must reproduce these placement numbers
+The simulation models the D3 radius distribution (oak 2/3, birch and blossom 2/3) and the
+D4 understory cap, so the overlap numbers are not the optimistic all-radius-2 case. The
+dense-grove maximum stays identical to v4, while the open woodland and the canopy box
+improve substantially. The actual v5 generator must reproduce these placement numbers
 before the test thresholds are pinned; the probe output is committed as
 `prototypes/m17/results/godot/m34-diagnosis.txt`.
 
@@ -150,10 +153,10 @@ For v5 broadleaf trees only:
 - No v5 broadleaf crown exceeds radius 3. The v4 maximum of 4 is removed for v5 only.
 - Pines keep their v4 conical tiers and radii.
 
-This keeps the chunky voxel vocabulary and the existing species, while reducing the actual
-horizontal reach from 5–6 blocks to 4–5 blocks. It also produces a mixed canopy with
-smaller understory crowns and occasional larger oak crowns instead of a field of identical
-wide domes.
+This keeps the chunky voxel vocabulary and the existing species, while reducing the normal
+horizontal reach from 5–6 blocks to 4–5 blocks (up to 6 with the rare two-block lean). It
+also produces a mixed canopy with smaller understory crowns and occasional larger oak
+crowns instead of a field of identical wide domes.
 
 ### D4. Crown silhouette and height-class variation
 
@@ -197,9 +200,9 @@ decor clearing rule are reused unchanged for v5. No new clearing shape is invent
 The expected composition after D2–D4 is:
 
 - genuinely dense groves (`forest_patch > 0.34`) keep their v4 candidate density; the
-  full forest-cell maximum stays close to v4 (simulated 25.59% vs 26.26%) and the dense
-  grove subset keeps a high p90 (test 18);
-- irregular open woodland with roughly 5–7% forest tree coverage and visible individual
+  full forest-cell maximum stays identical to v4 (simulated 25.59%) and the dense grove
+  subset is directly compared with v4 in test 18;
+- irregular open woodland with roughly 5–6% forest tree coverage and visible individual
   crowns;
 - the existing large clearings, now more effective because crowns are smaller and the
   woodland between them is less tightly packed;
@@ -207,16 +210,16 @@ The expected composition after D2–D4 is:
   open-woodland thinning is a composition rule, not a lower density field;
 - no artificial circular or grid-aligned openings.
 
-The absolute forest tree-column coverage falls from 9.54% to about 6.4% because open
+The absolute forest tree-column coverage falls from 9.54% to about 5.6% because open
 woodland is thinned. That is intentional spacing, not a blanket density change: dense
 groves remain at v4 density, the clearings are unchanged, and the lowland crown-union floor
 below guards against a sparse world.
 
-If the measured v5 lowland crown coverage falls below 45% or the densest full cells fall
-below the v4 p90 by more than a small margin, the implementation is tuned by adjusting the
-woodland keep fraction (4/9 to 5/9), the crown radius distribution, or the height-class
-shares within this spec before completion. A blanket reduction of the density field is not
-an acceptable fix.
+If the measured v5 lowland crown coverage falls below 45%, or the dense-grove comparison
+shows that groves were thinned, the implementation is tuned by adjusting the woodland keep
+fraction (4/9 to 5/9), the crown radius distribution, or the height-class shares within
+this spec before completion. A blanket reduction of the density field is not an acceptable
+fix.
 
 ### D6. Mountain, river and terrain preservation
 
@@ -258,7 +261,8 @@ and explicit thresholds. Existing v4 tests remain in place and must still pass.
 
 1. `M34_VERSION == 5`, `CURRENT_VERSION == 5`, `M33_VERSION == 4`.
 2. Versions 0–5 are supported; version 6 is rejected.
-3. v0–v4 region hashes equal the existing pins; v5 is deterministic and distinct.
+3. v0–v4 region hashes equal the existing pins; v5 is deterministic, distinct, and pinned
+   after the final implementation measurement.
 4. v5 `height_at()` and `biome_at()` equal v4 over the representative sample.
 5. A v5 save records/restores generator 5; a v4 save still records/restores 4.
 
@@ -281,32 +285,37 @@ in `LOWLAND_CANOPY_BOX`, including trees rooted just outside the box. All ratios
 Compare v4 and v5:
 
 9. v5 forest columns covered by 2+ crowns is at least 0.08 lower than v4 and <=0.50
-   (v4: 0.616; simulated v5: 0.460).
+   (v4: 0.616; simulated v5: 0.465).
 10. v5 forest columns covered by 3+ crowns is at least 0.10 lower than v4 and <=0.40
-    (v4: 0.576; simulated v5: 0.353).
+    (v4: 0.576; simulated v5: 0.363).
 11. v5 open (crown-free) forest columns is at least 0.05 higher than v4 and >=0.40
-    (v4: 0.340; simulated v5: 0.427).
+    (v4: 0.340; simulated v5: 0.436).
 12. v5 median nearest-trunk distance in the box is >=1.9 blocks and at least 0.4 blocks
     higher than v4 (v4 box: 1.41; simulated v5: 2.00).
 
 ### 3.4 Dense forest, composition and clearings
 
-13. `LOWLAND_BOX` forest tree-column coverage is >=5% and <=8.5%; the v5 box crown union
-    covers >=45% of forest columns (simulated 6.0% and about 57%).
+13. `LOWLAND_BOX` forest tree-column coverage is >=4.5% and <=8.5%; the v5
+    `LOWLAND_CANOPY_BOX` crown union covers >=45% of forest columns (simulated 5.1% and
+    about 56%).
 14. **Full** 32×32 forest cells — cells with at least 512 all-column samples and at least
     256 forest columns, so edge slivers are excluded — use forest columns as the
     denominator. Require p50 <=8%, p90 >=9%, max >=18%, at least five full cells >=8%,
-    at least two full cells >=12%, and at least five full cells <=1%. This preserves both
-    dense groves and open ground and rejects a uniformly sparse world.
-15. Global forest tree-column coverage is >=5% and <=8%.
+    and at least two full cells >=12% (simulated: p50 4.44%, p90 10.38%, max 25.59%,
+    13 cells >=8%, 5 cells >=12%). This preserves dense groves and rejects a uniformly
+    sparse world. Open-ground evidence comes from the existing clearing test (17), not
+    from full forest cells, which are dense by construction.
+15. Global forest tree-column coverage is >=5% and <=8% (simulated 5.55%).
 16. `vegetation_score < -0.16` forest columns still contain zero trees; designated clearing
     area remains >=20% of forest columns.
 17. `LOWLAND_CANOPY_BOX` still has >=100 clearing columns, a crown-free connected component
     of >=200 columns, and >=50% of clearing columns outside every crown footprint.
 18. Dense grove columns (`forest_patch > 0.34`) still contain trees of at least three species
-    and at least 10 trees in the existing generation sample. Full dense-grove cells retain
-    a forest tree-column p90 >=10% and a maximum >=18%, proving the woodland thinning did
-    not thin the dense-grove class.
+    and at least 10 trees in the existing generation sample. For every sampled forest
+    column with `forest_patch > 0.34`, v5 and v4 must return the same `tree_at` tree type
+    and base height; the woodland thinning is skipped in this class, so tree presence and
+    species cannot change. This directly proves that dense groves were not thinned, instead
+    of relying on an arbitrary dense-cell definition.
 
 The thresholds in tests 9–15 are derived from the committed diagnostic simulation, not
 from an implemented v5 generator. Before pinning them, run the actual v5 probe and record
