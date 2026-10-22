@@ -1,0 +1,82 @@
+M35/M36 verification summary (worktree C:\Users\Admin\Documents\Projects\VoxelWorld_m34)
+Branch: codex/m34-canopy-composition (uncommitted v6/v7 edits preserved and completed)
+Base: 08fa745 (M34 v5 evidence head)
+Generator default: version 7
+
+FINGERPRINTS (wilderness_probe.gd --fingerprint, seed 17017)
+version=0 hash=3214517825889907206
+version=1 hash=5947596836865492245
+version=2 hash=8397584315617538769
+version=3 hash=8802792587028581708
+version=4 hash=2164503133686526591
+version=5 hash=5133898688464144157
+version=6 hash=9184026728463986701
+version=7 hash=5732396842800747576
+
+UNIT
+M17_TESTS_PASS 2847 assertions (exit 0)
+
+INTEGRATION
+M17_INTEGRATION_PASS 463 assertions (exit 0)
+
+REGRESSION
+M17_REGRESSION_PASS assertions=52 (exit 0)
+
+SMOKE x2
+world_hash=5132669793853529491
+faces_hash=4681965802156541697
+faces=338156
+edits=604
+(stable in both runs)
+
+DISTRIBUTION, seed 17017, sample [-192,192] step 1
+v5 global forest tree coverage 0.0555 (2418/43603)
+v6 global forest tree coverage 0.0434 (1892/43603)
+v7 global forest tree coverage 0.0358 (1563/43603)
+dense-grove columns (patch > 0.34): 6059
+  v5 dense-grove trees 910
+  v6 dense-grove trees 442
+  v7 dense-grove trees 293
+open lowland (patch <= 0.34, height <= SEA+8) trees: 456 in v5, v6 and v7
+v7 LOWLAND_BOX coverage 0.0443 (51/1151)
+v7 LOWLAND_CANOPY_BOX open / 2+ / 3+ 0.447 / 0.444 / 0.338
+v7 LOWLAND_CANOPY_BOX crown union 0.553
+v7 median nearest-trunk spacing 2.00
+v7 clearings 1042 columns, zero trees; largest crown-free component 726
+v7 river core trees 0; river-outer coverage 52/8979 = 0.0058
+v7 ELEVATION_BANDS: 1 tree in 21-30, 0 above 30; HIGH any_above_30=0
+
+TREELINE
+root limit SEA+24 = 86; canopy ceiling SEA+30 = 92
+v7 trees 1730; max root 83; max top 92; roots above limit 0; tops above ceiling 0
+v6 max top 102 with 194 crowns above the ceiling (v6 had no canopy ceiling)
+v5 had trees rooted above SEA+24, so the v7 treeline is a real change
+
+PERFORMANCE (3 runs each; look-phase medians)
+Normal camera -7.3,101.5,-29 yaw 270 pitch -12:
+  v5 FPS 516.5, p95/p99 2.530/3.013 ms, draw 433.3, settle gen/mesh 806/7038 ms
+  v7 FPS 527.6, p95/p99 2.436/2.841 ms, draw 416.0, settle gen/mesh 814/6968 ms
+River camera 80,92,180 yaw 0 pitch -25:
+  v5 FPS 441.9, p95/p99 2.854/3.396 ms, draw 651.4, settle gen/mesh 1183/10170 ms
+  v7 FPS 447.5, p95/p99 2.828/3.227 ms, draw 643.6, settle gen/mesh 1183/10125 ms
+
+VISUAL EVIDENCE
+Matched v5 (m35-before-*) and v7 (m35-v7-*), seed 17017, radius 6,
+--fly --hide-hud --settle=25, 1280x720, time 0.28:
+  0 51.9,120.2,19.4 yaw 90 pitch -35 (mountain / forest boundary)
+  1 17.5,86.3,24.2 yaw 90 pitch 0 (ground; v7 camera inside terrain in this build)
+  2 91.8,98.5,-72.2 yaw 180 pitch -20 (dense high-ridge forest)
+  3 224,120,288 yaw 75 pitch -30 (dense canopy)
+  4 76,140,-40 yaw 180 pitch -14 (mountain / summit)
+  5 -7.3,101.5,-29 yaw 270 pitch -12 (normal gameplay)
+  6 80,72,160 yaw 90 pitch -8 (clearing / forest edge)
+  7 80,92,180 yaw 0 pitch -25 (river / forest)
+
+LIMITATIONS
+- v7 is intentionally open: global forest tree coverage is 3.58% (v5 5.55%).
+  Dense groves still exist but are thinner than v5; this is the requested change.
+- The camera at 17.5,86.3,24.2 is inside terrain in this build; the usable
+  ground-level evidence is the normal-gameplay and clearing pair.
+- No far-field/LOD, terrain, river or renderer changes; M32/M33 terrain and
+  river behavior is preserved.
+- Performance is measured on the local RTX 3080/Windows build.

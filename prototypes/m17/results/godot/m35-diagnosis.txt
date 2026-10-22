@@ -1,0 +1,33 @@
+﻿M35/M36 forest spacing and treeline diagnosis (generator v7, seed 17017)
+Worktree: C:/Users/Admin/Documents/Projects/VoxelWorld_m34
+Base: 08fa745 (M34 v5 evidence head) plus the v6/v7 generator edits
+Measured 2026-10-22
+
+Commands:
+  Godot ... --headless --path prototypes/m17/godot --script res://scripts/tests/m33_vegetation_probe.gd -- --version=7 --radius=192 --step=1
+  Godot ... --headless --path prototypes/m17/godot --script res://scripts/tests/m34_canopy_probe.gd -- --version=7 --radius=192
+  Godot ... --headless --path prototypes/m17/godot --script res://scripts/tests/wilderness_probe.gd -- --fingerprint
+
+M33_VEG_PROBE version=7 radius=192 step=1 sea=62
+FOREST columns=43603 trees=1563 coverage=0.0358
+ELEVATION_BANDS 1-10:974/63111=0.015 11-20:755/17117=0.044 21-30:1/6376=0.000 31-40:0/3354=0.000 41-46:0/1341=0.000 <=sea:0/51559=0.000 >46:0/5367=0.000
+SLOPE_BANDS 0:494/39703=0.012 1:1116/80784=0.014 2:109/13876=0.008 3:11/13862=0.001
+HIGH broadleaf_above_sea+30=0 any_above_30=0 summit_broadleaf_above_sea+40=0 summit_any=0
+RIVER columns=56806 trees=52 coverage=0.0009 core=0/47827=0.0000 outer=52/8979=0.0058
+LOCAL_CELLS count=169 mean=0.0109 p10=0.0000 p50=0.0020 p90=0.0332 max=0.0879 empty=117 dense8=2 dense12=0 full60=0
+LOWLAND box=[P: (200, 280), S: (48, 24)] columns=1151 trees=51 coverage=0.0443 species={ 1: 35, 4: 12, 2: 3, 5: 1 }
+CANOPY box=[P: (192, 256), S: (64, 64)] forest_columns=3552 covered=2027 open=1586 open_ratio=0.447 clearing=1042 crown_free_clearing=997 clearing_open_ratio=0.957 largest_open_component=726
+ACTUAL v7 box=[P: (192, 256), S: (64, 64)] trees=173 coverage=0.049 open=0.447 multi=0.444 triple=0.338 spacing_p50=2.00 components=1 largest=2027 large20=1 largest_open=726
+ACTUAL v7 box=[P: (200, 280), S: (48, 24)] trees=103 coverage=0.089 open=0.376 multi=0.533 triple=0.457 spacing_p50=2.00 components=2 largest=665 large20=2 largest_open=375
+TREELINE version=7 trees=1730 max_root=83 max_top=92 root_limit=86 top_limit=92 above_root=0 above_top=0
+DENSE_GROVES version=5 dense_columns=6059 dense_trees=910 open_low_trees=456
+DENSE_GROVES version=6 dense_columns=6059 dense_trees=442 open_low_trees=456
+DENSE_GROVES version=7 dense_columns=6059 dense_trees=293 open_low_trees=456
+FINGERPRINT seed=17017 version=0 hash=3214517825889907206
+FINGERPRINT seed=17017 version=1 hash=5947596836865492245
+FINGERPRINT seed=17017 version=2 hash=8397584315617538769
+FINGERPRINT seed=17017 version=3 hash=8802792587028581708
+FINGERPRINT seed=17017 version=4 hash=2164503133686526591
+FINGERPRINT seed=17017 version=5 hash=5133898688464144157
+FINGERPRINT seed=17017 version=6 hash=9184026728463986701
+FINGERPRINT seed=17017 version=7 hash=5732396842800747576
