@@ -1,4 +1,4 @@
-extends RefCounted
+﻿extends RefCounted
 
 ## M34 canopy composition: v5 version plumbing, deterministic placement,
 ## crown variation, overlap reduction, dense-grove preservation and ecology.
@@ -241,7 +241,7 @@ func _full_cell_stats(generator: WorldGen) -> Dictionary:
 func run(h: TestHarness) -> void:
 	h.section("M34 generator versions")
 	h.eq(WorldGen.M34_VERSION, 5, "the M34 canopy generator is version 5")
-	h.eq(WorldGen.CURRENT_VERSION, 7, "new worlds use the current M36 generator")
+	h.eq(WorldGen.CURRENT_VERSION, 8, "new worlds use the current M37 generator")
 	h.eq(WorldGen.M33_VERSION, 4, "the M33 generator remains version 4")
 	for version in range(0, WorldGen.CURRENT_VERSION + 1):
 		h.check(WorldGen.is_supported_version(version), "version %d remains loadable" % version)

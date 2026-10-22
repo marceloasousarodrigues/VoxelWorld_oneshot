@@ -1,4 +1,4 @@
-extends RefCounted
+﻿extends RefCounted
 
 ## M33 vegetation ecology: version pins, deterministic placement, elevation and
 ## slope limits, clearings, river rules and loaded-save compatibility.
@@ -87,7 +87,7 @@ func run(h: TestHarness) -> void:
 	_ensure_sample()
 	h.section("M33 generator versions")
 	h.eq(WorldGen.M33_VERSION, 4, "the M33 vegetation generator is version 4")
-	h.eq(WorldGen.CURRENT_VERSION, 7, "new worlds use the current M36 generator")
+	h.eq(WorldGen.CURRENT_VERSION, 8, "new worlds use the current M37 generator")
 	for version in range(0, WorldGen.CURRENT_VERSION + 1):
 		h.check(WorldGen.is_supported_version(version), "version %d remains loadable" % version)
 	h.check(not WorldGen.is_supported_version(WorldGen.CURRENT_VERSION + 1), "a future version is rejected")

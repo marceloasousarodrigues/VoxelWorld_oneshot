@@ -13,6 +13,7 @@ func _initialize() -> void:
 	var version := WorldGen.CURRENT_VERSION
 	var radius := 256
 	var step := 2
+	var seed_value := 17017
 	for argument: String in OS.get_cmdline_user_args():
 		var parts := argument.split("=", true, 1)
 		var value := parts[1] if parts.size() > 1 else ""
@@ -23,7 +24,9 @@ func _initialize() -> void:
 				radius = value.to_int()
 			"--step":
 				step = maxi(1, value.to_int())
-	var generator := WorldGen.new(17017, version)
+			"--seed":
+				seed_value = value.to_int()
+	var generator := WorldGen.new(seed_value, version)
 	var modern := version >= WorldGen.M33_VERSION
 	print("M33_VEG_PROBE version=%d radius=%d step=%d sea=%d" % [version, radius, step, SEA])
 	var bands := {}

@@ -16,6 +16,7 @@ var _generator: WorldGen
 func _initialize() -> void:
 	var version := WorldGen.CURRENT_VERSION
 	var radius := 192
+	var seed_value := 17017
 	for argument: String in OS.get_cmdline_user_args():
 		var parts := argument.split("=", true, 1)
 		var value := parts[1] if parts.size() > 1 else ""
@@ -24,8 +25,10 @@ func _initialize() -> void:
 				version = value.to_int()
 			"--radius":
 				radius = value.to_int()
-	_generator = WorldGen.new(17017, version)
-	print("M34_CANOPY_PROBE version=%d radius=%d" % [version, radius])
+			"--seed":
+				seed_value = value.to_int()
+	_generator = WorldGen.new(seed_value, version)
+	print("M34_CANOPY_PROBE version=%d radius=%d seed=%d" % [version, radius, seed_value])
 	_report_global(radius)
 	_report_box(LOWLAND_CANOPY_BOX)
 	_report_voxel_top(LOWLAND_CANOPY_BOX)
@@ -55,6 +58,7 @@ func _initialize() -> void:
 	_report_v4_cells()
 	_report_actual_box(LOWLAND_CANOPY_BOX)
 	_report_actual_box(LOWLAND_BOX)
+	_report_actual_box(Rect2i(60, -104, 64, 64))
 	_report_treeline()
 	_report_dense_groves()
 	for keep: int in [4, 5]:
@@ -487,8 +491,8 @@ func _v5_canopy_radius(x: int, z: int, height: int, type: int, patch: float) -> 
 
 
 func _report_dense_groves() -> void:
-	for version: int in [5, 6, 7]:
-		var generator := WorldGen.new(17017, version)
+	for version: int in [5, 6, 7, 8]:
+		var generator := WorldGen.new(_generator.world_seed, version)
 		var dense_columns := 0
 		var dense_trees := 0
 		var open_low_trees := 0

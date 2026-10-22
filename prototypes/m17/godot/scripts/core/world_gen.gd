@@ -27,9 +27,19 @@ const M34_VERSION := 5
 const M35_VERSION := 6
 ## Version 7 further opens dense groves and limits the full canopy height.
 const M36_VERSION := 7
-const CURRENT_VERSION := 7
+## Version 8 carves larger irregular openings inside dense groves.
+const M37_VERSION := 8
+const CURRENT_VERSION := 8
 const M35_TREELINE_LIMIT := SEA_LEVEL + 24
 const M36_CANOPY_CEILING := SEA_LEVEL + 30
+## Dense groves are left open where this low-frequency field is above the
+## threshold, producing contiguous clearings instead of scattered missing trees.
+const M37_DENSE_OPENING := -0.2
+const M37_WOODLAND_OPENING := 0.35
+const M37_SLOPE_CELL := 16
+const M37_SLOPE_CLEARING := 70
+const M37_WOODLAND_CLEARING := 20
+const M37_CLEARING_SCORE := -0.08
 const TREE_PAD := 5
 ## Wide enough for a radius-4 crown with one block of lean and one of shelf offset.
 const WILDERNESS_TREE_PAD := 7
@@ -109,6 +119,7 @@ var _river: FastNoiseLite
 var _forest_patches: FastNoiseLite
 var _flower_patches: FastNoiseLite
 var _woodland: FastNoiseLite
+var _grove_openings: FastNoiseLite
 var _detail: FastNoiseLite
 var _temperature: FastNoiseLite
 var _humidity: FastNoiseLite
@@ -141,6 +152,10 @@ func _init(world_seed_value: int = 17017, terrain_version_value: int = CURRENT_V
 			# Second low-frequency field that breaks forest-patch thresholds into
 			# irregular clearings and woodland instead of one contour-shaped edge.
 			_woodland = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.007, 2, 0.55)
+		if terrain_version >= M37_VERSION:
+			# Low-frequency openings keep dense groves in large irregular
+			# patches instead of thinning every candidate evenly.
+			_grove_openings = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.018, 2, 0.55)
 	_temperature = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0016, 2, 0.5)
 	_humidity = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.0021, 2, 0.5)
 	_cave_a = _noise(FastNoiseLite.TYPE_SIMPLEX, 0.026, 2, 0.5)
@@ -176,6 +191,11 @@ func _is_m35() -> bool:
 ## True for the version 7 forest spacing and canopy ceiling pass.
 func _is_m36() -> bool:
 	return terrain_version >= M36_VERSION
+
+
+## True for the version 8 dense-grove opening pass.
+func _is_m37() -> bool:
+	return terrain_version >= M37_VERSION
 
 
 ## Horizontal reach of a tree's crown from its trunk, in blocks.  Version 0 and 1
@@ -697,11 +717,43 @@ func _forest_canopy_tree_v5(x: int, z: int, height: int) -> Dictionary:
 	if x != candidate_x or z != candidate_z:
 		return {"type": TreeType.NONE}
 	var patch := _forest_patches.get_noise_2d(x, z)
+	var river_distance := _river_distance(x, z)
+	if river_distance < RIVER_BANK_LIMIT * M33_RIVER_CORE:
+		return {"type": TreeType.NONE}
+	var river_outer := river_distance < RIVER_BANK_LIMIT * M33_RIVER_OUTER
+	var slope := _column_slope(x, z, height)
+	if _is_m37() and not river_outer:
+		# Large, low-frequency openings instead of evenly scattered thinning.
+		# Dense groves open more aggressively than open woodland, and slopes
+		# open a little more so hillsides do not read as one canopy mass.
+		var opening := _grove_openings.get_noise_2d(x, z)
+		var dense_threshold := M37_DENSE_OPENING
+		var woodland_threshold := M37_WOODLAND_OPENING
+		if slope >= 2:
+			dense_threshold -= 0.25
+			woodland_threshold -= 0.25
+			var slope_cell := Vector2i(floori(float(x) / M37_SLOPE_CELL),
+				floori(float(z) / M37_SLOPE_CELL))
+			if _hash2(slope_cell.x, slope_cell.y, 9201) % 100 < M37_SLOPE_CLEARING:
+				return {"type": TreeType.NONE}
+		if patch > M34_GROVE_PATCH:
+			if opening > dense_threshold:
+				return {"type": TreeType.NONE}
+		else:
+			var wood_cell := Vector2i(floori(float(x) / M37_SLOPE_CELL),
+				floori(float(z) / M37_SLOPE_CELL))
+			if _hash2(wood_cell.x, wood_cell.y, 9202) % 100 < M37_WOODLAND_CLEARING:
+				return {"type": TreeType.NONE}
+			if opening > woodland_threshold:
+				return {"type": TreeType.NONE}
 	if _is_m36():
 		# Keep dense groves distinct, but space them enough to show separate
 		# crowns and terrain between trees in the user's v6 gameplay view.
 		if patch > M34_GROVE_PATCH:
-			if _hash2(cell_x, cell_z, 9103) % 3 != 0:
+			if _is_m37():
+				if _hash2(cell_x, cell_z, 9104) % 2 != 0:
+					return {"type": TreeType.NONE}
+			elif _hash2(cell_x, cell_z, 9103) % 3 != 0:
 				return {"type": TreeType.NONE}
 		elif _hash2(cell_x, cell_z, 9101) % 9 >= M34_WOODLAND_KEEP:
 			return {"type": TreeType.NONE}
@@ -717,14 +769,10 @@ func _forest_canopy_tree_v5(x: int, z: int, height: int) -> Dictionary:
 	elif patch <= M34_GROVE_PATCH \
 			and _hash2(cell_x, cell_z, 9101) % 9 >= M34_WOODLAND_KEEP:
 		return {"type": TreeType.NONE}
-	var river_distance := _river_distance(x, z)
-	if river_distance < RIVER_BANK_LIMIT * M33_RIVER_CORE:
-		return {"type": TreeType.NONE}
-	var river_outer := river_distance < RIVER_BANK_LIMIT * M33_RIVER_OUTER
 	var score := _vegetation_score(x, z)
-	if score < M33_CLEARING_SCORE:
+	var clearing_score := M37_CLEARING_SCORE if _is_m37() else M33_CLEARING_SCORE
+	if score < clearing_score:
 		return {"type": TreeType.NONE}
-	var slope := _column_slope(x, z, height)
 	var species_roll := _hash2(x, z, 4714) % 100
 	var broadleaf := float(species_roll) < _v4_broadleaf_share(height, patch) * 100.0
 	if broadleaf and (height > M33_BROADLEAF_LIMIT or slope >= 4):
@@ -740,11 +788,18 @@ func _forest_canopy_tree_v5(x: int, z: int, height: int) -> Dictionary:
 		return {"type": TreeType.NONE}
 	if broadleaf:
 		var leaf_roll := _hash2(x, z, 4715) % 100
+		var tree: Dictionary
 		if leaf_roll < 75:
-			return _oak(x, z, height)
-		if leaf_roll < 95:
-			return _birch(x, z, height)
-		return _blossom(x, z, height)
+			tree = _oak(x, z, height)
+		elif leaf_roll < 95:
+			tree = _birch(x, z, height)
+		else:
+			tree = _blossom(x, z, height)
+		if _is_m37():
+			# v8 keeps compact broadleaf crowns across the forest so sparse
+			# remnants read as separate trees rather than one broad surface.
+			tree["canopy"] = 1
+		return tree
 	return _pine(x, z, height)
 
 
@@ -903,6 +958,8 @@ func _oak(x: int, z: int, ground: int) -> Dictionary:
 		var crown := 2 + _hash2(x, z, 555) % 2
 		if height_class == 2:
 			crown = 2
+		if _is_m37() and patch > M34_GROVE_PATCH:
+			crown = 2
 		trunk = maxi(4, trunk + height_adjust)
 		return {"type": TreeType.OAK, "base": ground + 1, "height": trunk,
 			"canopy": crown, "height_class": height_class}
@@ -928,6 +985,8 @@ func _birch(x: int, z: int, ground: int) -> Dictionary:
 		var crown := 2 + (1 if _hash2(x, z, 556) % 4 == 0 else 0)
 		if height_class == 2:
 			crown = 2
+		if _is_m37() and patch > M34_GROVE_PATCH:
+			crown = 2
 		trunk = maxi(4, trunk + height_adjust)
 		return {"type": TreeType.BIRCH, "base": ground + 1, "height": trunk,
 			"canopy": crown, "height_class": height_class}
@@ -949,6 +1008,8 @@ func _blossom(x: int, z: int, ground: int) -> Dictionary:
 		var height_adjust := 2 if height_class == 1 else (-1 if height_class == 2 else 0)
 		var crown := 2 + (1 if _hash2(x, z, 557) % 3 == 0 else 0)
 		if height_class == 2:
+			crown = 2
+		if _is_m37() and patch > M34_GROVE_PATCH:
 			crown = 2
 		trunk = maxi(4, trunk + height_adjust)
 		return {"type": TreeType.BLOSSOM, "base": ground + 1, "height": trunk,

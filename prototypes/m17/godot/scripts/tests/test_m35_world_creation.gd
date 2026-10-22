@@ -1,4 +1,4 @@
-extends RefCounted
+﻿extends RefCounted
 
 ## M35/M36 world creation: v6/v7 forest spacing, v7 treeline and canopy ceiling.
 ## v5 remains the M34 canopy baseline; v6/v7 only change tree placement/height.
@@ -135,7 +135,7 @@ func run(h: TestHarness) -> void:
 	h.eq(WorldGen.M34_VERSION, 5, "the M34 canopy generator remains version 5")
 	h.eq(WorldGen.M35_VERSION, 6, "the forest-spacing pass is version 6")
 	h.eq(WorldGen.M36_VERSION, 7, "the treeline/canopy pass is version 7")
-	h.eq(WorldGen.CURRENT_VERSION, 7, "new worlds use the M36 generator")
+	h.eq(WorldGen.CURRENT_VERSION, 8, "new worlds use the current M37 generator")
 	for version in range(0, WorldGen.CURRENT_VERSION + 1):
 		h.check(WorldGen.is_supported_version(version), "version %d remains loadable" % version)
 	h.check(not WorldGen.is_supported_version(WorldGen.CURRENT_VERSION + 1),
