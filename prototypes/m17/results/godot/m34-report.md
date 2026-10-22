@@ -272,4 +272,6 @@ Commits:
 - `ff9df0e` â€” v5 crown radii and height classes
 - `2a505c5` â€” v5 crown silhouettes and pin
 - `73b6ef0` â€” v5 ecology, persistence and regression verification
-- evidence/report commit: latest on `codex/m34-canopy-composition`
+- `3b4fd2e` - visual, performance and verification evidence
+- `5698170` - referenced capture cleanup
+- `93f4f55` - final review and corrected comparison evidence
