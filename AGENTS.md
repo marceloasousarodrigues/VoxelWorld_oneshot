@@ -1,5 +1,13 @@
 # AGENTS.md
 
+## Current project layout
+
+Godot 4 in [`godot/`](godot/) is the canonical game project. The Python + Ursina
+implementation is deprecated and preserved under [`archive/ursina/`](archive/ursina/).
+The architecture described in the root `ARCHITECTURE.md` applies to that historical
+implementation; do not treat its Ursina-specific constraints as the active Godot
+architecture. Use the Godot milestone records and current design documents for Godot work.
+
 ## Purpose
 
 This document defines the permanent working rules for AI agents contributing to VoxelWorld.

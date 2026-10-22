@@ -38,13 +38,13 @@
 ### Task 1: v5 scaffolding, version plumbing and existing-test updates
 
 **Files:**
-- Modify: `prototypes/m17/godot/scripts/core/world_gen.gd:17-25,141-153`
-- Modify: `prototypes/m17/godot/scripts/tests/test_m33_vegetation.gd:86-108`
-- Modify: `prototypes/m17/godot/scripts/tests/test_m32_landscape.gd:34-41`
-- Modify: `prototypes/m17/godot/scripts/tests/m33_vegetation_probe.gd:26-28`
-- Modify: `prototypes/m17/godot/scripts/tests/wilderness_probe.gd:121-123,211-213`
-- Create: `prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd`
-- Modify: `prototypes/m17/godot/scripts/tests/run_tests.gd:12-54`
+- Modify: `godot/scripts/core/world_gen.gd:17-25,141-153`
+- Modify: `godot/scripts/tests/test_m33_vegetation.gd:86-108`
+- Modify: `godot/scripts/tests/test_m32_landscape.gd:34-41`
+- Modify: `godot/scripts/tests/m33_vegetation_probe.gd:26-28`
+- Modify: `godot/scripts/tests/wilderness_probe.gd:121-123,211-213`
+- Create: `godot/scripts/tests/test_m34_canopy_composition.gd`
+- Modify: `godot/scripts/tests/run_tests.gd:12-54`
 
 **Interfaces:**
 - Produces: `WorldGen.M34_VERSION = 5`, `WorldGen.CURRENT_VERSION = 5`, `WorldGen._is_m34() -> bool`.
@@ -121,7 +121,7 @@ The snippets in Tasks 2–5 are fragments of this same `run()` function. Reuse t
 Run:
 
 ```powershell
-& 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
+& 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' --headless --path godot --script res://scripts/tests/run_tests.gd
 ```
 
 Expected: FAIL because `M34_VERSION` does not exist and `CURRENT_VERSION` is still 4.
@@ -157,7 +157,7 @@ Expected: PASS. Task 2 adds the v5-distinct assertion once placement changes; do
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add prototypes/m17/godot/scripts/core/world_gen.gd prototypes/m17/godot/scripts/tests/test_m33_vegetation.gd prototypes/m17/godot/scripts/tests/test_m32_landscape.gd prototypes/m17/godot/scripts/tests/m33_vegetation_probe.gd prototypes/m17/godot/scripts/tests/wilderness_probe.gd prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd prototypes/m17/godot/scripts/tests/run_tests.gd
+git add godot/scripts/core/world_gen.gd godot/scripts/tests/test_m33_vegetation.gd godot/scripts/tests/test_m32_landscape.gd godot/scripts/tests/m33_vegetation_probe.gd godot/scripts/tests/wilderness_probe.gd godot/scripts/tests/test_m34_canopy_composition.gd godot/scripts/tests/run_tests.gd
 git commit -m "M34: add v5 generator scaffolding and version tests"
 ```
 
@@ -166,8 +166,8 @@ git commit -m "M34: add v5 generator scaffolding and version tests"
 ### Task 2: v5 forest placement, grove-aware thinning and dense-grove preservation
 
 **Files:**
-- Modify: `prototypes/m17/godot/scripts/core/world_gen.gd:24-49,472-480,618-695`
-- Modify: `prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd`
+- Modify: `godot/scripts/core/world_gen.gd:24-49,472-480,618-695`
+- Modify: `godot/scripts/tests/test_m34_canopy_composition.gd`
 
 **Interfaces:**
 - Consumes: `WorldGen._is_m34()`, `_vegetation_score()`, `_v4_tree_density()`, `_v4_broadleaf_share()`, `_river_distance()`, `_column_slope()`.
@@ -403,7 +403,7 @@ Expected: PASS for the new density/clearing/dense-grove tests. The v5 distinct t
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add prototypes/m17/godot/scripts/core/world_gen.gd prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd
+git add godot/scripts/core/world_gen.gd godot/scripts/tests/test_m34_canopy_composition.gd
 git commit -m "M34: add grove-aware v5 woodland placement"
 ```
 
@@ -412,8 +412,8 @@ git commit -m "M34: add grove-aware v5 woodland placement"
 ### Task 3: v5 crown radii, height classes and overlap reduction
 
 **Files:**
-- Modify: `prototypes/m17/godot/scripts/core/world_gen.gd:776-818`
-- Modify: `prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd`
+- Modify: `godot/scripts/core/world_gen.gd:776-818`
+- Modify: `godot/scripts/tests/test_m34_canopy_composition.gd`
 
 **Interfaces:**
 - Consumes: `_is_m34()`, `_hash2()`, `_hash3()`.
@@ -644,7 +644,7 @@ Expected: PASS. Before pinning anything, run `m34_canopy_probe.gd --version=5` a
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add prototypes/m17/godot/scripts/core/world_gen.gd prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd
+git add godot/scripts/core/world_gen.gd godot/scripts/tests/test_m34_canopy_composition.gd
 git commit -m "M34: add v5 crown radii and height classes"
 ```
 
@@ -653,8 +653,8 @@ git commit -m "M34: add v5 crown radii and height classes"
 ### Task 4: v5 crown profiles, block-level evidence and v5 pin
 
 **Files:**
-- Modify: `prototypes/m17/godot/scripts/core/world_gen.gd:1190-1315`
-- Modify: `prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd`
+- Modify: `godot/scripts/core/world_gen.gd:1190-1315`
+- Modify: `godot/scripts/tests/test_m34_canopy_composition.gd`
 - Modify: `prototypes/m17/results/godot/m34-diagnosis.txt`
 
 **Interfaces:**
@@ -836,7 +836,7 @@ Run the v5 probe and append the actual v5 measurements to `m34-diagnosis.txt` wi
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add prototypes/m17/godot/scripts/core/world_gen.gd prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd prototypes/m17/results/godot/m34-diagnosis.txt
+git add godot/scripts/core/world_gen.gd godot/scripts/tests/test_m34_canopy_composition.gd prototypes/m17/results/godot/m34-diagnosis.txt
 git commit -m "M34: add v5 crown silhouettes and pin v5 generation"
 ```
 
@@ -845,7 +845,7 @@ git commit -m "M34: add v5 crown silhouettes and pin v5 generation"
 ### Task 5: Ecology, persistence and full regression verification
 
 **Files:**
-- Modify: `prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd` (if a v5-specific ecology assertion is missing)
+- Modify: `godot/scripts/tests/test_m34_canopy_composition.gd` (if a v5-specific ecology assertion is missing)
 - Verify: existing `test_m33_vegetation.gd`, `test_m32_landscape.gd`, `test_generation.gd`, `test_persistence.gd`, `test_streaming_lifecycle.gd`, `test_starter_house.gd`
 
 **Interfaces:**
@@ -931,8 +931,8 @@ Run the unit command. Expected: `M17_TESTS_PASS`, exit 0. Record the assertion c
 - [ ] **Step 3: Run integration and regression**
 
 ```powershell
-& 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
-& 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' --headless --path prototypes/m17/godot --script res://scripts/regression.gd
+& 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' --headless --path godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
+& 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' --headless --path godot --script res://scripts/regression.gd
 ```
 
 Expected: `M17_INTEGRATION_PASS` and `M17_REGRESSION_PASS`, exit 0.
@@ -940,7 +940,7 @@ Expected: `M17_INTEGRATION_PASS` and `M17_REGRESSION_PASS`, exit 0.
 - [ ] **Step 4: Run the smoke test twice**
 
 ```powershell
-& 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' --headless --path prototypes/m17/godot -- --straight-to-game --seed=17017 --render-distance=6 --quit-after=30
+& 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' --headless --path godot -- --straight-to-game --seed=17017 --render-distance=6 --quit-after=30
 ```
 
 Run twice; compare `world_hash`, `faces_hash`, `faces`, `edits`. They must match between runs.
@@ -954,7 +954,7 @@ If v5 river-outer coverage falls below 0.5% because the 4/9 woodland thinning al
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd
+git add godot/scripts/tests/test_m34_canopy_composition.gd
 git commit -m "M34: verify v5 ecology, persistence and regressions"
 ```
 

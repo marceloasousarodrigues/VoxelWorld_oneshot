@@ -20,12 +20,12 @@ Baseline capture (same camera to reuse after the change):
 Command:
 ```powershell
 $godot = 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe'
-& $godot --path prototypes/m17/godot -- --capture --capture-name=m29-after-cottage.png --look=38,-8 --settle=16 --render-distance=5 --hide-hud --time=0.28
+& $godot --path godot -- --capture --capture-name=m29-after-cottage.png --look=38,-8 --settle=16 --render-distance=5 --hide-hud --time=0.28
 ```
 
 ## Rules
 
-- Work only under `prototypes/m17/godot/` plus M29 documentation/evidence paths.
+- Work only under `godot/` plus M29 documentation/evidence paths.
 - Do not modify the original Python/Ursina implementation.
 - Append new block IDs after `BlockDB.STAIR` (88); never renumber or reorder existing IDs.
 - Preserve existing saves and M23–M28 behavior. Keep chunk/mesh/streaming invariants.
@@ -124,7 +124,7 @@ Add/update Godot tests, at minimum:
 
 Run during iteration:
 ```powershell
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
+& $godot --headless --path godot --script res://scripts/tests/run_tests.gd
 ```
 At the milestone gate also run integration, smoke and determinism commands from
 `prototypes/m17/results/godot-progress.md`.

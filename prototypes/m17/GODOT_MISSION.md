@@ -73,7 +73,7 @@ The existing production game is written in Python using Ursina and has completed
 
 The Godot implementation is a new engine direction. Keep it isolated initially under:
 
-`prototypes/m17/godot/`
+`godot/`
 
 Keep shared M17 contracts, fixtures, documentation, and results under the existing `prototypes/m17/` structure.
 
@@ -145,7 +145,7 @@ Prefer:
 For each external resource:
 - Verify its source and intended use.
 - Record the asset or package name, source URL, license, attribution requirements, and local destination.
-- Keep a project-level asset manifest, for example `prototypes/m17/godot/ASSET_MANIFEST.md`.
+- Keep a project-level asset manifest, for example `godot/ASSET_MANIFEST.md`.
 - Include required attribution and license files.
 - Respect redistribution and modification restrictions.
 - Avoid downloading duplicate or unnecessary assets.

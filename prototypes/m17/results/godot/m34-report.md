@@ -1,4 +1,4 @@
-﻿# M34 â€” Canopy Shape and Forest Composition
+# M34 â€” Canopy Shape and Forest Composition
 
 ## Status
 
@@ -249,11 +249,11 @@ Its non-blocking warnings were addressed:
 
 - Spec: `docs/superpowers/specs/2026-10-21-m34-canopy-composition-design.md`
 - Plan: `docs/superpowers/plans/2026-10-21-m34-canopy-composition.md`
-- Generator: `prototypes/m17/godot/scripts/core/world_gen.gd`
-- Tests: `prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd`,
+- Generator: `godot/scripts/core/world_gen.gd`
+- Tests: `godot/scripts/tests/test_m34_canopy_composition.gd`,
   `test_streaming_lifecycle.gd`, `test_m33_vegetation.gd`, `test_m32_landscape.gd`,
   `run_tests.gd`
-- Probes: `prototypes/m17/godot/scripts/tests/m34_canopy_probe.gd`,
+- Probes: `godot/scripts/tests/m34_canopy_probe.gd`,
   `m33_vegetation_probe.gd`, `wilderness_probe.gd`
 - Evidence: `prototypes/m17/results/godot/m34-*.png`, `m34-*.json`,
   `m34-diagnosis.txt`, `m34-verification.txt`, this report.

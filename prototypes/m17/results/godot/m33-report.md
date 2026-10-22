@@ -263,13 +263,13 @@ trees = 0. Non-blocking note: the document originally said “ground + 6” whil
 
 - Spec: `docs/superpowers/specs/2026-10-21-m33-vegetation-ecology-design.md`
 - Plan: `docs/superpowers/plans/2026-10-21-m33-vegetation-ecology.md`
-- Generator: `prototypes/m17/godot/scripts/core/world_gen.gd`
-- Streaming: `prototypes/m17/godot/scripts/game/chunk_streamer.gd`
-- Spawn clearing: `prototypes/m17/godot/scripts/game/starter_house.gd`
-- Tests: `prototypes/m17/godot/scripts/tests/test_m33_vegetation.gd`,
+- Generator: `godot/scripts/core/world_gen.gd`
+- Streaming: `godot/scripts/game/chunk_streamer.gd`
+- Spawn clearing: `godot/scripts/game/starter_house.gd`
+- Tests: `godot/scripts/tests/test_m33_vegetation.gd`,
   `test_streaming_lifecycle.gd`, `test_generation.gd`, `test_m31_wilderness.gd`,
   `test_m32_landscape.gd`, `run_tests.gd`
-- Probe: `prototypes/m17/godot/scripts/tests/m33_vegetation_probe.gd`
+- Probe: `godot/scripts/tests/m33_vegetation_probe.gd`
 - Evidence: `prototypes/m17/results/godot/m33-*.png`, `m33-*.json`,
   `m33-verification.txt`, this report
 

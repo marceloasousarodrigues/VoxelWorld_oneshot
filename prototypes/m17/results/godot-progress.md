@@ -76,7 +76,7 @@ player-authored showcase had to show the improvement, not just a test arena.
   identical both runs.
 - Windowed capture, exact command:
   ```powershell
-  & $godot --path prototypes/m17/godot -- --capture --capture-name=m29-after-cottage.png --look=38,-8 --settle=16 --render-distance=5 --hide-hud --time=0.28
+  & $godot --path godot -- --capture --capture-name=m29-after-cottage.png --look=38,-8 --settle=16 --render-distance=5 --hide-hud --time=0.28
   ```
   exit **0**, `M29_STARTER_HOUSE ... house=273`, screenshot saved 1280×720.
 - Captures directly inspected by the Plan agent:
@@ -262,11 +262,11 @@ final settlement genuinely player-built rather than a prefab.
 
 ```powershell
 $godot = 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe'
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
-& $godot --headless --path prototypes/m17/godot -- --straight-to-game --quit-after=30
-& $godot --path prototypes/m17/godot -- --capture --capture-name=m28-final-wide.png --final-demo=wide --time=0.28 --hide-hud --settle=20 --render-distance=8
-& $godot --path prototypes/m17/godot -- --capture --capture-name=m28-final-castle.png --final-demo=castle --time=0.28 --hide-hud --settle=20 --render-distance=6
+& $godot --headless --path godot --script res://scripts/tests/run_tests.gd
+& $godot --headless --path godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
+& $godot --headless --path godot -- --straight-to-game --quit-after=30
+& $godot --path godot -- --capture --capture-name=m28-final-wide.png --final-demo=wide --time=0.28 --hide-hud --settle=20 --render-distance=8
+& $godot --path godot -- --capture --capture-name=m28-final-castle.png --final-demo=castle --time=0.28 --hide-hud --settle=20 --render-distance=6
 ```
 
 ## M27 — Bring normal generated worlds closer to the visual references (2026-10-20)
@@ -598,10 +598,10 @@ compile and had two real defects that are fixed here (see below).
 
 ### Verification actually run (Godot 4.7.2 stable mono, Windows)
 
-- Unit: `--headless --path prototypes/m17/godot --script
+- Unit: `--headless --path godot --script
   res://scripts/tests/run_tests.gd` → **1852 assertions, exit 0**, no script
   errors (M22: 1767; +85 stair assertions).
-- Integration: `--headless --path prototypes/m17/godot --script
+- Integration: `--headless --path godot --script
   res://scripts/tests/run_integration.gd -- --straight-to-game` →
   **426 assertions, exit 0** (M22: 402; +24 stair assertions).
 - Headless smoke twice: exit 0, 0 bytes stderr,
@@ -742,7 +742,7 @@ both exit 0 with empty stderr.  The real-scene smoke fingerprint is unchanged.
 ## M21 — Gameplay depth, survival and progression (2026-10-19, autonomous session)
 
 Mission: connect the existing Godot systems into coherent survival loops instead
-of adding disconnected features.  Work is confined to `prototypes/m17/godot/`
+of adding disconnected features.  Work is confined to `godot/`
 and these result documents; the production Ursina implementation was not touched.
 
 ### Root causes found in the actual code
@@ -1011,7 +1011,7 @@ assertions for both duplication paths.
 
 Mission: make the inventory, hotbar, crafting table, furnace and item collection
 one coherent Minecraft-inspired system.  The work is confined to the Godot
-project under `prototypes/m17/godot/`; the production Ursina implementation was
+project under `godot/`; the production Ursina implementation was
 not touched.
 
 ### Root causes found (not assumed)
@@ -1105,13 +1105,13 @@ not touched.
 
 ### Verification actually run (Godot 4.7.2 stable mono, Windows)
 
-- Unit: `--headless --path prototypes/m17/godot --script
+- Unit: `--headless --path godot --script
   res://scripts/tests/run_tests.gd` → **1477 assertions**, exit 0, 0 bytes
   stderr.  New/updated coverage: 36-slot inventory and legacy nine-row payloads,
   starter-kit storage headroom (iron/coal/apple regression), oversized payload
   rejection, storage-row persistence, station-detection reach, raw-ore refusal,
   shaped mirror matching, full-inventory crafting atomicity.
-- Integration: `--headless --path prototypes/m17/godot --script
+- Integration: `--headless --path godot --script
   res://scripts/tests/run_integration.gd -- --straight-to-game` → **327
   assertions**, exit 0, 0 bytes stderr.  New real-scene coverage: wheel/number
   hotbar selection, inventory panel 36 slots, split/merge/swap/quick-move and
@@ -1161,7 +1161,7 @@ or a human play-through of the new interfaces.
 Mission: turn the placed crafting table and furnace into real, targetable world
 objects with their own persistent inventories and dedicated interfaces, using the
 existing inventory, recipe and save systems rather than a second implementation.
-The work lives in the Godot project under `prototypes/m17/godot/`; the production
+The work lives in the Godot project under `godot/`; the production
 Ursina implementation was not touched.
 
 ### Implemented
@@ -1274,7 +1274,7 @@ Ursina implementation was not touched.
 
 ### Verification actually run (Godot 4.7.2 stable mono, Windows)
 
-- Unit: `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd`
+- Unit: `--headless --path godot --script res://scripts/tests/run_tests.gd`
   → **1451 assertions**, exit 0, **0 bytes stderr**. New `test_stations.gd`
   covers role acceptance, caps, insert/take/split/move/swap/deposit, refused
   operations, serialisation/rejection, smelting data, shaped/shapeless crafting,
@@ -1283,7 +1283,7 @@ Ursina implementation was not touched.
   creation, two independent stations, stale-state removal, chunk unload/reload,
   persistence round-trip and tick radius. `test_persistence.gd` covers save v6
   station rows, the v3 legacy path and a malformed `stations` payload.
-- Integration: `--headless --path prototypes/m17/godot --script
+- Integration: `--headless --path godot --script
   res://scripts/tests/run_integration.gd -- --straight-to-game` → **265
   assertions**, exit 0, **0 bytes stderr**. New assertions drive the real scene:
   target a placed table, open it with the real `interact` action, move items
@@ -1580,10 +1580,10 @@ No code change was made for this.
 ```powershell
 $godot = 'C:\Godot\Godot_v4.7.2-stable_mono_win64\...\Godot_v4.7.2-stable_mono_win64.exe'
 # unit suite / integration suite
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
+& $godot --headless --path godot --script res://scripts/tests/run_tests.gd
+& $godot --headless --path godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
 # frame-time benchmark (windowed; one scenario per run)
-& $godot --path prototypes/m17/godot --script res://scripts/tests/run_perf.gd -- --straight-to-game --seed=17017 --scenario=walk --label=perf-walk-after
+& $godot --path godot --script res://scripts/tests/run_perf.gd -- --straight-to-game --seed=17017 --scenario=walk --label=perf-walk-after
 ```
 
 ---
@@ -1658,7 +1658,7 @@ Verified means: observed in a run of the real project, not merely written.
 
 ## 4. Files and architecture
 
-Godot project root: `prototypes/m17/godot/`.
+Godot project root: `godot/`.
 `project.godot` main scene: `res://scenes/game.tscn` → `scripts/game/game.gd`.
 
 **Engine layer** (`scripts/core/`, no scene-tree knowledge):
@@ -1705,22 +1705,22 @@ $godot = 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64
 $repo  = 'C:\Users\Admin\Documents\Projects\VoxelWorld_oneshot'
 
 # Automated tests (headless, exit code is the result)
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
+& $godot --headless --path godot --script res://scripts/tests/run_tests.gd
 
 # Runtime integration test: boots the real scene and drives WASD/collision (exit code)
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
+& $godot --headless --path godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
 
 # Headless smoke run (deterministic world fingerprint)
-& $godot --headless --path prototypes/m17/godot -- --straight-to-game --quit-after=30
+& $godot --headless --path godot -- --straight-to-game --quit-after=30
 
 # Play the game
-& $godot --path prototypes/m17/godot
+& $godot --path godot
 
 # Render a screenshot from inside the running game and quit
-& $godot --path prototypes/m17/godot -- --capture --capture-name=look-spawn.png --hide-hud --settle=12
+& $godot --path godot -- --capture --capture-name=look-spawn.png --hide-hud --settle=12
 
 # Scripted camera tour, one PNG per viewpoint
-& $godot --path prototypes/m17/godot -- --capture --shots="38:-12; 90:-8:-30,66,0"
+& $godot --path godot -- --capture --shots="38:-12; 90:-8:-30,66,0"
 ```
 
 Note for shell scripting: launching the Godot GUI executable through a PowerShell
@@ -1925,9 +1925,9 @@ Baseline sanity command set (copy/paste):
 ```powershell
 cd C:\Users\Admin\Documents\Projects\VoxelWorld_oneshot
 $godot = 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe'
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd | Select-Object -Last 1
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game | Select-Object -Last 1
-& $godot --headless --path prototypes/m17/godot -- --straight-to-game --quit-after=30 | Select-String M17_GAME_SUMMARY
+& $godot --headless --path godot --script res://scripts/tests/run_tests.gd | Select-Object -Last 1
+& $godot --headless --path godot --script res://scripts/tests/run_integration.gd -- --straight-to-game | Select-Object -Last 1
+& $godot --headless --path godot -- --straight-to-game --quit-after=30 | Select-String M17_GAME_SUMMARY
 ```
 
 Note for any new `class_name` script: the headless runner cannot see a new class until the
@@ -1935,7 +1935,7 @@ project's class cache is refreshed, so run this once after adding one (it is not
 just a scan):
 
 ```powershell
-& $godot --headless --path prototypes/m17/godot --import
+& $godot --headless --path godot --import
 ```
 
 ## 10. Savepoint log
@@ -2074,7 +2074,7 @@ and the root milestone/architecture instructions were not changed.
 
 **Verification actually run** (Godot 4.7.2 stable Mono, Windows):
 
-- Unit: `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd`
+- Unit: `--headless --path godot --script res://scripts/tests/run_tests.gd`
   via redirected `Start-Process`; exit **0**, `M17_TESTS_PASS 540 assertions`, stderr
   0 bytes. This includes health, survival and persistence cases.
 - Integration: same project/script with `-- --straight-to-game`; exit **0**,
@@ -2148,14 +2148,14 @@ committed. Existing unrelated dirty files were preserved.
   with the expected undeclared-model error. A subsequent execution caught test fixture
   chunks loaded at y=0 while land cells were in chunk y=4; corrected the fixture.
 - Unit command (redirected `Start-Process`):
-  `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd`;
+  `--headless --path godot --script res://scripts/tests/run_tests.gd`;
   final exit 0, `M17_TESTS_PASS 579 assertions`, stderr 0 bytes.
 - Integration command (redirected `Start-Process`):
-  `--headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game`;
+  `--headless --path godot --script res://scripts/tests/run_integration.gd -- --straight-to-game`;
   exit 0, `M17_INTEGRATION_PASS 35 assertions`, stderr 0 bytes. Includes live capped spawn,
   ray target prioritization, three attacks, and exactly one inventory item.
 - Windowed capture command:
-  `--path prototypes/m17/godot -- --capture --capture-name=passive-creature.png
+  `--path godot -- --capture --capture-name=passive-creature.png
   --creature-feedback-capture --settle=14 --time-rate=0`; exit 0, stderr 0 bytes,
   `results/godot/passive-creature.png` (1280x720) inspected. Image shows the primitive
   boar in the forest, health/hotbar HUD, and centered `Boar hurt (2/3)` feedback. Capture
@@ -2229,11 +2229,11 @@ the ground cells under candidates are loaded and can be edited.
 
 **Verification actually run (Windows, Godot 4.7.2 stable Mono)**
 
-- Unit: `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd`
+- Unit: `--headless --path godot --script res://scripts/tests/run_tests.gd`
   (redirected `Start-Process`); exit **0**, `M17_TESTS_PASS 587 assertions`,
   stderr **0 bytes**. (Baseline before this follow-up was 579; the 8 new assertions are the
   only change.)
-- Integration: `--headless --path prototypes/m17/godot --script
+- Integration: `--headless --path godot --script
   res://scripts/tests/run_integration.gd -- --straight-to-game`; exit **0**,
   `M17_INTEGRATION_PASS 35 assertions`, stderr **0 bytes**. The integration run exercises
   the real creature node (spawn, physics wander, ray attack, kill/drop) with no script
@@ -2320,9 +2320,9 @@ so the hole's back faces belong to the neighbour chunk (`z=1`):
 **Verification actually run (Godot 4.7.2-stable mono, Windows, this machine).**
 
 ```powershell
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
-& $godot --headless --path prototypes/m17/godot -- --straight-to-game --quit-after=25
+& $godot --headless --path godot --script res://scripts/tests/run_tests.gd
+& $godot --headless --path godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
+& $godot --headless --path godot -- --straight-to-game --quit-after=25
 ```
 
 - Unit: exit **0**, `M17_TESTS_PASS 701 assertions`, stderr **0 bytes** (was 615).

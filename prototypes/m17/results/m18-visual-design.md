@@ -1,7 +1,7 @@
 # M18 — VoxelWorld visual design specification
 
 Status: active. This is the visual contract for the Godot implementation under
-`prototypes/m17/godot/`. It describes the style the renderer and world content
+`godot/`. It describes the style the renderer and world content
 are being tuned to, not an aspiration disconnected from the game.
 
 ## 1. Direction

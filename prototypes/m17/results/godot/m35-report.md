@@ -1,4 +1,4 @@
-﻿# M35/M36 â€” World Creation: Forest Spacing and Treeline (generator v7)
+# M35/M36 â€” World Creation: Forest Spacing and Treeline (generator v7)
 
 ## Status
 
@@ -13,7 +13,7 @@ versioned tests cover v6 and v7, and the default generator is v7.
 ## Preflight
 
 - Worktree: `C:/Users/Admin/Documents/Projects/VoxelWorld_m34`.
-- Godot project: `prototypes/m17/godot`.
+- Godot project: `godot`.
 - Base: `08fa745` (M34 v5 evidence head) plus uncommitted v6/v7 edits.
 - Seed used for all measurements and captures: `17017`.
 - The v6/v7 edits already defined `M35_VERSION = 6`, `M36_VERSION = 7`,
@@ -174,9 +174,9 @@ v7 is slightly faster and draws fewer calls; settle generation is unchanged
 
 ## Files and commits
 
-- Generator: `prototypes/m17/godot/scripts/core/world_gen.gd` (v6/v7 edits preserved and
+- Generator: `godot/scripts/core/world_gen.gd` (v6/v7 edits preserved and
   completed)
-- Tests: `prototypes/m17/godot/scripts/tests/test_m35_world_creation.gd`,
+- Tests: `godot/scripts/tests/test_m35_world_creation.gd`,
   `test_m34_canopy_composition.gd`, `test_m33_vegetation.gd`, `test_m32_landscape.gd`,
   `test_streaming_lifecycle.gd`, `run_tests.gd`
 - Probes: `m34_canopy_probe.gd`, `m33_vegetation_probe.gd`, `wilderness_probe.gd`

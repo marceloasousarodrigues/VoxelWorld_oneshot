@@ -1,5 +1,10 @@
 # ARCHITECTURE.md
 
+> **Historical scope:** This document records the Python + Ursina architecture from
+> milestones M1–M16. The canonical game project is now Godot 4 in [`godot/`](godot/);
+> this document describes the deprecated reference implementation in
+> [`archive/ursina/`](archive/ursina/) and does not constrain the Godot architecture.
+
 # VoxelWorld Architecture
 
 ## Purpose

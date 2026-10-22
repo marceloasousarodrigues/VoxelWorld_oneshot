@@ -24,7 +24,7 @@ Date: 2026-10-19. Seed 17017, radius 4, 1280×720, vsync off.
 
 | Suite | Command | Result |
 | --- | --- | --- |
-| Unit | `godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd` | **1693 assertions, exit 0** |
+| Unit | `godot --headless --path godot --script res://scripts/tests/run_tests.gd` | **1693 assertions, exit 0** |
 | Integration | `… --script res://scripts/tests/run_integration.gd -- --straight-to-game` | **391 assertions, exit 0** |
 | Headless smoke | `… -- --straight-to-game --quit-after=14` | exit 0, `world_hash=7995773462820745781`, 392 chunks, 170492 faces, `faces_hash=6834793821708419232` |
 
@@ -285,21 +285,21 @@ the clock, and a stairs/slab roof set. These are listed as follow-up work.
 
 ```powershell
 $godot = 'C:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe'
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
-& $godot --headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
-& $godot --headless --path prototypes/m17/godot -- --straight-to-game --quit-after=14
+& $godot --headless --path godot --script res://scripts/tests/run_tests.gd
+& $godot --headless --path godot --script res://scripts/tests/run_integration.gd -- --straight-to-game
+& $godot --headless --path godot -- --straight-to-game --quit-after=14
 
-& $godot --path prototypes/m17/godot -- --capture --capture-name=m22-wide-noon.png --visual-test=wide --time=0.28 --hide-hud --settle=10 --render-distance=5
-& $godot --path prototypes/m17/godot -- --capture --capture-name=m22-dusk.png --visual-test=dusk --time=0.50 --hide-hud --settle=10
-& $godot --path prototypes/m17/godot -- --capture --capture-name=m22-night.png --visual-test=dusk --time=0.75 --hide-hud --settle=10
+& $godot --path godot -- --capture --capture-name=m22-wide-noon.png --visual-test=wide --time=0.28 --hide-hud --settle=10 --render-distance=5
+& $godot --path godot -- --capture --capture-name=m22-dusk.png --visual-test=dusk --time=0.50 --hide-hud --settle=10
+& $godot --path godot -- --capture --capture-name=m22-night.png --visual-test=dusk --time=0.75 --hide-hud --settle=10
 
-& $godot --path prototypes/m17/godot --script res://scripts/tests/run_perf.gd -- --straight-to-game --seed=17017 --scenario=look --label=m22-after-look
+& $godot --path godot --script res://scripts/tests/run_perf.gd -- --straight-to-game --seed=17017 --scenario=look --label=m22-after-look
 ```
 
 Regenerate the textures with:
 
 ```powershell
-python prototypes/m17/godot/tools/generate_m22_textures.py
+python godot/tools/generate_m22_textures.py
 ```
 
 ## 9. Limitations / next highest-value work

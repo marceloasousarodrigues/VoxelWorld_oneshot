@@ -1,12 +1,12 @@
-﻿M35/M36 forest spacing and treeline diagnosis (generator v7, seed 17017)
+M35/M36 forest spacing and treeline diagnosis (generator v7, seed 17017)
 Worktree: C:/Users/Admin/Documents/Projects/VoxelWorld_m34
 Base: 08fa745 (M34 v5 evidence head) plus the v6/v7 generator edits
 Measured 2026-10-22
 
 Commands:
-  Godot ... --headless --path prototypes/m17/godot --script res://scripts/tests/m33_vegetation_probe.gd -- --version=7 --radius=192 --step=1
-  Godot ... --headless --path prototypes/m17/godot --script res://scripts/tests/m34_canopy_probe.gd -- --version=7 --radius=192
-  Godot ... --headless --path prototypes/m17/godot --script res://scripts/tests/wilderness_probe.gd -- --fingerprint
+  Godot ... --headless --path godot --script res://scripts/tests/m33_vegetation_probe.gd -- --version=7 --radius=192 --step=1
+  Godot ... --headless --path godot --script res://scripts/tests/m34_canopy_probe.gd -- --version=7 --radius=192
+  Godot ... --headless --path godot --script res://scripts/tests/wilderness_probe.gd -- --fingerprint
 
 M33_VEG_PROBE version=7 radius=192 step=1 sea=62
 FOREST columns=43603 trees=1563 coverage=0.0358

@@ -34,13 +34,13 @@
 ### Task 1: v4 scaffolding, pins, and streaming version safety
 
 **Files:**
-- Modify: `prototypes/m17/godot/scripts/core/world_gen.gd`
-- Modify: `prototypes/m17/godot/scripts/game/chunk_streamer.gd`
-- Modify: `prototypes/m17/godot/scripts/tests/test_m31_wilderness.gd`
-- Modify: `prototypes/m17/godot/scripts/tests/test_m32_landscape.gd`
-- Modify: `prototypes/m17/godot/scripts/tests/run_tests.gd`
-- Create: `prototypes/m17/godot/scripts/tests/test_m33_vegetation.gd`
-- Test: `prototypes/m17/godot/scripts/tests/test_streaming_lifecycle.gd`
+- Modify: `godot/scripts/core/world_gen.gd`
+- Modify: `godot/scripts/game/chunk_streamer.gd`
+- Modify: `godot/scripts/tests/test_m31_wilderness.gd`
+- Modify: `godot/scripts/tests/test_m32_landscape.gd`
+- Modify: `godot/scripts/tests/run_tests.gd`
+- Create: `godot/scripts/tests/test_m33_vegetation.gd`
+- Test: `godot/scripts/tests/test_streaming_lifecycle.gd`
 
 **Interfaces:**
 - Produces: `WorldGen.M33_VERSION = 4`, `WorldGen.CURRENT_VERSION = 4`, `WorldGen.is_supported_version(0..4)`, `WorldGen._is_m33() -> bool`.
@@ -58,7 +58,7 @@ Assert `M33_VERSION == 4`, `CURRENT_VERSION == 4`, versions 0..4 supported, 5 re
 
 - [ ] **Step 2: Run the unit suite and confirm failure**
 
-Run: `Godot ... --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd`
+Run: `Godot ... --headless --path godot --script res://scripts/tests/run_tests.gd`
 Expected: FAIL because `M33_VERSION` and `CURRENT_VERSION == 4` do not exist yet.
 
 - [ ] **Step 3: Implement v4 scaffolding**
@@ -85,9 +85,9 @@ Run the unit suite. Expected: PASS. Commit only scaffolding, pins, streaming fix
 ### Task 2: Vegetation score, elevation/slope factors, and candidate density
 
 **Files:**
-- Modify: `prototypes/m17/godot/scripts/core/world_gen.gd`
-- Modify: `prototypes/m17/godot/scripts/tests/m33_vegetation_probe.gd`
-- Test: `prototypes/m17/godot/scripts/tests/test_m33_vegetation.gd`
+- Modify: `godot/scripts/core/world_gen.gd`
+- Modify: `godot/scripts/tests/m33_vegetation_probe.gd`
+- Test: `godot/scripts/tests/test_m33_vegetation.gd`
 
 **Interfaces:**
 - Produces: `_vegetation_score(x: int, z: int) -> float`, `_elevation_factor(height: int, broadleaf: bool) -> float`, `_slope_factor(slope: int, broadleaf: bool) -> float`, `_v4_tree_density(height: int, slope: int, broadleaf: bool, score: float) -> float`.
@@ -131,9 +131,9 @@ Run unit suite and `m33_vegetation_probe.gd --version=4 --radius=192 --step=1`. 
 ### Task 3: Forest species, clearings, river rules, and crown size
 
 **Files:**
-- Modify: `prototypes/m17/godot/scripts/core/world_gen.gd`
-- Test: `prototypes/m17/godot/scripts/tests/test_m33_vegetation.gd`
-- Modify: `prototypes/m17/godot/scripts/tests/test_generation.gd`
+- Modify: `godot/scripts/core/world_gen.gd`
+- Test: `godot/scripts/tests/test_m33_vegetation.gd`
+- Modify: `godot/scripts/tests/test_generation.gd`
 
 **Interfaces:**
 - Consumes: `_vegetation_score`, `_elevation_factor`, `_slope_factor`, `_v4_tree_density`.
@@ -212,7 +212,7 @@ Run `run_perf.gd` at `-7.3,101.5,-29` yaw 270 and `80,92,180` yaw 0, three runs 
 ### Task 5: Full verification, v4 pin, review, and report
 
 **Files:**
-- Modify: `prototypes/m17/godot/scripts/tests/run_tests.gd`, probes, M31/M32 version tests
+- Modify: `godot/scripts/tests/run_tests.gd`, probes, M31/M32 version tests
 - Create: `prototypes/m17/results/godot/m33-report.md`
 - Update: `prototypes/m17/results/godot/m33-verification.txt`
 

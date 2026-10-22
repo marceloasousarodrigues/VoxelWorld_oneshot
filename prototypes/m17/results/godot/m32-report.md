@@ -152,10 +152,10 @@ Commands run from the M32 worktree with
 
 | Suite | Command | Result |
 |---|---|---|
-| Unit | `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd` | `M17_TESTS_PASS 2579 assertions`, exit 0 |
-| Integration | `--headless --path prototypes/m17/godot --script res://scripts/tests/run_integration.gd -- --straight-to-game` | 5/5 runs `M17_INTEGRATION_PASS 463 assertions`, exit 0 |
-| Regression | `--headless --path prototypes/m17/godot --script res://scripts/regression.gd` | `M17_REGRESSION_PASS assertions=52`, exit 0 |
-| Smoke ×2 | `--headless --path prototypes/m17/godot -- --straight-to-game --seed=17017 --render-distance=6 --quit-after=30` | both `world_hash=5495814557571427371`, `faces_hash=3989804036799183035`, `faces=468281`, exit 0 |
+| Unit | `--headless --path godot --script res://scripts/tests/run_tests.gd` | `M17_TESTS_PASS 2579 assertions`, exit 0 |
+| Integration | `--headless --path godot --script res://scripts/tests/run_integration.gd -- --straight-to-game` | 5/5 runs `M17_INTEGRATION_PASS 463 assertions`, exit 0 |
+| Regression | `--headless --path godot --script res://scripts/regression.gd` | `M17_REGRESSION_PASS assertions=52`, exit 0 |
+| Smoke ×2 | `--headless --path godot -- --straight-to-game --seed=17017 --render-distance=6 --quit-after=30` | both `world_hash=5495814557571427371`, `faces_hash=3989804036799183035`, `faces=468281`, exit 0 |
 | River probe | `--headless ... --script res://scripts/tests/m32_river_probe.gd -- --version=3 --radius=512 --step=4` | 173 inland water components; largest `x=-304..-192 z=4..140`, height 55..61 |
 
 The integration settle wait is now 2400 frames **and** a 45 s wall-clock cap. The M32 canopy
@@ -238,17 +238,17 @@ the v3 showcase counts, the pinned fingerprints and the corrected evidence numbe
 
 ## Files
 
-- `prototypes/m17/godot/scripts/core/world_gen.gd` (v3)
-- `prototypes/m17/godot/scripts/core/chunk_data.gd` (per-chunk generator version)
-- `prototypes/m17/godot/scripts/core/chunk_mesher.gd` (version-aware tint)
-- `prototypes/m17/godot/scripts/game/build_demo.gd` (showcase height cap)
-- `prototypes/m17/godot/scripts/game/final_demo.gd` (showcase height cap)
-- `prototypes/m17/godot/scripts/game/voxel_player.gd` (marker distance, spawn ground)
-- `prototypes/m17/godot/scripts/game/game.gd` (`--no-target-marker` diagnostic)
-- `prototypes/m17/godot/shaders/voxel_water.gdshader`
-- `prototypes/m17/godot/scripts/tests/test_m32_landscape.gd` (new)
-- `prototypes/m17/godot/scripts/tests/m32_river_probe.gd` (new diagnostic)
-- `prototypes/m17/godot/scripts/tests/{run_tests,run_integration,test_generation,test_m31_wilderness,test_m29_architecture,test_final_demo,wilderness_probe}.gd`
+- `godot/scripts/core/world_gen.gd` (v3)
+- `godot/scripts/core/chunk_data.gd` (per-chunk generator version)
+- `godot/scripts/core/chunk_mesher.gd` (version-aware tint)
+- `godot/scripts/game/build_demo.gd` (showcase height cap)
+- `godot/scripts/game/final_demo.gd` (showcase height cap)
+- `godot/scripts/game/voxel_player.gd` (marker distance, spawn ground)
+- `godot/scripts/game/game.gd` (`--no-target-marker` diagnostic)
+- `godot/shaders/voxel_water.gdshader`
+- `godot/scripts/tests/test_m32_landscape.gd` (new)
+- `godot/scripts/tests/m32_river_probe.gd` (new diagnostic)
+- `godot/scripts/tests/{run_tests,run_integration,test_generation,test_m31_wilderness,test_m29_architecture,test_final_demo,wilderness_probe}.gd`
 - `prototypes/m17/results/godot/m32-*.png`, `m32-matched-*.json`, `m32-verification.txt`, this report
 
 Generated `.import`/`.uid` files from the Godot import pass are not part of the commit.

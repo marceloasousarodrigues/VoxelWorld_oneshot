@@ -1,7 +1,7 @@
 # M22 — Lush fantasy wilderness and medieval settlements
 
 Status: **implemented and verified** (2026-10-19). This is the visual and
-behavioural contract for the M22 Godot work under `prototypes/m17/godot/`. It
+behavioural contract for the M22 Godot work under `godot/`. It
 defines what the milestone means by "convincing", how it is reproduced, and what
 evidence must exist before the work is called complete. It does not replace
 `m18-visual-design.md`; it extends that material/geometry contract with a

@@ -10,7 +10,7 @@
 - Worktree: `C:/Users/Admin/Documents/Projects/VoxelWorld_m30`.
 - Branch: `codex/m30-voxel-wilderness`, based on committed revision `92a9bdd`.
 - Initial implementation commit: `fc1c81174985a9e466934aba4380a8d5ea03466b`; initial report commit: `62f6ab1`.
-- M30 source changes are limited to `prototypes/m17/godot/scripts/core/world_gen.gd` and `prototypes/m17/godot/scripts/tests/test_generation.gd`.
+- M30 source changes are limited to `godot/scripts/core/world_gen.gd` and `godot/scripts/tests/test_generation.gd`.
 - M29-pending changes are in a separate original checkout. M30 did not change the mesher, block definitions, texture manifest, rendering, game, or save manager.
 
 ## Plan
@@ -80,8 +80,8 @@ Mesh, attachment, and generation durations are startup/settling aggregates, not 
 
 ## Changed files
 
-- `prototypes/m17/godot/scripts/core/world_gen.gd`
-- `prototypes/m17/godot/scripts/tests/test_generation.gd`
+- `godot/scripts/core/world_gen.gd`
+- `godot/scripts/tests/test_generation.gd`
 - `prototypes/m17/results/godot/m30-report.md`
 - M30 before/after capture PNGs listed above, all under `prototypes/m17/results/godot/`.
 

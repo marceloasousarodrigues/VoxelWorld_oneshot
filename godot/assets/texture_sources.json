@@ -1,0 +1,1079 @@
+{
+  "generated_by": "godot/tools/import_textures.py",
+  "note": "Vendored copies of repository textures for the M17 Godot project. No file was downloaded; each entry records the in-repo source path.",
+  "textures": {
+    "bedrock": {
+      "description": "BEDROCK (dark unbreakable rock)",
+      "file": "default_obsidian_block.png",
+      "height": 128,
+      "key": "bedrock",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_obsidian_block.png",
+      "width": 128
+    },
+    "brick": {
+      "description": "BRICK",
+      "file": "default_brick.png",
+      "height": 128,
+      "key": "brick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_brick.png",
+      "width": 128
+    },
+    "cactus_side": {
+      "description": "CACTUS side",
+      "file": "default_cactus_side.png",
+      "height": 128,
+      "key": "cactus_side",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_cactus_side.png",
+      "width": 128
+    },
+    "cactus_top": {
+      "description": "CACTUS top",
+      "file": "default_cactus_top.png",
+      "height": 128,
+      "key": "cactus_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_cactus_top.png",
+      "width": 128
+    },
+    "clay": {
+      "description": "CLAY",
+      "file": "default_clay.png",
+      "height": 128,
+      "key": "clay",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_clay.png",
+      "width": 128
+    },
+    "coal_ore": {
+      "description": "COAL_ORE",
+      "file": "default_mineral_coal.png",
+      "height": 128,
+      "key": "coal_ore",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_mineral_coal.png",
+      "width": 128
+    },
+    "cobble": {
+      "description": "COBBLESTONE / STONE drop",
+      "file": "default_cobble.png",
+      "height": 128,
+      "key": "cobble",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_cobble.png",
+      "width": 128
+    },
+    "deco_dry_grass": {
+      "description": "dry grass tuft decoration",
+      "file": "default_dry_grass_1.png",
+      "height": 64,
+      "key": "deco_dry_grass",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_dry_grass_1.png",
+      "width": 64
+    },
+    "deco_grass_1": {
+      "description": "grass tuft decoration",
+      "file": "default_grass_1.png",
+      "height": 64,
+      "key": "deco_grass_1",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_grass_1.png",
+      "width": 64
+    },
+    "deco_grass_2": {
+      "description": "grass tuft decoration",
+      "file": "default_grass_2.png",
+      "height": 64,
+      "key": "deco_grass_2",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_grass_2.png",
+      "width": 64
+    },
+    "deco_grass_3": {
+      "description": "grass tuft decoration",
+      "file": "default_grass_3.png",
+      "height": 64,
+      "key": "deco_grass_3",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_grass_3.png",
+      "width": 64
+    },
+    "deco_grass_4": {
+      "description": "grass tuft decoration",
+      "file": "default_grass_4.png",
+      "height": 64,
+      "key": "deco_grass_4",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_grass_4.png",
+      "width": 64
+    },
+    "deco_grass_5": {
+      "description": "grass tuft decoration",
+      "file": "default_grass_5.png",
+      "height": 64,
+      "key": "deco_grass_5",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_grass_5.png",
+      "width": 64
+    },
+    "deco_jungle_grass": {
+      "description": "tall grass tuft decoration",
+      "file": "default_junglegrass.png",
+      "height": 128,
+      "key": "deco_jungle_grass",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_junglegrass.png",
+      "width": 64
+    },
+    "diamond_ore": {
+      "description": "DIAMOND_ORE",
+      "file": "default_mineral_diamond.png",
+      "height": 128,
+      "key": "diamond_ore",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_mineral_diamond.png",
+      "width": 128
+    },
+    "dirt": {
+      "description": "DIRT",
+      "file": "default_dirt.png",
+      "height": 128,
+      "key": "dirt",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_dirt.png",
+      "width": 128
+    },
+    "dry_grass_side": {
+      "description": "DRY_GRASS side (savanna)",
+      "file": "default_dry_grass_side.png",
+      "height": 128,
+      "key": "dry_grass_side",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_dry_grass_side.png",
+      "width": 128
+    },
+    "dry_grass_top": {
+      "description": "DRY_GRASS top (savanna)",
+      "file": "default_dry_grass.png",
+      "height": 128,
+      "key": "dry_grass_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_dry_grass.png",
+      "width": 128
+    },
+    "furnace_side": {
+      "description": "FURNACE side",
+      "file": "default_furnace_side.png",
+      "height": 128,
+      "key": "furnace_side",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_furnace_side.png",
+      "width": 128
+    },
+    "furnace_top": {
+      "description": "FURNACE top/bottom",
+      "file": "default_furnace_top.png",
+      "height": 128,
+      "key": "furnace_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_furnace_top.png",
+      "width": 128
+    },
+    "glass": {
+      "description": "GLASS",
+      "file": "default_glass.png",
+      "height": 128,
+      "key": "glass",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_glass.png",
+      "width": 128
+    },
+    "gold_ore": {
+      "description": "GOLD_ORE",
+      "file": "default_mineral_gold.png",
+      "height": 128,
+      "key": "gold_ore",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_mineral_gold.png",
+      "width": 128
+    },
+    "grass_side": {
+      "description": "GRASS side face",
+      "file": "grass_side_composite.png",
+      "height": 128,
+      "key": "grass_side",
+      "license": "Derived composite already used by M12 (Minetest default pack derivative).",
+      "source": "archive/ursina/voxel_textures/blocks/grass_side_composite.png",
+      "width": 128
+    },
+    "grass_top": {
+      "description": "GRASS top face",
+      "file": "default_grass.png",
+      "height": 128,
+      "key": "grass_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_grass.png",
+      "width": 128
+    },
+    "gravel": {
+      "description": "GRAVEL",
+      "file": "default_gravel.png",
+      "height": 128,
+      "key": "gravel",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_gravel.png",
+      "width": 128
+    },
+    "iron_ore": {
+      "description": "IRON_ORE",
+      "file": "default_mineral_iron.png",
+      "height": 128,
+      "key": "iron_ore",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_mineral_iron.png",
+      "width": 128
+    },
+    "item_apple": {
+      "description": "APPLE icon",
+      "file": "default_apple.png",
+      "height": 64,
+      "key": "item_apple",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_apple.png",
+      "width": 64
+    },
+    "item_bread": {
+      "description": "BREAD icon",
+      "file": "farming_bread.png",
+      "height": 64,
+      "key": "item_bread",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/farming_bread.png",
+      "width": 64
+    },
+    "item_coal": {
+      "description": "COAL icon",
+      "file": "default_coal_lump.png",
+      "height": 64,
+      "key": "item_coal",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_coal_lump.png",
+      "width": 64
+    },
+    "item_diamond": {
+      "description": "DIAMOND icon",
+      "file": "default_diamond.png",
+      "height": 64,
+      "key": "item_diamond",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_diamond.png",
+      "width": 64
+    },
+    "item_gold_lump": {
+      "description": "GOLD_LUMP icon",
+      "file": "default_gold_lump.png",
+      "height": 64,
+      "key": "item_gold_lump",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_gold_lump.png",
+      "width": 64
+    },
+    "item_iron_ingot": {
+      "description": "IRON_INGOT icon (the pack draws iron as 'steel')",
+      "file": "default_steel_ingot.png",
+      "height": 64,
+      "key": "item_iron_ingot",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_steel_ingot.png",
+      "width": 64
+    },
+    "item_iron_lump": {
+      "description": "IRON_LUMP icon (raw ore)",
+      "file": "default_iron_lump.png",
+      "height": 64,
+      "key": "item_iron_lump",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_iron_lump.png",
+      "width": 64
+    },
+    "item_stick": {
+      "description": "STICK icon",
+      "file": "default_stick.png",
+      "height": 128,
+      "key": "item_stick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_stick.png",
+      "width": 128
+    },
+    "item_tool_diamond_axe": {
+      "description": "DIAMOND AXE icon",
+      "file": "default_tool_diamondaxe.png",
+      "height": 128,
+      "key": "item_tool_diamond_axe",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_diamondaxe.png",
+      "width": 128
+    },
+    "item_tool_diamond_pick": {
+      "description": "DIAMOND PICKAXE icon",
+      "file": "default_tool_diamondpick.png",
+      "height": 128,
+      "key": "item_tool_diamond_pick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_diamondpick.png",
+      "width": 128
+    },
+    "item_tool_diamond_shovel": {
+      "description": "DIAMOND SHOVEL icon",
+      "file": "default_tool_diamondshovel.png",
+      "height": 128,
+      "key": "item_tool_diamond_shovel",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_diamondshovel.png",
+      "width": 128
+    },
+    "item_tool_diamond_sword": {
+      "description": "DIAMOND SWORD icon",
+      "file": "default_tool_diamondsword.png",
+      "height": 128,
+      "key": "item_tool_diamond_sword",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_diamondsword.png",
+      "width": 128
+    },
+    "item_tool_iron_axe": {
+      "description": "IRON AXE icon",
+      "file": "default_tool_steelaxe.png",
+      "height": 128,
+      "key": "item_tool_iron_axe",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_steelaxe.png",
+      "width": 128
+    },
+    "item_tool_iron_pick": {
+      "description": "IRON PICKAXE icon (the pack draws iron as 'steel')",
+      "file": "default_tool_steelpick.png",
+      "height": 128,
+      "key": "item_tool_iron_pick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_steelpick.png",
+      "width": 128
+    },
+    "item_tool_iron_shovel": {
+      "description": "IRON SHOVEL icon",
+      "file": "default_tool_steelshovel.png",
+      "height": 128,
+      "key": "item_tool_iron_shovel",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_steelshovel.png",
+      "width": 128
+    },
+    "item_tool_iron_sword": {
+      "description": "IRON SWORD icon",
+      "file": "default_tool_steelsword.png",
+      "height": 128,
+      "key": "item_tool_iron_sword",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_steelsword.png",
+      "width": 128
+    },
+    "item_tool_stone_axe": {
+      "description": "STONE AXE icon",
+      "file": "default_tool_stoneaxe.png",
+      "height": 128,
+      "key": "item_tool_stone_axe",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_stoneaxe.png",
+      "width": 128
+    },
+    "item_tool_stone_pick": {
+      "description": "STONE PICKAXE icon",
+      "file": "default_tool_stonepick.png",
+      "height": 128,
+      "key": "item_tool_stone_pick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_stonepick.png",
+      "width": 128
+    },
+    "item_tool_stone_shovel": {
+      "description": "STONE SHOVEL icon",
+      "file": "default_tool_stoneshovel.png",
+      "height": 128,
+      "key": "item_tool_stone_shovel",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_stoneshovel.png",
+      "width": 128
+    },
+    "item_tool_stone_sword": {
+      "description": "STONE SWORD icon",
+      "file": "default_tool_stonesword.png",
+      "height": 128,
+      "key": "item_tool_stone_sword",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_stonesword.png",
+      "width": 128
+    },
+    "item_tool_wood_axe": {
+      "description": "WOODEN AXE icon",
+      "file": "default_tool_woodaxe.png",
+      "height": 128,
+      "key": "item_tool_wood_axe",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_woodaxe.png",
+      "width": 128
+    },
+    "item_tool_wood_pick": {
+      "description": "WOODEN PICKAXE icon",
+      "file": "default_tool_woodpick.png",
+      "height": 128,
+      "key": "item_tool_wood_pick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_woodpick.png",
+      "width": 128
+    },
+    "item_tool_wood_shovel": {
+      "description": "WOODEN SHOVEL icon",
+      "file": "default_tool_woodshovel.png",
+      "height": 128,
+      "key": "item_tool_wood_shovel",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_woodshovel.png",
+      "width": 128
+    },
+    "item_tool_wood_sword": {
+      "description": "WOODEN SWORD icon",
+      "file": "default_tool_woodsword.png",
+      "height": 128,
+      "key": "item_tool_wood_sword",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tool_woodsword.png",
+      "width": 128
+    },
+    "item_wheat": {
+      "description": "WHEAT icon",
+      "file": "farming_wheat.png",
+      "height": 64,
+      "key": "item_wheat",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/farming_wheat.png",
+      "width": 64
+    },
+    "mossy_cobble": {
+      "description": "MOSSY_COBBLESTONE",
+      "file": "default_mossycobble.png",
+      "height": 128,
+      "key": "mossy_cobble",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_mossycobble.png",
+      "width": 128
+    },
+    "oak_leaves": {
+      "description": "OAK_LEAVES (alpha cutout)",
+      "file": "default_leaves.png",
+      "height": 128,
+      "key": "oak_leaves",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_leaves.png",
+      "width": 128
+    },
+    "oak_log_side": {
+      "description": "OAK_LOG side",
+      "file": "default_tree.png",
+      "height": 128,
+      "key": "oak_log_side",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tree.png",
+      "width": 128
+    },
+    "oak_log_top": {
+      "description": "OAK_LOG top/bottom",
+      "file": "default_tree_top.png",
+      "height": 128,
+      "key": "oak_log_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_tree_top.png",
+      "width": 128
+    },
+    "obsidian": {
+      "description": "OBSIDIAN (dark volcanic rock)",
+      "file": "default_obsidian_block.png",
+      "height": 128,
+      "key": "obsidian",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_obsidian_block.png",
+      "width": 128
+    },
+    "pine_leaves": {
+      "description": "PINE_LEAVES (alpha cutout)",
+      "file": "default_pine_needles.png",
+      "height": 128,
+      "key": "pine_leaves",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_pine_needles.png",
+      "width": 128
+    },
+    "pine_log_side": {
+      "description": "PINE_LOG side",
+      "file": "default_pine_tree.png",
+      "height": 128,
+      "key": "pine_log_side",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_pine_tree.png",
+      "width": 128
+    },
+    "pine_log_top": {
+      "description": "PINE_LOG top/bottom",
+      "file": "default_pine_tree_top.png",
+      "height": 128,
+      "key": "pine_log_top",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_pine_tree_top.png",
+      "width": 128
+    },
+    "planks": {
+      "description": "PLANKS",
+      "file": "default_wood.png",
+      "height": 128,
+      "key": "planks",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_wood.png",
+      "width": 128
+    },
+    "sand": {
+      "description": "SAND",
+      "file": "default_sand.png",
+      "height": 128,
+      "key": "sand",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_sand.png",
+      "width": 128
+    },
+    "sandstone": {
+      "description": "SANDSTONE",
+      "file": "default_sandstone.png",
+      "height": 128,
+      "key": "sandstone",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_sandstone.png",
+      "width": 128
+    },
+    "snow": {
+      "description": "SNOW",
+      "file": "default_snow.png",
+      "height": 128,
+      "key": "snow",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_snow.png",
+      "width": 128
+    },
+    "stone": {
+      "description": "STONE",
+      "file": "default_stone.png",
+      "height": 128,
+      "key": "stone",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_stone.png",
+      "width": 128
+    },
+    "stone_brick": {
+      "description": "STONE_BRICK",
+      "file": "default_stone_brick.png",
+      "height": 128,
+      "key": "stone_brick",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_stone_brick.png",
+      "width": 128
+    },
+    "oak_leaves_clean": {
+      "description": "Denser oak leaf canopy (cutout with fewer holes)",
+      "file": "oak_leaves_clean.png",
+      "height": 128,
+      "key": "oak_leaves_clean",
+      "license": "M18 derivative of the Minetest default game texture pack (CC BY-SA 3.0); generated by tools/generate_m18_textures.py from default_leaves.png.",
+      "source": "godot/tools/generate_m18_textures.py (derived from archive/ursina/voxel_textures/MINETEST_TEXTURES/default_leaves.png)",
+      "width": 128
+    },
+    "pine_leaves_clean": {
+      "description": "Denser pine needle canopy (cutout with fewer holes)",
+      "file": "pine_leaves_clean.png",
+      "height": 128,
+      "key": "pine_leaves_clean",
+      "license": "M18 derivative of the Minetest default game texture pack (CC BY-SA 3.0); generated by tools/generate_m18_textures.py from default_pine_needles.png.",
+      "source": "godot/tools/generate_m18_textures.py (derived from archive/ursina/voxel_textures/MINETEST_TEXTURES/default_pine_needles.png)",
+      "width": 128
+    },
+    "glass_clean": {
+      "description": "Clear glass with a bright edge and highlight",
+      "file": "glass_clean.png",
+      "height": 128,
+      "key": "glass_clean",
+      "license": "M18 procedural derivative; generated by tools/generate_m18_textures.py, no third-party art.",
+      "source": "godot/tools/generate_m18_textures.py",
+      "width": 128
+    },
+    "crafting_table_top": {
+      "description": "Crafting table working surface (3x3 grid and framed border)",
+      "file": "crafting_table_top.png",
+      "height": 128,
+      "key": "crafting_table_top",
+      "license": "M18 derivative of the Minetest default game texture pack (CC BY-SA 3.0); generated by tools/generate_m18_textures.py from default_wood.png.",
+      "source": "godot/tools/generate_m18_textures.py (derived from archive/ursina/voxel_textures/MINETEST_TEXTURES/default_wood.png)",
+      "width": 128
+    },
+    "crafting_table_side": {
+      "description": "Crafting table apron with tool rack",
+      "file": "crafting_table_side.png",
+      "height": 128,
+      "key": "crafting_table_side",
+      "license": "M18 derivative of the Minetest default game texture pack (CC BY-SA 3.0); generated by tools/generate_m18_textures.py from default_wood.png.",
+      "source": "godot/tools/generate_m18_textures.py (derived from archive/ursina/voxel_textures/MINETEST_TEXTURES/default_wood.png)",
+      "width": 128
+    },
+    "furnace_opening": {
+      "description": "Recessed furnace opening with embers",
+      "file": "furnace_opening.png",
+      "height": 128,
+      "key": "furnace_opening",
+      "license": "M18 derivative of the Minetest default game texture pack (CC BY-SA 3.0); generated by tools/generate_m18_textures.py, with a procedural ember interior.",
+      "source": "godot/tools/generate_m18_textures.py",
+      "width": 128
+    },
+    "water": {
+      "description": "WATER tile (static fallback)",
+      "file": "water.png",
+      "height": 16,
+      "key": "water",
+      "license": "Present in the repository since M9; small placeholder water tile.",
+      "source": "archive/ursina/voxel_textures/blocks/water.png",
+      "width": 16
+    },
+    "water_anim": {
+      "description": "WATER surface, 8-frame animated strip",
+      "file": "default_water_source_animated.png",
+      "frames": 8,
+      "height": 1024,
+      "key": "water_anim",
+      "license": "Minetest default game texture pack; refer to that pack's bundled license (CC BY-SA 3.0 for the default game). Already used by the M12/M14 production milestones via config/texture_manifest.json.",
+      "source": "archive/ursina/voxel_textures/MINETEST_TEXTURES/default_water_source_animated.png",
+      "width": 128
+    },
+    "farmland_top": {
+      "description": "farmland top (tilled soil)",
+      "file": "m21_farmland_top.png",
+      "height": 64,
+      "key": "farmland_top",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "farmland_side": {
+      "description": "farmland side (tilled soil)",
+      "file": "m21_farmland_side.png",
+      "height": 64,
+      "key": "farmland_side",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "wheat_stage_0": {
+      "description": "wheat crop stage 0 (sprout)",
+      "file": "m21_wheat_stage_0.png",
+      "height": 64,
+      "key": "wheat_stage_0",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "wheat_stage_1": {
+      "description": "wheat crop stage 1",
+      "file": "m21_wheat_stage_1.png",
+      "height": 64,
+      "key": "wheat_stage_1",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "wheat_stage_2": {
+      "description": "wheat crop stage 2",
+      "file": "m21_wheat_stage_2.png",
+      "height": 64,
+      "key": "wheat_stage_2",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "wheat_stage_3": {
+      "description": "wheat crop stage 3 (ripe)",
+      "file": "m21_wheat_stage_3.png",
+      "height": 64,
+      "key": "wheat_stage_3",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_raw_meat": {
+      "description": "raw meat icon",
+      "file": "m21_item_raw_meat.png",
+      "height": 64,
+      "key": "item_raw_meat",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_cooked_meat": {
+      "description": "cooked meat icon",
+      "file": "m21_item_cooked_meat.png",
+      "height": 64,
+      "key": "item_cooked_meat",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_hide": {
+      "description": "hide icon",
+      "file": "m21_item_hide.png",
+      "height": 64,
+      "key": "item_hide",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_bone": {
+      "description": "bone icon",
+      "file": "m21_item_bone.png",
+      "height": 64,
+      "key": "item_bone",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_wheat_seeds": {
+      "description": "wheat seeds icon",
+      "file": "m21_item_wheat_seeds.png",
+      "height": 64,
+      "key": "item_wheat_seeds",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "item_bone_meal": {
+      "description": "bone meal icon",
+      "file": "m21_item_bone_meal.png",
+      "height": 64,
+      "key": "item_bone_meal",
+      "license": "M21 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m21_textures.py",
+      "width": 64
+    },
+    "birch_log_side": {
+      "description": "birch log side (pale bark)",
+      "file": "m22_birch_log_side.png",
+      "height": 128,
+      "key": "birch_log_side",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "birch_log_top": {
+      "description": "birch log top (growth rings)",
+      "file": "m22_birch_log_top.png",
+      "height": 128,
+      "key": "birch_log_top",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "birch_leaves_clean": {
+      "description": "birch leaves (light, airy canopy)",
+      "file": "m22_birch_leaves_clean.png",
+      "height": 128,
+      "key": "birch_leaves_clean",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "blossom_leaves_clean": {
+      "description": "blossom leaves (pink accent canopy)",
+      "file": "m22_blossom_leaves_clean.png",
+      "height": 128,
+      "key": "blossom_leaves_clean",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "deco_bush": {
+      "description": "bush decoration (crossed quads)",
+      "file": "m22_deco_bush.png",
+      "height": 128,
+      "key": "deco_bush",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "deco_flower_red": {
+      "description": "red wildflower",
+      "file": "m22_deco_flower_red.png",
+      "height": 128,
+      "key": "deco_flower_red",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "deco_flower_yellow": {
+      "description": "yellow wildflower",
+      "file": "m22_deco_flower_yellow.png",
+      "height": 128,
+      "key": "deco_flower_yellow",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "deco_flower_blue": {
+      "description": "blue wildflower",
+      "file": "m22_deco_flower_blue.png",
+      "height": 128,
+      "key": "deco_flower_blue",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "timber_frame": {
+      "description": "timber-framed wall (dark beams over planks)",
+      "file": "m22_timber_frame.png",
+      "height": 128,
+      "key": "timber_frame",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "roof_tile": {
+      "description": "terracotta roof tiles",
+      "file": "m22_roof_tile.png",
+      "height": 128,
+      "key": "roof_tile",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "roof_ridge": {
+      "description": "roof ridge cap",
+      "file": "m22_roof_ridge.png",
+      "height": 128,
+      "key": "roof_ridge",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "path_top": {
+      "description": "packed path top (earth and pebbles)",
+      "file": "m22_path_top.png",
+      "height": 128,
+      "key": "path_top",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "path_side": {
+      "description": "packed path side",
+      "file": "m22_path_side.png",
+      "height": 128,
+      "key": "path_side",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "lantern_side": {
+      "description": "lantern iron frame and warm pane",
+      "file": "m22_lantern_side.png",
+      "height": 128,
+      "key": "lantern_side",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "lantern_top": {
+      "description": "lantern iron cap",
+      "file": "m22_lantern_top.png",
+      "height": 128,
+      "key": "lantern_top",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "fence": {
+      "description": "fence rail timber",
+      "file": "m22_fence.png",
+      "height": 128,
+      "key": "fence",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "barrel_side": {
+      "description": "barrel staves and iron bands",
+      "file": "m22_barrel_side.png",
+      "height": 128,
+      "key": "barrel_side",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "barrel_top": {
+      "description": "barrel lid",
+      "file": "m22_barrel_top.png",
+      "height": 128,
+      "key": "barrel_top",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "door": {
+      "description": "plank door with iron hinges",
+      "file": "m22_door.png",
+      "height": 128,
+      "key": "door",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "roof_side": {
+      "description": "roof eave/edge face",
+      "file": "m22_roof_side.png",
+      "height": 128,
+      "key": "roof_side",
+      "license": "M22 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m22_textures.py",
+      "width": 128
+    },
+    "plaster": {
+      "description": "warm lime-plaster infill",
+      "file": "m29_plaster.png",
+      "height": 128,
+      "key": "plaster",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "dark_timber": {
+      "description": "dark structural oak",
+      "file": "m29_dark_timber.png",
+      "height": 128,
+      "key": "dark_timber",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "stone_wall": {
+      "description": "coursed warm-grey medieval stone",
+      "file": "m29_stone_wall.png",
+      "height": 128,
+      "key": "stone_wall",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "timber_brace": {
+      "description": "plaster panel with a diagonal dark brace",
+      "file": "m29_timber_brace.png",
+      "height": 128,
+      "key": "timber_brace",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "slate_tile": {
+      "description": "grey-blue slate shingles",
+      "file": "m29_slate_tile.png",
+      "height": 128,
+      "key": "slate_tile",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "slate_ridge": {
+      "description": "slate ridge cap with warm shadow",
+      "file": "m29_slate_ridge.png",
+      "height": 128,
+      "key": "slate_ridge",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "slate_side": {
+      "description": "exposed slate roof edge and eave underside",
+      "file": "m29_slate_side.png",
+      "height": 128,
+      "key": "slate_side",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "window": {
+      "description": "framed window with glass and mullion",
+      "file": "m29_window.png",
+      "height": 128,
+      "key": "window",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "shutter": {
+      "description": "louvered timber shutter",
+      "file": "m29_shutter.png",
+      "height": 128,
+      "key": "shutter",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "chimney_side": {
+      "description": "sooted chimney masonry",
+      "file": "m29_chimney_side.png",
+      "height": 128,
+      "key": "chimney_side",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "chimney_top": {
+      "description": "chimney cap with a dark flue",
+      "file": "m29_chimney_top.png",
+      "height": 128,
+      "key": "chimney_top",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "finial": {
+      "description": "dark iron ridge finial",
+      "file": "m29_finial.png",
+      "height": 128,
+      "key": "finial",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "flower_box": {
+      "description": "wooden flower-box planter",
+      "file": "m29_flower_box.png",
+      "height": 128,
+      "key": "flower_box",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    },
+    "flower_box_bloom": {
+      "description": "flower-box leaves and blooms",
+      "file": "m29_flower_box_bloom.png",
+      "height": 128,
+      "key": "flower_box_bloom",
+      "license": "M29 procedural texture generated in-repo for VoxelWorld; contains no third-party art. Free to use and modify with the project (CC BY-SA 3.0 compatible).",
+      "source": "godot/tools/generate_m29_textures.py",
+      "width": 128
+    }
+  },
+  "version": 1
+}

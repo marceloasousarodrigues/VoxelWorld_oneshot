@@ -11,7 +11,7 @@ feature is disclosed rather than claimed as fixed.
 ## Preflight
 
 - Worktree: `C:/Users/Admin/Documents/Projects/VoxelWorld_m34`.
-- Godot project: `prototypes/m17/godot`.
+- Godot project: `godot`.
 - Base: `47d1327` (v7 head).
 - No uncommitted user changes were present at the start of this pass.
 - Seed 17017 is the primary evidence seed; seed 424242 is the additional seed.
@@ -178,8 +178,8 @@ are the likely causes.
 
 ## Files and commits
 
-- Generator: `prototypes/m17/godot/scripts/core/world_gen.gd`
-- Tests: `prototypes/m17/godot/scripts/tests/test_m37_forest_composition.gd`,
+- Generator: `godot/scripts/core/world_gen.gd`
+- Tests: `godot/scripts/tests/test_m37_forest_composition.gd`,
   `test_m35_world_creation.gd`, `test_m34_canopy_composition.gd`,
   `test_m33_vegetation.gd`, `test_m32_landscape.gd`, `test_streaming_lifecycle.gd`,
   `run_tests.gd`

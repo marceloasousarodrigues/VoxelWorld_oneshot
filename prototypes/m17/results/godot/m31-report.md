@@ -66,7 +66,7 @@ Commands run from the worktree with `Godot_v4.7.2-stable_mono_win64.exe`:
 
 | Suite | Command | Result |
 |---|---|---|
-| Unit | `--headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd` | `M17_TESTS_PASS 2530 assertions`, exit 0 |
+| Unit | `--headless --path godot --script res://scripts/tests/run_tests.gd` | `M17_TESTS_PASS 2530 assertions`, exit 0 |
 | Integration | `... run_integration.gd -- --straight-to-game` | `M17_INTEGRATION_PASS 463 assertions`, exit 0, stderr empty |
 | Regression | `... regression.gd` | `M17_REGRESSION_PASS assertions=52`, exit 0, stderr empty |
 | Smoke ×2 | `-- --straight-to-game --quit-after=30` | exit 0 both, `world_hash=9000566444367539267`, `edits=508`, `faces=176502`, stderr empty, hashes identical |
@@ -110,10 +110,10 @@ The draw-call and primitive rise at the final frame is real but is not a like-fo
 
 ## Files
 
-- `prototypes/m17/godot/scripts/core/world_gen.gd` (generator version 2)
-- `prototypes/m17/godot/scripts/tests/test_m31_wilderness.gd` (new)
-- `prototypes/m17/godot/scripts/tests/wilderness_probe.gd` (new diagnostic tool, not in the suite)
-- `prototypes/m17/godot/scripts/tests/run_tests.gd`, `run_integration.gd`, `test_npcs.gd`, `test_m26_protection.gd`, `test_m29_architecture.gd`
+- `godot/scripts/core/world_gen.gd` (generator version 2)
+- `godot/scripts/tests/test_m31_wilderness.gd` (new)
+- `godot/scripts/tests/wilderness_probe.gd` (new diagnostic tool, not in the suite)
+- `godot/scripts/tests/run_tests.gd`, `run_integration.gd`, `test_npcs.gd`, `test_m26_protection.gd`, `test_m29_architecture.gd`
 - `docs/superpowers/plans/2026-10-20-m31-wilderness-visuals.md`
 - `prototypes/m17/results/godot/m31-{before,after}-{0..5}.png`, this report
 

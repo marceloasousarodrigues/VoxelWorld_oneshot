@@ -270,7 +270,7 @@ reappear on upper slopes and no summit tree carpet may return.
 
 ## 3. Tests
 
-Add `prototypes/m17/godot/scripts/tests/test_m34_canopy_composition.gd` and register it in
+Add `godot/scripts/tests/test_m34_canopy_composition.gd` and register it in
 `run_tests.gd`. Use seed 17017, the existing `[-192,192]` step-1 sample, the existing
 `LOWLAND_BOX = Rect2i(200, 280, 48, 24)` and `LOWLAND_CANOPY_BOX = Rect2i(192, 256, 64, 64)`,
 and explicit thresholds. Existing v4 tests remain in place and must still pass.

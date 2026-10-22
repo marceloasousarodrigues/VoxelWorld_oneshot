@@ -1,7 +1,7 @@
 # M17 native Godot game
 
 A first-person voxel game built on Godot 4 with a native chunk-mesh renderer: the
-project directory `prototypes/m17/godot/` holds the engine, the game and the tests,
+project directory `godot/` holds the engine, the game and the tests,
 and `prototypes/m17/shared/` holds the shared deterministic fixture and scenario.
 
 It is a real, playable game — generated terrain, streaming, water, block breaking and
@@ -13,7 +13,7 @@ Current state, evidence, measurements and the exact resume command live in:
 
 - `prototypes/m17/results/godot-progress.md` — what works, what was verified, how to run it
 - `prototypes/m17/results/godot-roadmap.md` — phase-by-phase checklist (A → D)
-- `prototypes/m17/godot/ASSET_MANIFEST.md` — texture/asset provenance and licences
+- `godot/ASSET_MANIFEST.md` — texture/asset provenance and licences
 
 ## Verified development machine
 
@@ -37,19 +37,19 @@ python prototypes/m17/shared/generate_fixture.py
 Run the game:
 
 ```powershell
-& 'C:\Godot\...\Godot_v4.7.2-stable_mono_win64.exe' --path prototypes/m17/godot
+& 'C:\Godot\...\Godot_v4.7.2-stable_mono_win64.exe' --path godot
 ```
 
 Run the automated tests (headless; the exit code is the result):
 
 ```powershell
-& 'C:\Godot\...\Godot_v4.7.2-stable_mono_win64.exe' --headless --path prototypes/m17/godot --script res://scripts/tests/run_tests.gd
+& 'C:\Godot\...\Godot_v4.7.2-stable_mono_win64.exe' --headless --path godot --script res://scripts/tests/run_tests.gd
 ```
 
 Measure frame times (windowed; one scripted activity per run, JSON report in `results/godot/`):
 
 ```powershell
-& 'C:\Godot\...\Godot_v4.7.2-stable_mono_win64.exe' --path prototypes/m17/godot --script res://scripts/tests/run_perf.gd -- --straight-to-game --seed=17017 --scenario=walk --label=perf-walk
+& 'C:\Godot\...\Godot_v4.7.2-stable_mono_win64.exe' --path godot --script res://scripts/tests/run_perf.gd -- --straight-to-game --seed=17017 --scenario=walk --label=perf-walk
 ```
 
 The `...` is a recorded local machine path, not a portable one; set `$godot` to
