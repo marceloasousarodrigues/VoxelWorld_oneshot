@@ -2503,3 +2503,221 @@ environment, where both test commands passed; that environment was deleted after
   locally on the verified Windows x64 environment.
 - The pins and the suite are verified on CPython 3.14 / Windows x64 only; no other
   platform or interpreter version was tested.
+
+---
+
+# Godot Implementation Milestones (M17-M37)
+
+M17-M32 are recorded in detail in `prototypes/m17/results/godot-progress.md` and the
+individual reports (`m29-report.md`, `m30-report.md`, `m31-report.md`, `m32-report.md`).
+They are indexed here so this file reflects the full Godot implementation history;
+M33-M37 are the recent world-generation milestones and are documented below.
+
+## M17-M32 Index
+
+| Milestone | Subject | Evidence |
+|---|---|---|
+| M17 | Native Godot voxel slice and gameplay foundation | `prototypes/m17/results/godot-progress.md` |
+| M18 | Visual quality upgrade | `godot-progress.md` |
+| M19 | Interactive crafting stations and persistent inventories | `godot-progress.md` |
+| M20 | Inventory, hotbar, crafting and interaction overhaul | `godot-progress.md` |
+| M21 | Gameplay depth, survival and progression | `godot-progress.md` |
+| M22 | Stylized voxel world and medieval settlements | `m22-progress.md` |
+| M23 | Roof stairs and stair behavior | `godot-progress.md` |
+| M24 | Exploration and building economy | `godot-progress.md` |
+| M25 | Expressive, dependable construction | `godot-progress.md` |
+| M26 | Saving and streaming protection for player-built worlds | `godot-progress.md` |
+| M27 | Normal generated worlds closer to the visual references | `godot-progress.md` |
+| M28 | Final playable loop and release-quality pass | `godot-progress.md` |
+| M29 | Medieval architectural building system | `m29-report.md` |
+| M30 | Voxel wilderness terrain | `m30-report.md` |
+| M31 | Wilderness visuals | `m31-report.md` |
+| M32 | Landscape quality | `m32-report.md` |
+
+## M33 - Vegetation Distribution and Biome Ecology (generator v4)
+
+**Status: COMPLETE - PASS with documented limitations.**
+
+**Base:** M32 tip `e9120bb`. **Branch/worktree:** `codex/m33-vegetation-ecology`,
+`C:/Users/Admin/Documents/Projects/VoxelWorld_m33`.
+
+**Objective.** Replace the v3 continuous highland canopy with a spatially varied ecology:
+dense lowland forest, irregular clearings, sparse upper slopes, no broadleaf on high
+summits, and version-safe streaming for old saves.
+
+**Implemented.** Generator version 4 (`M33_VERSION = 4`, `CURRENT_VERSION = 4`). A
+two-scale vegetation score combines forest-patch and woodland noise; elevation and slope
+multipliers gate forest candidates; broadleaf is hard-limited to `SEA+30`, conifers to
+`SEA+44`, and snow/mountain pines to a 0.6% cap below their limits. River core/outer rules,
+crown sizes and decor clearing rules were added. `ChunkStreamer` now creates its worker
+with the world's recorded generator version, so v0-v3 saves stream their own version.
+
+**Verified.**
+- Unit: `M17_TESTS_PASS 2657 assertions`; integration: 463; regression: 52.
+- Smoke x2: `world_hash=1166263243268247887`, `faces_hash=8413966639196070975`,
+  `faces=407087`, `edits=813`.
+- v4 forest coverage 9.54%; lowland 11.03%; p90 cell 8.11%; clearing area 22.8%;
+  river-core trees 0; broadleaf above `SEA+30` 0; trees above `SEA+40` 2.
+- Pins: v0 `3214517825889907206`, v1 `5947596836865492245`, v2
+  `8397584315617538769`, v3 `8802792587028581708`, v4
+  `2164503133686526591`.
+- Performance: normal-camera look FPS 563.1 -> 567.5; river 482.2 -> 489.4; draw
+  calls and mesh work fell.
+
+**Limitations.** The canopy-top capture still reads as a leafy surface with gaps; the
+snow summit remains a stepped plateau inherited from M31; no cascades/far-field; one
+normal-camera settle worst frame was higher across runs.
+
+**Evidence.** `prototypes/m17/results/godot/m33-report.md`,
+`m33-verification.txt`, `m33-final-*.png`.
+
+---
+
+## M34 - Canopy Shape and Forest Composition (generator v5)
+
+**Status: COMPLETE - PASS with documented limitations.**
+
+**Base:** M33 tip `c0b58c3`. **Branch/worktree:** `codex/m34-canopy-composition`,
+`C:/Users/Admin/Documents/Projects/VoxelWorld_m34`.
+
+**Objective.** Make v5 forests read as individual crowns and small groups instead of one
+continuous canopy, while preserving M33's mountain/river ecology, determinism, historical
+saves and performance.
+
+**Implemented.** Generator version 5 (`M34_VERSION = 5`, `CURRENT_VERSION = 5`).
+Grove-aware woodland thinning keeps all dense-grove candidates (`forest_patch > 0.34`) and
+4 of 9 open-woodland candidates. Broadleaf crown radii are limited to 2-3; three
+deterministic height classes (emergent/canopy/understory) add vertical layering; six
+radius-3 and four radius-2 crown profiles replace the repeated v4 top plate. The outer ring
+is trimmed harder and emergent trees get an extra top leaf. River, elevation, slope,
+clearing and decor rules are unchanged.
+
+**Verified.**
+- Unit: `M17_TESTS_PASS 2777 assertions`; integration: 463; regression: 52.
+- Smoke x2: `world_hash=1188233828819198944`, `faces_hash=3201666069178630801`,
+  `faces=365154`, `edits=688`.
+- Global forest coverage 5.55%; canopy box open / 2+ / 3+ 43.6 / 46.5 / 36.3%;
+  median trunk spacing 2.00; dense lowland crown union 63.2%; full forest-cell max
+  25.59%; clearings 9,938 columns with zero trees.
+- v5 pin `5133898688464144157`; v0-v4 pins unchanged.
+- Performance: normal look FPS 518.6 -> 516.5, p99 2.964 -> 3.013 ms, draw calls
+  446.4 -> 433.3, mesh 8,683 -> 7,038 ms; river look FPS 442.8 -> 441.9, p99
+  3.475 -> 3.396 ms.
+
+**Limitations.** Dense groves keep v4 density by design and can remain visually
+connected; the close elevated camera still has large foreground crowns; the v4 forest
+interior camera at `228,74,288` was occupied by a trunk, so that shot is after-only.
+
+**Evidence.** `prototypes/m17/results/godot/m34-report.md`,
+`m34-verification.txt`, `m34-diagnosis.txt`, `m34-before-*.png`,
+`m34-after-*.png`.
+
+---
+
+## M35 - Forest Spacing and Root Treeline (generator v6)
+
+**Status: COMPLETE as an intermediate version; superseded as default by M36.**
+
+**Base:** M34 evidence head `08fa745`. **Branch/worktree:**
+`codex/m34-canopy-composition`, `C:/Users/Admin/Documents/Projects/VoxelWorld_m34`.
+
+**Objective.** Reduce the remaining dense-grove mass and keep tree roots off the upper
+mountain slopes.
+
+**Implemented.** Generator version 6 (`M35_VERSION = 6`). Dense groves keep one of two
+candidates; open woodland keeps the v5 four-of-nine rate. Tree roots above
+`M35_TREELINE_LIMIT = SEA+24` are rejected in every biome. v0-v5 output remains unchanged.
+
+**Verified.**
+- Global forest coverage 4.34%; dense-grove trees 442 (v5 910); max root 86; zero roots
+  above the treeline.
+- v6 pin `9184026728463986701`; v5 and earlier pins unchanged.
+- Covered by the combined M35/M36 suite: unit `2852 assertions`, integration 463,
+  regression 52.
+- v6 still allowed crowns above the later v7 ceiling (max top 102, 194 above `SEA+30`).
+
+**Limitations.** v6 removed high roots but not tall crowns; it was an intermediate
+version, not the final default.
+
+**Evidence.** `prototypes/m17/results/godot/m35-report.md`,
+`m35-verification.txt`, `m35-diagnosis.txt`.
+
+---
+
+## M36 - Full-Height Treeline and Canopy Ceiling (generator v7)
+
+**Status: COMPLETE; v7 was the default until M37 and remains pinned.**
+
+**Base:** M34 evidence head `08fa745` plus the v6 changes. **Branch/worktree:**
+`codex/m34-canopy-composition`, `C:/Users/Admin/Documents/Projects/VoxelWorld_m34`.
+
+**Objective.** Make the mountain treeline account for the full generated tree height, not
+only the root column, and open dense groves further.
+
+**Implemented.** Generator version 7 (`M36_VERSION = 7`, `CURRENT_VERSION = 7`). Dense
+groves keep one of three candidates. A tree whose full top exceeds
+`M36_CANOPY_CEILING = SEA+30` is rejected; `_tree_top_y()` includes the v5 emergent extra
+top leaf. The v6 root treeline at `SEA+24` remains. Terrain, river, biome and rendering are
+unchanged.
+
+**Verified.**
+- Unit `M17_TESTS_PASS 2852 assertions`; integration 463; regression 52.
+- Smoke x2: `world_hash=5132669793853529491`,
+  `faces_hash=4681965802156541697`, `faces=338156`, `edits=604`.
+- Global forest coverage 3.58%; dense-grove trees 293; max root 83; max full top 92;
+  zero roots/tops above the limits; mountain summit captures clear of trees.
+- v7 pin `5732396842800747576`; v0-v6 pins unchanged.
+- Performance: normal look FPS 527.6, p99 2.841 ms, draw calls 416.0; river look FPS
+  447.5, p99 3.227 ms, draw calls 643.6.
+
+**Limitations.** Dense groves still merged into broad canopy masses in the normal
+gameplay view; that limitation motivated M37.
+
+**Evidence.** `prototypes/m17/results/godot/m35-report.md`,
+`m35-verification.txt`, `m35-v7-*.png`, `m35-before-*.png`.
+
+---
+
+## M37 - Larger Irregular Forest Openings (generator v8)
+
+**Status: PARTIAL - substantial improvement, not complete.**
+
+**Base:** v7 head `47d1327`. **Branch/worktree:** `codex/m34-canopy-composition`,
+`C:/Users/Admin/Documents/Projects/VoxelWorld_m34`.
+
+**Objective.** Open dense groves further so distinct crowns and visible ground or sky gaps
+remain at elevated and ground-level viewpoints, preferring larger irregular openings over
+uniformly scattered missing trees; preserve the v7 treeline and determinism.
+
+**Implemented.** Generator version 8 (`M37_VERSION = 8`, `CURRENT_VERSION = 8`). Dense
+groves keep one of two candidates. A low-frequency opening field (`0.018`) and a
+deterministic 16x16 coarse clearing mask (70% of slope cells, 20% of open-woodland cells)
+carve large openings; the tree-clearing score threshold moves to `-0.08`; forest broadleaf
+crowns are capped at radius 2. The v7 root treeline and full-height canopy ceiling are
+unchanged. No terrain, river, biome or renderer changes.
+
+**Verified.**
+- Unit `M17_TESTS_PASS 2923 assertions`; integration 463; regression 52.
+- Smoke x2: `world_hash=6244082895220264557`,
+  `faces_hash=4560890229176639593`, `faces=306321`, `edits=525`.
+- Seed 17017: global forest coverage 2.08%; dense-grove trees 128 (v7 293); open lowland
+  trees 300 (v7 456); canopy box open / 2+ / 3+ 61.5 / 25.2 / 15.8%; dense box
+  53.4 / 35.7 / 22.3%; largest openings 1,866 and 899 columns.
+- Treeline: max root 82, max full top 92, zero above either limit.
+- Additional seed 424242: global coverage 3.25%; dense box open / 2+ / 3+ 69.6 / 20.6 /
+  14.3%; treeline preserved.
+- v8 pin `6693088695751418916`; v0-v7 pins unchanged.
+- Performance: normal look FPS 527.6 -> 506.2 (-4.0%), p99 2.841 -> 3.089 ms (+8.7%),
+  draw calls 416.0 -> 404.9; river 447.5 -> 442.6, p99 3.227 -> 3.350 ms. Under the
+  5%/10% investigation thresholds, reported rather than dismissed.
+
+**Limitations.** The normal gameplay capture still contains a dense tree line on the right
+hillside, so the result is not called complete. Global forest coverage is 2.08% on seed
+17017, some areas read as sparse woodland, and the 16x16 coarse mask can create
+straight-edged openings.
+
+**Evidence.** `prototypes/m17/results/godot/m37-report.md`,
+`m37-verification.txt`, `m37-diagnosis.txt`, `m37-final-*.png`,
+`m37-before-seedB-*.png`, `m37-v8-seedB-*.png`, `m37-v8-*.json`.
+
+**Commits.** `e8697aa` (v8 generator and tests), `25a7416` (evidence and report).
