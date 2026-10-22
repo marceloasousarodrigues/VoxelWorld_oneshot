@@ -241,7 +241,7 @@ func _full_cell_stats(generator: WorldGen) -> Dictionary:
 func run(h: TestHarness) -> void:
 	h.section("M34 generator versions")
 	h.eq(WorldGen.M34_VERSION, 5, "the M34 canopy generator is version 5")
-	h.eq(WorldGen.CURRENT_VERSION, 5, "new worlds use the M34 generator")
+	h.eq(WorldGen.CURRENT_VERSION, 7, "new worlds use the current M36 generator")
 	h.eq(WorldGen.M33_VERSION, 4, "the M33 generator remains version 4")
 	for version in range(0, WorldGen.CURRENT_VERSION + 1):
 		h.check(WorldGen.is_supported_version(version), "version %d remains loadable" % version)

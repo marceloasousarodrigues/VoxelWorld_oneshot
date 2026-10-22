@@ -23,7 +23,13 @@ const WILDERNESS_VERSION := 2
 const M32_VERSION := 3
 const M33_VERSION := 4
 const M34_VERSION := 5
-const CURRENT_VERSION := 5
+## Version 6 halves dense-grove candidates and lowers the trunk-root limit.
+const M35_VERSION := 6
+## Version 7 further opens dense groves and limits the full canopy height.
+const M36_VERSION := 7
+const CURRENT_VERSION := 7
+const M35_TREELINE_LIMIT := SEA_LEVEL + 24
+const M36_CANOPY_CEILING := SEA_LEVEL + 30
 const TREE_PAD := 5
 ## Wide enough for a radius-4 crown with one block of lean and one of shelf offset.
 const WILDERNESS_TREE_PAD := 7
@@ -160,6 +166,16 @@ func _is_m33() -> bool:
 ## True for generator version 5 and later (the M34 canopy composition pass).
 func _is_m34() -> bool:
 	return terrain_version >= M34_VERSION
+
+
+## True for the version 6 forest spacing and treeline pass.
+func _is_m35() -> bool:
+	return terrain_version >= M35_VERSION
+
+
+## True for the version 7 forest spacing and canopy ceiling pass.
+func _is_m36() -> bool:
+	return terrain_version >= M36_VERSION
 
 
 ## Horizontal reach of a tree's crown from its trunk, in blocks.  Version 0 and 1
@@ -483,8 +499,15 @@ func tree_at(x: int, z: int) -> Dictionary:
 	var biome := _world_biome(x, z)
 	if height <= SEA_LEVEL:
 		return {"type": TreeType.NONE}
+	# Version 6 leaves a wider open alpine band above the forested foothills.
+	# Keep the v0-v5 treelines unchanged for existing worlds and saves.
+	if _is_m35() and height > M35_TREELINE_LIMIT:
+		return {"type": TreeType.NONE}
 	if _is_m33():
-		return _biome_tree_v4(x, z, height, biome)
+		var tree := _biome_tree_v4(x, z, height, biome)
+		if _is_m36() and _tree_top_y(tree) > M36_CANOPY_CEILING:
+			return {"type": TreeType.NONE}
+		return tree
 	if _is_wilderness() and biome == Biome.FOREST:
 		return _forest_canopy_tree(x, z, height)
 	var roll := _hash2(x, z, 31337) % 1000
@@ -674,7 +697,24 @@ func _forest_canopy_tree_v5(x: int, z: int, height: int) -> Dictionary:
 	if x != candidate_x or z != candidate_z:
 		return {"type": TreeType.NONE}
 	var patch := _forest_patches.get_noise_2d(x, z)
-	if patch <= M34_GROVE_PATCH \
+	if _is_m36():
+		# Keep dense groves distinct, but space them enough to show separate
+		# crowns and terrain between trees in the user's v6 gameplay view.
+		if patch > M34_GROVE_PATCH:
+			if _hash2(cell_x, cell_z, 9103) % 3 != 0:
+				return {"type": TreeType.NONE}
+		elif _hash2(cell_x, cell_z, 9101) % 9 >= M34_WOODLAND_KEEP:
+			return {"type": TreeType.NONE}
+	elif _is_m35():
+		# M34 kept every dense-grove candidate; the user's v5 gameplay capture
+		# shows those crowns still merging into a nearly continuous mass. Keep
+		# groves denser than open woodland, but thin their candidates by half.
+		if patch > M34_GROVE_PATCH:
+			if _hash2(cell_x, cell_z, 9102) % 2 != 0:
+				return {"type": TreeType.NONE}
+		elif _hash2(cell_x, cell_z, 9101) % 9 >= M34_WOODLAND_KEEP:
+			return {"type": TreeType.NONE}
+	elif patch <= M34_GROVE_PATCH \
 			and _hash2(cell_x, cell_z, 9101) % 9 >= M34_WOODLAND_KEEP:
 		return {"type": TreeType.NONE}
 	var river_distance := _river_distance(x, z)
@@ -919,6 +959,30 @@ func _blossom(x: int, z: int, ground: int) -> Dictionary:
 func _pine(x: int, z: int, ground: int) -> Dictionary:
 	var trunk := 8 + _hash2(x, z, 8888) % 4
 	return {"type": TreeType.PINE, "base": ground + 1, "height": trunk}
+
+
+## Highest block in a generated tree, used to keep v7 crowns below the alpine
+## belt. The root-height check alone cannot constrain tall trunks and crowns.
+func _tree_top_y(tree: Dictionary) -> int:
+	var tree_type := int(tree.get("type", TreeType.NONE))
+	if tree_type == TreeType.NONE:
+		return 0
+	var base := int(tree.get("base", 0))
+	var trunk := int(tree.get("height", 0))
+	match tree_type:
+		TreeType.OAK, TreeType.BIRCH, TreeType.BLOSSOM:
+			# The normal broadleaf cap is top + 2; the M34 emergent class
+			# places one extra leaf at top + 3.  Include it so the v7 canopy
+			# ceiling accounts for the full generated height.
+			var top := base + trunk + 3
+			if int(tree.get("height_class", 0)) == 1:
+				top += 1
+			return top
+		TreeType.PINE:
+			return base + trunk + 2
+		TreeType.CACTUS:
+			return base + trunk - 1
+	return 0
 
 
 ## Decoration block for a column, or AIR. Deterministic per column.

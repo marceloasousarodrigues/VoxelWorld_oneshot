@@ -55,6 +55,8 @@ func _initialize() -> void:
 	_report_v4_cells()
 	_report_actual_box(LOWLAND_CANOPY_BOX)
 	_report_actual_box(LOWLAND_BOX)
+	_report_treeline()
+	_report_dense_groves()
 	for keep: int in [4, 5]:
 		_simulate_grove_thin(LOWLAND_CANOPY_BOX, keep, 9, 0.34, 2)
 		_simulate_grove_thin(LOWLAND_BOX, keep, 9, 0.34, 2)
@@ -482,6 +484,52 @@ func _v5_canopy_radius(x: int, z: int, height: int, type: int, patch: float) -> 
 	if _generator._hash3(x, height, z, 9102) % 100 < understory:
 		canopy = 2
 	return canopy
+
+
+func _report_dense_groves() -> void:
+	for version: int in [5, 6, 7]:
+		var generator := WorldGen.new(17017, version)
+		var dense_columns := 0
+		var dense_trees := 0
+		var open_low_trees := 0
+		for z in range(-192, 193):
+			for x in range(-192, 193):
+				if generator.biome_at(x, z) != WorldGen.Biome.FOREST:
+					continue
+				var tree := _is_tree(int(generator.tree_at(x, z)["type"]))
+				var patch := generator._forest_patches.get_noise_2d(x, z)
+				if patch > WorldGen.M34_GROVE_PATCH:
+					dense_columns += 1
+					dense_trees += 1 if tree else 0
+				elif generator.height_at(x, z) <= WorldGen.SEA_LEVEL + 8:
+					open_low_trees += 1 if tree else 0
+		print("DENSE_GROVES version=%d dense_columns=%d dense_trees=%d open_low_trees=%d" % [
+			version, dense_columns, dense_trees, open_low_trees])
+
+
+func _report_treeline() -> void:
+	var trees := 0
+	var max_root := -1
+	var max_top := -1
+	var above_root := 0
+	var above_top := 0
+	for z in range(-192, 193):
+		for x in range(-192, 193):
+			var tree := _generator.tree_at(x, z)
+			if not _is_tree(int(tree["type"])):
+				continue
+			trees += 1
+			var root := int(tree["base"]) - 1
+			var top := _generator._tree_top_y(tree)
+			max_root = maxi(max_root, root)
+			max_top = maxi(max_top, top)
+			if root > WorldGen.M35_TREELINE_LIMIT:
+				above_root += 1
+			if top > WorldGen.M36_CANOPY_CEILING:
+				above_top += 1
+	print("TREELINE version=%d trees=%d max_root=%d max_top=%d root_limit=%d top_limit=%d above_root=%d above_top=%d" % [
+		_generator.terrain_version, trees, max_root, max_top,
+		WorldGen.M35_TREELINE_LIMIT, WorldGen.M36_CANOPY_CEILING, above_root, above_top])
 
 
 func _report_actual_box(box: Rect2i) -> void:
