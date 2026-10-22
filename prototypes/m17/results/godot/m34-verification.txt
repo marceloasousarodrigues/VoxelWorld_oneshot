@@ -1,7 +1,7 @@
 ﻿M34 verification summary (worktree C:\Users\Admin\Documents\Projects\VoxelWorld_m34)
 Branch: codex/m34-canopy-composition
 Base: c0b58c3 (M33 tip)
-Head at verification: 93f4f55
+Head at verification: e20bb28
 
 FINGERPRINTS (wilderness_probe.gd --fingerprint, seed 17017)
 version=0 hash=3214517825889907206
