@@ -122,7 +122,7 @@ func _test_clear_restarts_the_worker(h: TestHarness) -> void:
 ## not the current version.  This catches the latent `WorldGen.new(seed)` default
 ## in the background generation worker.
 func _test_generation_uses_world_version(h: TestHarness) -> void:
-	for version: int in [3, 4, 5, 7]:
+	for version: int in [3, 4, 5, 6, 7]:
 		var streamer := _make_streamer(2, version)
 		streamer.generation_budget = 64
 		_pump(streamer)

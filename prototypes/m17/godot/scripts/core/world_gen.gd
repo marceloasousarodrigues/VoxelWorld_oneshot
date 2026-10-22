@@ -971,9 +971,10 @@ func _tree_top_y(tree: Dictionary) -> int:
 	var trunk := int(tree.get("height", 0))
 	match tree_type:
 		TreeType.OAK, TreeType.BIRCH, TreeType.BLOSSOM:
-			# The normal broadleaf cap is top + 2; the M34 emergent class
-			# places one extra leaf at top + 3.  Include it so the v7 canopy
-			# ceiling accounts for the full generated height.
+			# Conservative upper bound: normal broadleaf crowns place their
+			# cap at top + 2 and the M34 emergent class adds a leaf at top + 3;
+			# returning top + 3 (top + 4 for emergent) leaves one block of
+			# margin for profile changes.
 			var top := base + trunk + 3
 			if int(tree.get("height_class", 0)) == 1:
 				top += 1

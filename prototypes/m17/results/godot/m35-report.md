@@ -1,4 +1,4 @@
-# M35/M36 — World Creation: Forest Spacing and Treeline (generator v7)
+﻿# M35/M36 â€” World Creation: Forest Spacing and Treeline (generator v7)
 
 ## Status
 
@@ -36,7 +36,7 @@ versioned tests cover v6 and v7, and the default generator is v7.
 - Dense groves (`forest_patch > 0.34`) keep one of two candidates.
 - Open woodland keeps the v5 four-of-nine candidates.
 - Tree roots above `M35_TREELINE_LIMIT = SEA+24` are rejected in every biome.
-- v0–v5 behaviour is untouched.
+- v0â€“v5 behaviour is untouched.
 
 ### Version 7: current default
 
@@ -61,13 +61,13 @@ Seed 17017, sample `[-192,192]` step 1 (43,603 forest columns).
 | Global forest tree-column coverage | 5.55% | 4.34% | **3.58%** |
 | Dense-grove trees (`patch > 0.34`) | 910 | 442 | **293** |
 | Open lowland trees (`patch <= 0.34`, `height <= SEA+8`) | 456 | 456 | 456 |
-| Canopy box open / 2+ / 3+ | 43.6% / 46.5% / 36.3% | — | **44.7% / 44.4% / 33.8%** |
-| Canopy box crown union | 56.4% | — | **55.3%** |
+| Canopy box open / 2+ / 3+ | 43.6% / 46.5% / 36.3% | â€” | **44.7% / 44.4% / 33.8%** |
+| Canopy box crown union | 56.4% | â€” | **55.3%** |
 | Median nearest-trunk spacing | 2.00 | 2.00 | 2.00 |
 | River core trees | 0 | 0 | 0 |
-| River-outer coverage | — | — | 0.58% |
+| River-outer coverage | â€” | â€” | 0.58% |
 
-Dense groves lose about **68%** of their v5 trees (910 → 293) while open lowland keeps the
+Dense groves lose about **68%** of their v5 trees (910 â†’ 293) while open lowland keeps the
 same placement (456 trees), so the change targets the dense mass rather than blanket-thinning
 the whole forest. The v7 canopy box has more crown-free columns and fewer 2+/3+ overlaps
 than v5.
@@ -92,17 +92,17 @@ v5 is gone.
 ## Visual evidence
 
 Matched v5 (`m35-before-*`) and v7 (`m35-v7-*`), seed 17017, render radius 6,
-`--fly --hide-hud --settle=25`, 1280×720, time 0.28.
+`--fly --hide-hud --settle=25`, 1280Ã—720, time 0.28.
 
 | View | Camera | Before / After |
 |---|---|---|
-| Mountain / forest boundary | `51.9,120.2,19.4`, yaw 90, pitch −35 | `m35-before-0.png` / `m35-v7-0.png` |
-| Dense high-ridge forest | `91.8,98.5,-72.2`, yaw 180, pitch −20 | `m35-before-2.png` / `m35-v7-2.png` |
-| Dense canopy | `224,120,288`, yaw 75, pitch −30 | `m35-before-3.png` / `m35-v7-3.png` |
-| Mountain / summit | `76,140,-40`, yaw 180, pitch −14 | `m35-before-4.png` / `m35-v7-4.png` |
-| Normal gameplay | `-7.3,101.5,-29`, yaw 270, pitch −12 | `m35-before-5.png` / `m35-v7-5.png` |
-| Clearing / forest edge | `80,72,160`, yaw 90, pitch −8 | `m35-before-6.png` / `m35-v7-6.png` |
-| River / forest | `80,92,180`, yaw 0, pitch −25 | `m35-before-7.png` / `m35-v7-7.png` |
+| Mountain / forest boundary | `51.9,120.2,19.4`, yaw 90, pitch âˆ’35 | `m35-before-0.png` / `m35-v7-0.png` |
+| Dense high-ridge forest | `91.8,98.5,-72.2`, yaw 180, pitch âˆ’20 | `m35-before-2.png` / `m35-v7-2.png` |
+| Dense canopy | `224,120,288`, yaw 75, pitch âˆ’30 | `m35-before-3.png` / `m35-v7-3.png` |
+| Mountain / summit | `76,140,-40`, yaw 180, pitch âˆ’14 | `m35-before-4.png` / `m35-v7-4.png` |
+| Normal gameplay | `-7.3,101.5,-29`, yaw 270, pitch âˆ’12 | `m35-before-5.png` / `m35-v7-5.png` |
+| Clearing / forest edge | `80,72,160`, yaw 90, pitch âˆ’8 | `m35-before-6.png` / `m35-v7-6.png` |
+| River / forest | `80,92,180`, yaw 0, pitch âˆ’25 | `m35-before-7.png` / `m35-v7-7.png` |
 
 Direct inspection:
 
@@ -123,10 +123,10 @@ not usable; the normal-gameplay and clearing captures provide the ground-level e
 
 | Check | Result |
 |---|---|
-| Unit | `M17_TESTS_PASS 2847 assertions` |
+| Unit | `M17_TESTS_PASS 2852 assertions` |
 | Integration | `M17_INTEGRATION_PASS 463 assertions` |
 | Regression | `M17_REGRESSION_PASS assertions=52` |
-| Smoke ×2 | `world_hash=5132669793853529491`, `faces_hash=4681965802156541697`, `faces=338156`, `edits=604` |
+| Smoke Ã—2 | `world_hash=5132669793853529491`, `faces_hash=4681965802156541697`, `faces=338156`, `edits=604` |
 
 Generator pins:
 
@@ -148,7 +148,7 @@ emergent crowns), river rules, chunk-boundary load order, and v7 save version.
 
 `test_m32_landscape.gd`, `test_m33_vegetation.gd` and `test_m34_canopy_composition.gd`
 now assert `CURRENT_VERSION == 7`; their historical v3/v4/v5 samples and pins are
-unchanged. `test_streaming_lifecycle.gd` now streams generator versions 3, 4, 5 and 7.
+unchanged. `test_streaming_lifecycle.gd` now streams generator versions 3, 4, 5, 6 and 7.
 
 ## Performance
 
@@ -160,8 +160,8 @@ Three `run_perf.gd` look-phase runs per camera per build.
 | River `80,92,180` | 441.9 / 3.396 ms / 651.4 | **447.5 / 3.227 ms / 643.6** |
 
 v7 is slightly faster and draws fewer calls; settle generation is unchanged
-(806→814 ms normal, 1183→1183 ms river) and mesh cost falls (7038→6968 ms normal,
-10170→10125 ms river). No performance regression.
+(806â†’814 ms normal, 1183â†’1183 ms river) and mesh cost falls (7038â†’6968 ms normal,
+10170â†’10125 ms river). No performance regression.
 
 ## Limitations
 

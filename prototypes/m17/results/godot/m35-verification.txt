@@ -1,4 +1,4 @@
-M35/M36 verification summary (worktree C:\Users\Admin\Documents\Projects\VoxelWorld_m34)
+﻿M35/M36 verification summary (worktree C:\Users\Admin\Documents\Projects\VoxelWorld_m34)
 Branch: codex/m34-canopy-composition (uncommitted v6/v7 edits preserved and completed)
 Base: 08fa745 (M34 v5 evidence head)
 Generator default: version 7
@@ -14,7 +14,7 @@ version=6 hash=9184026728463986701
 version=7 hash=5732396842800747576
 
 UNIT
-M17_TESTS_PASS 2847 assertions (exit 0)
+M17_TESTS_PASS 2852 assertions (exit 0)
 
 INTEGRATION
 M17_INTEGRATION_PASS 463 assertions (exit 0)
