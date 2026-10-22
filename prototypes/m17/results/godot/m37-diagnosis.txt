@@ -1,0 +1,46 @@
+﻿M37 forest composition diagnosis (generator v8, seed 17017 unless noted)
+Worktree: C:/Users/Admin/Documents/Projects/VoxelWorld_m34
+Base: 47d1327 (v7 head) plus v8 changes
+Measured 2026-10-22
+
+Commands:
+  m34_canopy_probe.gd --version=8 --radius=192
+  m33_vegetation_probe.gd --version=8 --radius=192 --step=1
+  wilderness_probe.gd --fingerprint
+
+ACTUAL v8 box=[P: (192, 256), S: (64, 64)] trees=139 coverage=0.039 open=0.615 multi=0.252 triple=0.158 spacing_p50=2.00 components=3 largest=1148 large20=3 largest_open=1866
+ACTUAL v8 box=[P: (200, 280), S: (48, 24)] trees=83 coverage=0.072 open=0.553 multi=0.353 triple=0.237 spacing_p50=2.00 components=2 largest=513 large20=1 largest_open=511
+ACTUAL v8 box=[P: (60, -104), S: (64, 64)] trees=154 coverage=0.052 open=0.534 multi=0.357 triple=0.223 spacing_p50=2.00 components=4 largest=1156 large20=4 largest_open=899
+TREELINE version=8 trees=1072 max_root=82 max_top=92 root_limit=86 top_limit=92 above_root=0 above_top=0
+DENSE_GROVES version=5 dense_columns=6059 dense_trees=910 open_low_trees=456
+DENSE_GROVES version=6 dense_columns=6059 dense_trees=442 open_low_trees=456
+DENSE_GROVES version=7 dense_columns=6059 dense_trees=293 open_low_trees=456
+DENSE_GROVES version=8 dense_columns=6059 dense_trees=128 open_low_trees=300
+M33_VEG_PROBE version=8 radius=192 step=1 sea=62
+FOREST columns=43603 trees=905 coverage=0.0208
+SPECIES { 1: 622, 4: 203, 2: 203, 5: 44 }
+ELEVATION_BANDS 1-10:608/63111=0.010 11-20:464/17117=0.027 21-30:0/6376=0.000 31-40:0/3354=0.000 41-46:0/1341=0.000 <=sea:0/51559=0.000 >46:0/5367=0.000
+HIGH broadleaf_above_sea+30=0 any_above_30=0 summit_broadleaf_above_sea+40=0 summit_any=0
+RIVER columns=56806 trees=64 coverage=0.0011 core=0/47827=0.0000 outer=64/8979=0.0071
+LOCAL_CELLS count=169 mean=0.0067 p10=0.0000 p50=0.0010 p90=0.0195 max=0.0674 empty=137 dense8=0 dense12=0 full60=0
+LOWLAND box=[P: (200, 280), S: (48, 24)] columns=1151 trees=43 coverage=0.0374 species={ 1: 31, 2: 3, 4: 9 }
+CANOPY box=[P: (192, 256), S: (64, 64)] forest_columns=3552 covered=1408 open=2183 open_ratio=0.615 clearing=1042 crown_free_clearing=1042 clearing_open_ratio=1.000 largest_open_component=1866
+FINGERPRINT seed=17017 version=7 hash=5732396842800747576
+FINGERPRINT seed=17017 version=8 hash=6693088695751418916
+
+SEED 424242
+ACTUAL v8 box=[P: (192, 256), S: (64, 64)] trees=77 coverage=0.084 open=0.358 multi=0.485 triple=0.287 spacing_p50=2.24 components=4 largest=646 large20=4 largest_open=306
+ACTUAL v8 box=[P: (200, 280), S: (48, 24)] trees=51 coverage=0.108 open=0.395 multi=0.478 triple=0.260 spacing_p50=2.00 components=1 largest=351 large20=1 largest_open=187
+ACTUAL v8 box=[P: (60, -104), S: (64, 64)] trees=110 coverage=0.058 open=0.696 multi=0.206 triple=0.143 spacing_p50=2.24 components=7 largest=676 large20=6 largest_open=936
+TREELINE version=8 trees=1368 max_root=82 max_top=92 root_limit=86 top_limit=92 above_root=0 above_top=0
+FOREST columns=36374 trees=1182 coverage=0.0325
+RIVER columns=66654 trees=61 coverage=0.0009 core=0/54976=0.0000 outer=61/11678=0.0052
+LOCAL_CELLS count=169 mean=0.0079 p10=0.0000 p50=0.0010 p90=0.0273 max=0.0879 empty=135 dense8=1 dense12=0 full60=0
+LOWLAND box=[P: (200, 280), S: (48, 24)] columns=473 trees=25 coverage=0.0529 species={ 4: 5, 1: 19, 2: 1 }
+CANOPY box=[P: (192, 256), S: (64, 64)] forest_columns=916 covered=804 open=328 open_ratio=0.358 clearing=215 crown_free_clearing=209 clearing_open_ratio=0.972 largest_open_component=306
+POINT x=-7 z=-29 h=68 band=1-10 biome=Plains slope=1 tree=0 patch=-0.045 river=0.198
+POINT x=80 z=152 h=65 band=1-10 biome=Snow slope=0 tree=0 patch=-0.414 river=0.420
+POINT x=224 z=288 h=63 band=1-10 biome=Beach slope=1 tree=0 patch=-0.047 river=0.504
+POINT x=76 z=-40 h=78 band=11-20 biome=Snow slope=1 tree=0 patch=0.272 river=0.255
+POINT x=40 z=120 h=62 band=<=sea biome=Beach slope=1 tree=0 patch=-0.143 river=0.303
+POINT x=0 z=0 h=55 band=<=sea biome=Ocean slope=0 tree=0 patch=0.000 river=0.000

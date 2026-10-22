@@ -1,0 +1,89 @@
+M37 forest composition verification (worktree C:\Users\Admin\Documents\Projects\VoxelWorld_m34)
+Branch: codex/m34-canopy-composition
+Base: 47d1327 (v7 head) plus v8 changes
+Generator default: version 8
+
+FINGERPRINTS (wilderness_probe.gd --fingerprint, seed 17017)
+version=0 hash=3214517825889907206
+version=1 hash=5947596836865492245
+version=2 hash=8397584315617538769
+version=3 hash=8802792587028581708
+version=4 hash=2164503133686526591
+version=5 hash=5133898688464144157
+version=6 hash=9184026728463986701
+version=7 hash=5732396842800747576
+version=8 hash=6693088695751418916
+
+UNIT
+M17_TESTS_PASS 2923 assertions (exit 0)
+
+INTEGRATION
+M17_INTEGRATION_PASS 463 assertions (exit 0)
+
+REGRESSION
+M17_REGRESSION_PASS assertions=52 (exit 0)
+
+SMOKE x2
+world_hash=6244082895220264557
+faces_hash=4560890229176639593
+faces=306321
+edits=525
+(stable in both runs)
+
+DISTRIBUTION, seed 17017, sample [-192,192] step 1
+v7 global forest tree coverage 0.0358
+v8 global forest tree coverage 0.0208 (905/43603)
+dense-grove columns (patch > 0.34): 6059
+  v7 dense-grove trees 293
+  v8 dense-grove trees 128
+open lowland (patch <= 0.34, height <= SEA+8) trees: 456 v7, 300 v8
+v8 LOWLAND_BOX coverage 0.0374 (43/1151)
+v8 canopy box open / 2+ / 3+ 0.615 / 0.252 / 0.158
+v8 canopy box crown union 0.385
+v8 dense box (60,-104,64,64) open / 2+ / 3+ 0.534 / 0.357 / 0.223
+v8 dense box largest open component 899 columns
+v8 canopy box largest open component 1866 columns
+v8 median nearest-trunk spacing 2.00
+v8 river core trees 0; river-outer coverage 64/8979 = 0.0071
+v8 ELEVATION_BANDS: 0 trees in 21-30, 0 above 30; HIGH any_above_30=0
+
+TREELINE
+root limit SEA+24 = 86; canopy ceiling SEA+30 = 92
+v8 trees 1072; max root 82; max top 92; roots above limit 0; tops above ceiling 0
+v7 max root 83; max top 92 (preserved)
+
+ADDITIONAL SEED 424242
+v8 global forest coverage 0.0325 (1182/36374)
+v8 dense box open 0.696; 2+ 0.206; 3+ 0.143; largest open 936
+v8 treeline max root 82, max top 92; 0 above either limit
+
+PERFORMANCE (3 runs each; look-phase medians)
+Normal camera -7.3,101.5,-29 yaw 270 pitch -12:
+  v7 FPS 527.6, p95/p99 2.436/2.841 ms, draw 416.0, gen/mesh 814/6968 ms
+  v8 FPS 506.2, p95/p99 2.622/3.089 ms, draw 404.9, gen/mesh 787/6767 ms
+River camera 80,92,180 yaw 0 pitch -25:
+  v7 FPS 447.5, p95/p99 2.828/3.227 ms, draw 643.6, gen/mesh 1183/10125 ms
+  v8 FPS 442.6, p95/p99 2.859/3.350 ms, draw 625.4, gen/mesh 1173/10318 ms
+
+VISUAL EVIDENCE
+Matched v7/v8, seed 17017, radius 6, --fly --hide-hud --settle=25, 1280x720, time 0.28:
+  0 51.9,120.2,19.4 yaw 90 pitch -35 (mountain/forest boundary)
+  1 91.8,98.5,-72.2 yaw 180 pitch -20 (dense high ridge)
+  2 224,120,288 yaw 75 pitch -30 (dense canopy)
+  3 76,140,-40 yaw 180 pitch -14 (mountain/summit)
+  4 -7.3,101.5,-29 yaw 270 pitch -12 (normal gameplay)
+  5 80,72,160 yaw 90 pitch -8 (clearing/forest edge)
+  6 80,92,180 yaw 0 pitch -25 (river/forest)
+Files: m35-before-* (v7) and m37-final-* (v8).
+
+Additional seed 424242, same cameras 0/4/5/3:
+  m37-before-seedB-0..4 (v7) and m37-v8-seedB-0..4 (v8).
+
+LIMITATIONS
+- The normal gameplay view still has a dense tree line on the right hillside;
+  this is a remaining continuous-canopy feature, so the result is reported as
+  an improvement, not a complete elimination of canopy masses.
+- Global forest coverage is 2.08% (v7 3.58%); the forest is intentionally more
+  open and some areas may read as sparse woodland.
+- The 16x16 coarse clearing mask can produce straight-edged openings in places.
+- No terrain, river, biome or renderer changes; performance is local RTX 3080.
