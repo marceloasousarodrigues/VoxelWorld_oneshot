@@ -8,8 +8,8 @@
 	],
 	"fluid": {
 		"changes": 0,
-		"evaluations": 1304,
-		"observed_edits": 595,
+		"evaluations": 1297,
+		"observed_edits": 594,
 		"pending": 0,
 		"seeded_chunks": 0
 	},
@@ -26,17 +26,17 @@
 		"timestamp": 0
 	},
 	"look": [
-		38.0,
+		20.0,
 		-12.0
 	],
 	"mesher": {
-		"assemble_ms": 63.966,
+		"assemble_ms": 64.386,
 		"builds": 352,
-		"emit_ms": 4773.506,
-		"faces": 142388,
-		"fill_ms": 436.137,
-		"ms": 5218.481,
-		"triangles": 284776
+		"emit_ms": 4776.742,
+		"faces": 142310,
+		"fill_ms": 431.064,
+		"ms": 5216.975,
+		"triangles": 284620
 	},
 	"player": [
 		8.5,
@@ -45,16 +45,16 @@
 	],
 	"seed": 17017,
 	"streaming": {
-		"attach_ms_total": 3429.255,
+		"attach_ms_total": 3531.727,
 		"center": "(0, 5, 0)",
-		"faces": 142388,
-		"faces_hash": 6544400489782280556,
+		"faces": 142310,
+		"faces_hash": 8035997406396760670,
 		"generated": 343,
 		"generation_in_flight": 0,
-		"generation_ms_total": 904.788,
-		"generation_worker_ms": 4093.034,
+		"generation_ms_total": 901.68,
+		"generation_worker_ms": 4104.285,
 		"loaded": 343,
-		"mesh_ms_total": 5218.481,
+		"mesh_ms_total": 5216.975,
 		"meshed": 352,
 		"meshes_in_flight": 0,
 		"queued": 0,
@@ -63,11 +63,11 @@
 		"vertical_radius": 4,
 		"views": 343,
 		"wanted": 343,
-		"worst_mesh_ms": 38.451
+		"worst_mesh_ms": 37.642
 	},
 	"window_size": [
 		1280,
 		720
 	],
-	"world_hash": 6139341112815705948
+	"world_hash": 4653933628351690447
 }

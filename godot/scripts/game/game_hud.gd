@@ -72,7 +72,7 @@ func _build() -> void:
 	hint_panel.name = "ControlHint"
 	hint_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	hint_panel.offset_left = 10
-	hint_panel.offset_top = -24
+	hint_panel.offset_top = -25
 	hint_panel.offset_right = 1010
 	hint_panel.offset_bottom = -2
 	hint_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -222,7 +222,7 @@ func _build_hotbar() -> void:
 	_hotbar_root.name = "HotbarRoot"
 	_hotbar_root.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_hotbar_root.offset_top = -(SLOT_SIZE + 68)
-	_hotbar_root.offset_bottom = -30
+	_hotbar_root.offset_bottom = -34
 	_hotbar_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_hotbar_root)
 
