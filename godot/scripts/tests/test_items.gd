@@ -138,6 +138,32 @@ func _test_drop_requirements(h: TestHarness) -> void:
 	h.check(not ItemDB.harvestable(BlockDB.OBSIDIAN, ItemDB.IRON_PICKAXE), "obsidian needs a diamond pickaxe")
 	h.check(ItemDB.harvestable(BlockDB.OBSIDIAN, ItemDB.DIAMOND_PICKAXE), "obsidian drops to a diamond pickaxe")
 	h.check(not ItemDB.harvestable(BlockDB.STONE, ItemDB.WOOD_AXE), "an axe cannot mine stone")
+
+	# Crafted blocks are collectable by hand.  Raw terrain materials (stone,
+	# cobblestone, ores, obsidian) keep their tool gates.
+	var hand_crafted := [
+		BlockDB.FURNACE, BlockDB.STONE_BRICK, BlockDB.BRICK, BlockDB.SANDSTONE,
+		BlockDB.STONE_WALL, BlockDB.CHIMNEY, BlockDB.SLATE_TILE, BlockDB.SLATE_STAIR,
+		BlockDB.SLATE_SLAB, BlockDB.SLATE_RIDGE, BlockDB.SLATE_RAMP, BlockDB.WINDOW,
+		BlockDB.ROOF_TILE, BlockDB.GLASS,
+	]
+	for block_id: int in hand_crafted:
+		h.check(ItemDB.harvestable(block_id, BlockDB.AIR),
+			"crafted %s drops to a bare hand" % BlockDB.name_of(block_id))
+		h.eq(ItemDB.requirement_label(block_id), "",
+			"crafted %s advertises no tool requirement" % BlockDB.name_of(block_id))
+	# Every catalogue output that is a real block is exempt, with the two raw
+	# stone materials kept behind their tool gate.
+	for recipe: Dictionary in Crafting.recipes():
+		var output := int(recipe.get("output", BlockDB.NO_DROP))
+		if not ItemDB.is_block(output) or output in [BlockDB.STONE, BlockDB.COBBLESTONE]:
+			continue
+		h.check(ItemDB.harvestable(output, BlockDB.AIR),
+			"recipe output %s is hand-harvestable" % BlockDB.name_of(output))
+	h.check(not ItemDB.harvestable(BlockDB.COBBLESTONE, BlockDB.AIR),
+		"raw cobblestone still needs a pickaxe")
+	h.check(not ItemDB.harvestable(BlockDB.OBSIDIAN, BlockDB.AIR),
+		"raw obsidian still needs a diamond pickaxe")
 	h.eq(ItemDB.requirement_label(BlockDB.STONE), "Pickaxe",
 		"stone asks for a pickaxe in the HUD")
 	h.eq(ItemDB.requirement_label(BlockDB.IRON_ORE), "Stone Pickaxe",

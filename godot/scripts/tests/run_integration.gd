@@ -1197,6 +1197,21 @@ func _crafting_and_mining_section() -> void:
 	_check(int(_game.world.get_block(mine_cell)) == BlockDB.COAL_ORE,
 		"the bare-handed coal ore remains in the world")
 
+	# A crafted block is collectable by hand.  Only raw terrain materials keep
+	# their tool gate, so the same bare hand that cannot mine stone can recover
+	# the crafted stone brick it was made into.
+	var crafted_before := inventory.count_of(BlockDB.STONE_BRICK)
+	_game.world.set_block(mine_cell, BlockDB.STONE_BRICK)
+	for i in range(2):
+		await process_frame
+	_check(ItemDB.harvestable(BlockDB.STONE_BRICK, BlockDB.AIR),
+		"a crafted stone brick is hand-harvestable")
+	_check(player.break_target(), "a bare hand breaks a crafted stone brick")
+	_check(int(_game.world.get_block(mine_cell)) == BlockDB.AIR,
+		"the crafted stone brick leaves the world")
+	_check(inventory.count_of(BlockDB.STONE_BRICK) == crafted_before + 1,
+		"the crafted stone brick drops into the inventory")
+
 	# A pickaxe is faster, yields the drop and wears out.
 	_check(ItemDB.break_seconds(BlockDB.STONE, ItemDB.WOOD_PICKAXE) < hand_seconds,
 		"a pickaxe breaks stone faster than a bare hand")

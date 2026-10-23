@@ -94,6 +94,13 @@ static var _effective_tool: Dictionary = {}
 ## Tool class and tier a block *requires* before it drops anything.
 static var _required_tool: Dictionary = {}
 static var _required_tier: Dictionary = {}
+## Blocks produced by a crafting/smelting recipe.  These are always collectable
+## by hand; only raw terrain materials keep a tool requirement.  Raw stone and
+## cobblestone are recipe outputs too (stone can be smelted, cobblestone crafted
+## from stone), so they are explicitly excluded from the exemption.
+static var _crafted_block_outputs: Dictionary = {}
+static var _crafted_outputs_ready := false
+const RAW_TOOL_BLOCKS := [BlockDB.STONE, BlockDB.COBBLESTONE]
 
 ## item id -> definition dictionary for the non-block items.
 static var _definitions: Dictionary = {}
@@ -332,7 +339,23 @@ static func effective_tool(block_id: int) -> int:
 
 
 static func required_tool(block_id: int) -> int:
+	if _is_crafted_block(block_id):
+		return Tool.NONE
 	return int(_required_tool.get(block_id, Tool.NONE))
+
+
+## True when the block is an output of the real recipe catalogue.  The cache is
+## filled lazily (after both ItemDB and Crafting are loaded) so ItemDB's static
+## mining tables do not create an initialisation cycle with the recipe model.
+static func _is_crafted_block(block_id: int) -> bool:
+	if not _crafted_outputs_ready:
+		_crafted_outputs_ready = true
+		for recipe: Dictionary in Crafting.recipes():
+			var output := int(recipe.get("output", BlockDB.NO_DROP))
+			if not is_block(output) or RAW_TOOL_BLOCKS.has(output):
+				continue
+			_crafted_block_outputs[output] = true
+	return _crafted_block_outputs.has(block_id)
 
 
 static func required_tier(block_id: int) -> int:
