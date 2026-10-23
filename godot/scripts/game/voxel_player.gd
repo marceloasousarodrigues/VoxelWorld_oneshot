@@ -552,28 +552,22 @@ func place_selected() -> bool:
 	if not hit.get("hit", false):
 		interaction_failed.emit("Nothing to build against")
 		return false
-	var block_id := ItemDB.placeable_block(item_id)
-	if block_id == BlockDB.NO_DROP:
+	var preview := placement_preview()
+	if preview.is_empty():
 		if item_id == BlockDB.AIR:
 			interaction_failed.emit("Hotbar slot is empty")
 		else:
 			interaction_failed.emit("%s is not a placeable block" % ItemDB.name_of(item_id))
 		return false
-	var normal: Vector3i = hit["normal"]
-	var cell: Vector3i = hit["block"] + normal
-	if not VoxelWorld.in_world_vertical(cell.y):
-		interaction_failed.emit("Outside the buildable height")
+	if not bool(preview["valid"]):
+		interaction_failed.emit(str(preview.get("message", "That space is occupied")))
 		return false
-	var orientation := 0
-	if BlockDB.is_orientable(block_id):
-		orientation = placement_orientation(normal)
-	var existing := world.get_block(cell)
-	if existing != BlockDB.AIR and not BlockDB.is_liquid(existing):
-		interaction_failed.emit("That space is occupied")
-		return false
-	if cell_intersects_body(cell, block_id, orientation):
-		interaction_failed.emit("Cannot build inside yourself")
-		return false
+	var cell: Vector3i = preview["cell"]
+	var block_id := int(preview["block"])
+	var orientation := int(preview["orientation"])
+	# `placement_preview` is the single authority for the destination, shape and
+	# validity.  The action below consumes that exact result, so the ghost the
+	# player sees cannot drift from what this call writes.
 	if not world.set_block_state(cell, block_id, orientation):
 		interaction_failed.emit("That block is outside the loaded world")
 		return false
@@ -623,6 +617,10 @@ func placement_orientation(normal: Vector3i) -> int:
 static func orientation_label(block_id: int, orientation: int) -> String:
 	if block_id == BlockDB.SLATE_RIDGE:
 		return "long axis %s" % ("X" if orientation % 2 == 0 else "Z")
+	if BlockShape.is_slab(block_id):
+		# The slab's only meaningful state is which half of the cell it fills.
+		# The horizontal facing that R still cycles does not alter its geometry.
+		return "top half (upside down)" if orientation >= 4 else "bottom half"
 	return facing_name(orientation % 4) + (" upside down" if orientation >= 4 else "")
 
 
@@ -638,25 +636,43 @@ func placement_preview() -> Dictionary:
 		return {}
 	var hit := target()
 	if not hit.get("hit", false):
-		return {"item": item_id, "block": block_id, "valid": false, "reason": "aim at a block"}
+		return {
+			"item": item_id, "block": block_id, "hit": false, "valid": false,
+			"reason": "aim at a block", "message": "Nothing to build against",
+			"show": false,
+		}
 	var normal: Vector3i = hit["normal"]
-	var cell: Vector3i = hit["block"] + normal
+	var target_cell: Vector3i = hit["block"]
+	var cell: Vector3i = target_cell + normal
 	var orientation := 0
 	if BlockDB.is_orientable(block_id):
 		orientation = placement_orientation(normal)
 	var preview := {
-		"item": item_id, "block": block_id, "cell": cell, "normal": normal,
+		"item": item_id, "block": block_id, "hit": true,
+		"target": target_cell, "cell": cell, "normal": normal,
 		"orientation": orientation, "valid": true, "reason": "",
+		"message": "", "show": true,
 	}
 	if not VoxelWorld.in_world_vertical(cell.y):
 		preview["valid"] = false
 		preview["reason"] = "outside the buildable height"
+		preview["message"] = "Outside the buildable height"
+		# There is no supported preview range outside the buildable height.
+		preview["show"] = false
 	elif world.get_block(cell) != BlockDB.AIR and not BlockDB.is_liquid(world.get_block(cell)):
 		preview["valid"] = false
 		preview["reason"] = "space occupied"
+		preview["message"] = "That space is occupied"
 	elif cell_intersects_body(cell, block_id, orientation):
 		preview["valid"] = false
 		preview["reason"] = "inside you"
+		preview["message"] = "Cannot build inside yourself"
+	elif not world.is_loaded(cell):
+		preview["valid"] = false
+		preview["reason"] = "outside the loaded world"
+		preview["message"] = "That block is outside the loaded world"
+		# A cell in a chunk that is not loaded cannot be inspected reliably.
+		preview["show"] = false
 	return preview
 
 

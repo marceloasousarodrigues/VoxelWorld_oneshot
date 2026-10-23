@@ -16,6 +16,7 @@ const CONFIG_PATH := "user://settings.json"
 const BuildDemo = preload("res://scripts/game/build_demo.gd")
 const FinalDemo = preload("res://scripts/game/final_demo.gd")
 const StarterHouse = preload("res://scripts/game/starter_house.gd")
+const BlockPlacementPreviewNode = preload("res://scripts/game/block_placement_preview.gd")
 const AUTOSAVE_SECONDS := 120.0
 ## After any damage the player is briefly immune to further *impact* damage, so a
 ## single landing or hit cannot apply twice in consecutive frames.
@@ -32,6 +33,7 @@ var world: VoxelWorld
 var fluid: FluidSim
 var streamer: ChunkStreamer
 var player: VoxelPlayer
+var placement_preview
 var inventory: Inventory
 var hud: GameHUD
 var menu: MainMenu
@@ -125,6 +127,7 @@ var _options := {
 	"seed": 17017,
 	"player_at": Vector3.INF,
 	"look": Vector2(INF, INF),
+	"placement_capture": "",
 	"straight_to_game": false,
 	"hide_hud": false,
 	"fly": false,
@@ -337,9 +340,17 @@ func _build_nodes() -> void:
 	player.show_target_marker = str(_options["visual_test"]).is_empty() and bool(_options["show_target_marker"])
 	player.gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 24.0))
 	player.can_interact = false
+	# Update the crosshair target before the game layer paints HUD/ghost feedback
+	# in the same frame.  Processing order is otherwise parent-before-child.
+	player.process_priority = -10
 	player.set_physics_process(false)
 	player.set_process(false)
 	add_child(player)
+
+	placement_preview = BlockPlacementPreviewNode.new()
+	placement_preview.name = "BlockPlacementPreview"
+	add_child(placement_preview)
+	placement_preview.setup(mesher)
 
 	streamer = ChunkStreamer.new()
 	streamer.name = "ChunkStreamer"
@@ -499,6 +510,15 @@ func _parse_arguments() -> void:
 				_options["mesh_budget_ms"] = maxf(0.5, value.to_float())
 			"--player-at":
 				_options["player_at"] = _parse_vector(value)
+			"--placement-capture":
+				# Diagnostic: build a deterministic flat test pad and aim at a
+				# known cell, so the placement ghost can be captured without a
+				# scripted walk.  Values: cube, slab, slab_top, stair, invalid.
+				var mode := value.to_lower()
+				_options["placement_capture"] = mode if mode in [
+					"cube", "slab", "slab_top", "stair", "invalid"] else "cube"
+				_options["capture"] = true
+				_options["straight_to_game"] = true
 			"--look":
 				var look := value.split(",")
 				if look.size() == 2:
@@ -933,6 +953,79 @@ func _place_m40_capture_table() -> void:
 	world.set_block(cell, BlockDB.CRAFTING_TABLE)
 
 
+## Diagnostic (`--placement-capture`): a deterministic, flat pad with one aimed
+## target cell.  The ghost itself still comes from the live player raycast and
+## the real preview rule; this helper only stages the viewpoint and loadout.
+func _prepare_placement_capture(mode: String) -> void:
+	if world == null or player == null or inventory == null:
+		return
+	if inventory_panel != null and inventory_panel.is_open():
+		inventory_panel.close()
+	var spawn_x := floori(player.global_position.x)
+	var spawn_z := floori(player.global_position.z)
+	var center := Vector2i(spawn_x + 14, spawn_z)
+	var surface := world.surface_height(center.x, center.y)
+	var base_y := mini(surface + 3, WorldGen.WORLD_HEIGHT - 14)
+	for dz in range(-6, 7):
+		for dx in range(-6, 7):
+			var x := center.x + dx
+			var z := center.y + dz
+			if not world.is_loaded(Vector3i(x, base_y, z)):
+				continue
+			for y in range(base_y, mini(base_y + 10, WorldGen.WORLD_HEIGHT)):
+				world.set_block(Vector3i(x, y, z), BlockDB.AIR)
+			world.set_block(Vector3i(x, base_y, z), BlockDB.STONE)
+	var target := Vector3i(center.x, base_y, center.y - 4)
+	world.set_block_state(target, BlockDB.PLANKS, 0)
+	if mode == "invalid":
+		world.set_block(target + Vector3i.UP, BlockDB.DIRT)
+	if mode == "slab_top":
+		world.set_block(target + Vector3i(0, 5, 0), BlockDB.STONE)
+	var feet := Vector3(center.x + 0.5, float(base_y) + 1.05, center.y + 0.5)
+	player.teleport_to(feet)
+	player.flying = false
+	player.look_yaw(0.0)
+	var aim := Vector3(target) + Vector3(0.5, 1.0, 0.5)
+	if mode == "slab_top":
+		aim = Vector3(target + Vector3i(0, 5, 0)) + Vector3(0.5, 0.0, 0.5)
+	var eye := feet + Vector3(0.0, VoxelPlayer.EYE_HEIGHT, 0.0)
+	var delta := aim - eye
+	player.look_pitch(rad_to_deg(atan2(delta.y, Vector2(delta.x, delta.z).length())))
+	var item_id := BlockDB.STONE
+	if mode == "slab" or mode == "slab_top":
+		item_id = BlockDB.SLATE_SLAB
+	elif mode == "stair":
+		item_id = BlockDB.STAIR
+	for index in Inventory.HOTBAR_SIZE:
+		inventory.clear_slot(index)
+	inventory.put_stack(0, {"item": item_id, "count": 16})
+	inventory.select(0)
+	player.placement_facing = -1
+	if mode == "stair":
+		# Deliberately rotated: the canonical +Z stair becomes +X, and the ghost
+		# must show the same rotation before placement.
+		player.placement_facing = 1
+	if mode == "invalid":
+		# The raycast would hit the occupant first, so freeze the staged target
+		# and feed the preview the face pair directly.  This is a capture-only
+		# way to show the red state; the normal game path still uses the real ray.
+		player.set_process(false)
+		player._hit = {
+			"hit": true, "block": target, "normal": Vector3i.UP,
+			"block_id": BlockDB.PLANKS, "distance": 4.0,
+		}
+		if player.marker != null:
+			player.marker.global_position = Vector3(target) + Vector3.ONE * 0.5
+			player.marker.visible = true
+	streamer.focus_at(player.global_position)
+	var destination := target + (Vector3i.DOWN if mode == "slab_top" else Vector3i.UP)
+	if hud != null:
+		hud.flash("Placement preview: %s at (%d, %d, %d)" % [
+			mode, destination.x, destination.y, destination.z], 60.0)
+	print("M17_PLACEMENT_CAPTURE mode=%s player=%s target=%s cell=%s look=%s item=%d" % [
+		mode, player.global_position, target, destination, player.look_angles(), item_id])
+
+
 ## Diagnostic (`--find-structure`): places the player above the nearest structure
 ## so a capture or a manual check can inspect one without a long walk.
 func _apply_find_structure() -> void:
@@ -1174,6 +1267,8 @@ func _enter_play(area_ready: bool) -> void:
 		_open_settings()
 	if bool(_options["m40_capture"]):
 		_prepare_m40_capture()
+	if not str(_options["placement_capture"]).is_empty():
+		_prepare_placement_capture(str(_options["placement_capture"]))
 	_apply_find_structure()
 	print("M17_GAME_READY seed=%d player=%s chunks=%d views=%d meshed=%d" % [
 		world.world_seed, player.global_position, streamer.loaded_count(), streamer.view_count(), int(streamer.stats["meshed"]),
@@ -1414,6 +1509,7 @@ func _process(delta: float) -> void:
 				_save_silently("autosave")
 		_:
 			pass
+	_update_placement_preview()
 	# The capture harness also has to run on the death screen, so it is driven
 	# from every "world is up" state rather than from the playing branch.
 	if bool(_options["capture"]) and state in [State.PLAYING, State.DEAD]:
@@ -1676,12 +1772,27 @@ func _update_status() -> void:
 					item_name, VoxelPlayer.face_name(preview["normal"]), count]
 				if BlockDB.is_orientable(int(preview["block"])):
 					var orientation := int(preview["orientation"])
-					build_text += "  ·  R rotate (%s)" % VoxelPlayer.orientation_label(
-						int(preview["block"]), orientation)
+					var shape := VoxelPlayer.orientation_label(int(preview["block"]), orientation)
+					if int(preview["block"]) == BlockDB.SLATE_SLAB:
+						build_text += "  ·  %s" % shape
+					else:
+						build_text += "  ·  R rotate (%s)" % shape
 			else:
 				build_text = "Cannot place %s: %s" % [item_name, str(preview["reason"])]
 				build_valid = false
 	hud.set_build_prompt(build_text, build_valid)
+
+
+## The ghost is driven by the same preview dictionary the HUD and placement
+## action use.  It is hidden whenever the world does not own the mouse, which
+## includes every interface, the pause menu and the death screen.
+func _update_placement_preview() -> void:
+	if placement_preview == null or player == null:
+		return
+	if state != State.PLAYING or not player.can_interact or _overlay_open():
+		placement_preview.hide_preview()
+		return
+	placement_preview.update_preview(player.placement_preview())
 
 
 func _center_biome_name() -> String:

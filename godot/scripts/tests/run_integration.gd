@@ -599,6 +599,9 @@ func _main() -> void:
 	# --- M29 slate roof pieces through the real scene ----------------------
 	await _m29_section()
 
+	# --- M40 placement ghost: real raycast, UI gate and final placement ----
+	await _placement_preview_section()
+
 	# --- Inventory interface: slots, stack moves and item details ----------
 	await _inventory_section()
 
@@ -913,6 +916,118 @@ func _m29_section() -> void:
 		_check(player.break_target(), "the player mines the slate ridge")
 		_check(world.get_block(ridge_cell) == BlockDB.AIR, "mining removes the slate ridge")
 	player.flying = false
+
+
+## M40 placement ghost through the real scene: the live voxel raycast targets a
+## real cell, the ghost follows the same preview dictionary, opening an
+## interface hides it and gates the placement action, and the eventual block
+## lands in exactly the previewed cell with exactly the previewed orientation.
+func _placement_preview_section() -> void:
+	var player: VoxelPlayer = _game.player
+	var world: VoxelWorld = _game.world
+	var inventory: Inventory = _game.inventory
+	var ghost = _game.placement_preview
+	if _game.inventory_panel.is_open():
+		_game.inventory_panel.close()
+	player.can_interact = true
+	player.flying = true
+	var base := Vector3i(40, 90, 40)
+	world.ensure_chunk(VoxelWorld.world_to_chunk(base))
+	for dz in range(-6, 7):
+		for dx in range(-4, 5):
+			var x := base.x + dx
+			var z := base.z + dz
+			for y in range(base.y, base.y + 7):
+				world.set_block(Vector3i(x, y, z), BlockDB.AIR, false)
+			world.set_block(Vector3i(x, base.y, z), BlockDB.STONE, false)
+	var target := Vector3i(base.x, base.y, base.z - 4)
+	world.set_block(target, BlockDB.PLANKS, false)
+	var destination := target + Vector3i.UP
+	var feet := Vector3(base.x + 0.5, float(base.y) + 1.05, base.z + 0.5)
+	player.teleport_to(feet)
+	player.look_yaw(0.0)
+	var eye := feet + Vector3(0.0, VoxelPlayer.EYE_HEIGHT, 0.0)
+	var aim := Vector3(target) + Vector3(0.5, 1.0, 0.5)
+	var delta := aim - eye
+	player.look_pitch(rad_to_deg(atan2(delta.y, Vector2(delta.x, delta.z).length())))
+	inventory.clear_slot(0)
+	inventory.put_stack(0, {"item": BlockDB.STONE, "count": 8})
+	inventory.select(0)
+	player.placement_facing = -1
+	streamer_focus(player.global_position)
+	for i in range(4):
+		await process_frame
+
+	_check(player.target().get("hit", false) and player.target()["block"] == target,
+		"the live crosshair targets the staged surface")
+	var preview: Dictionary = player.placement_preview()
+	_check(bool(preview.get("valid", false)), "the live preview accepts the staged face")
+	_check(preview.get("cell", Vector3i.ZERO) == destination,
+		"the live preview reports the exact destination cell")
+	_check(ghost.is_showing(), "the ghost is visible during normal gameplay")
+	_check(ghost.preview_cell() == destination,
+		"the ghost's position is the preview's destination cell")
+	_check(ghost.preview_block() == BlockDB.STONE,
+		"the ghost uses the selected block")
+	var preview_cell: Vector3i = preview["cell"]
+	var preview_orientation := int(preview["orientation"])
+
+	# An open interface must hide the ghost and swallow the placement action.
+	_game._open_inventory()
+	await process_frame
+	_check(not ghost.is_showing(), "opening the inventory hides the placement ghost")
+	var before_block := world.get_block(preview_cell)
+	var place_event := InputEventAction.new()
+	place_event.action = "place_block"
+	place_event.pressed = true
+	_game._unhandled_input(place_event)
+	_check(world.get_block(preview_cell) == before_block,
+		"a placement action while the inventory owns input changes nothing")
+	_game._close_inventory()
+	for i in range(3):
+		await process_frame
+	_check(player.can_interact, "closing the inventory restores interaction")
+	_check(ghost.is_showing(), "closing the inventory brings the ghost back")
+
+	# Selecting a non-placeable item hides the ghost; selecting another block
+	# changes the ghost without changing the destination.
+	inventory.put_stack(0, {"item": ItemDB.APPLE, "count": 2})
+	for i in range(2):
+		await process_frame
+	_check(not ghost.is_showing(), "a held food item hides the placement ghost")
+	inventory.put_stack(0, {"item": BlockDB.GLASS, "count": 4})
+	for i in range(2):
+		await process_frame
+	_check(ghost.is_showing() and ghost.preview_block() == BlockDB.GLASS,
+		"changing the selected block updates the ghost")
+	inventory.put_stack(0, {"item": BlockDB.STONE, "count": 8})
+	for i in range(2):
+		await process_frame
+	_check(ghost.preview_cell() == preview_cell, "changing items keeps the destination cell")
+
+	# The actual transaction uses the same preview result.
+	preview = player.placement_preview()
+	preview_cell = preview["cell"]
+	preview_orientation = int(preview["orientation"])
+	_check(player.place_selected(), "the previewed block can be placed")
+	_check(world.get_block(preview_cell) == BlockDB.STONE,
+		"the placed block is exactly in the previewed cell")
+	_check(world.get_orientation(preview_cell) == preview_orientation,
+		"the placed block has exactly the previewed orientation")
+	await process_frame
+
+	player.flying = false
+	player.teleport_to(Vector3(8.5, float(_test_pad_y + 1), 8.5))
+	player.look_pitch(-10.0)
+	streamer_focus(player.global_position)
+	await process_frame
+
+
+## Small helper so this section can move the streamer without knowing its field
+## name in the game script.
+func streamer_focus(position: Vector3) -> void:
+	if _game.streamer != null:
+		_game.streamer.focus_at(position)
 
 
 ## Crafting and mining through the real scene: the station is taken from the
