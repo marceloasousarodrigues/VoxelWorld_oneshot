@@ -131,6 +131,8 @@ var _options := {
 	"open_crafting": false,
 	"open_inventory": false,
 	"open_settings": false,
+	"m40_capture": false,
+	"inventory_page": "inventory",
 	"station_capture": "",
 	"build_demo": "",
 	"final_demo": "",
@@ -417,6 +419,16 @@ func _build_ui() -> void:
 	crafting_layer.add_child(inventory_panel)
 	inventory_panel.setup(inventory, library)
 	inventory_panel.message.connect(func(text: String) -> void: hud.flash(text, 2.4))
+	# The M40 screen covers the whole viewport with its own hotbar, hints and
+	# vitals, so the gameplay HUD yields while it is open and returns exactly when
+	# the panel really closes (a refused close keeps both states consistent).
+	inventory_panel.opened.connect(func() -> void:
+		if hud != null:
+			hud.visible = false)
+	inventory_panel.closed.connect(func() -> void:
+		if hud != null:
+			hud.visible = not bool(_options["hide_hud"]))
+	inventory_panel.navigate.connect(_on_inventory_navigate)
 
 	# The station interface (M19) shares the overlay layer: only one panel is
 	# open at a time, and the station panel is opened at the world object the
@@ -508,6 +520,16 @@ func _parse_arguments() -> void:
 				_options["open_crafting"] = true
 			"--open-inventory":
 				_options["open_inventory"] = true
+			"--m40-capture":
+				# Diagnostic: a deterministic, real-item inventory state plus a real
+				# nearby crafting table and a matching grid, so the M40 screen can be
+				# captured without a scripted play session.
+				_options["capture"] = true
+				_options["straight_to_game"] = true
+				_options["open_inventory"] = true
+				_options["m40_capture"] = true
+			"--inventory-page":
+				_options["inventory_page"] = value.to_lower() if value.to_lower() in ["inventory", "character"] else "inventory"
 			"--find-structure":
 				# Diagnostic: teleport to the nearest placed structure (optionally of
 				# a given id) so a capture can show one without a long walk.
@@ -795,6 +817,81 @@ func _give_diagnostic_tools() -> void:
 	inventory.add(ItemDB.APPLE, 6)
 
 
+## Diagnostic (`--m40-capture`): fills the inventory with real VoxelWorld items,
+## puts a real crafting table nearby, and seeds the grid with the real wood-pickaxe
+## recipe.  Capture-only; nothing here invents an item or a recipe.
+func _prepare_m40_capture() -> void:
+	if inventory == null or inventory_panel == null or player == null or world == null:
+		return
+	for index in Inventory.SIZE:
+		inventory.clear_slot(index)
+	# Hotbar: the reference's tool-rich row, using actual tools and blocks.
+	var tools: Array = [
+		[0, ItemDB.WOOD_AXE, 1, 34],
+		[1, ItemDB.STONE_PICKAXE, 1, 71],
+		[2, ItemDB.IRON_SWORD, 1, 118],
+		[3, ItemDB.DIAMOND_SHOVEL, 1, 700],
+		[4, BlockDB.COBBLESTONE, 28, -1],
+		[5, ItemDB.COAL, 12, -1],
+		[6, ItemDB.COOKED_MEAT, 6, -1],
+		[7, ItemDB.APPLE, 5, -1],
+		[8, BlockDB.OAK_LOG, 17, -1],
+	]
+	# Storage: a representative spread of the real catalogue, including the
+	# deco blocks that use the flat icon path.
+	var storage: Array = [
+		[9, BlockDB.GRASS, 64, -1], [10, BlockDB.STONE, 42, -1],
+		[11, BlockDB.DIRT, 28, -1], [12, BlockDB.COBBLESTONE, 12, -1],
+		[13, BlockDB.PLANKS, 8, -1], [14, BlockDB.GLASS, 6, -1],
+		[15, BlockDB.OAK_LOG, 24, -1], [16, BlockDB.BIRCH_LOG, 17, -1],
+		[17, ItemDB.COAL, 3, -1], [18, ItemDB.APPLE, 12, -1],
+		[19, ItemDB.WHEAT, 5, -1], [20, ItemDB.STICK, 6, -1],
+		[21, ItemDB.IRON_INGOT, 4, -1], [22, ItemDB.RAW_MEAT, 2, -1],
+		[23, ItemDB.HIDE, 6, -1], [24, ItemDB.BONE, 2, -1],
+		[25, ItemDB.WHEAT_SEEDS, 18, -1], [26, ItemDB.BONE_MEAL, 12, -1],
+		[27, ItemDB.IRON_LUMP, 3, -1], [28, ItemDB.DIAMOND, 1, -1],
+		[29, BlockDB.FLOWER_RED, 4, -1], [30, BlockDB.FLOWER_BLUE, 7, -1],
+		[31, BlockDB.FLOWER_YELLOW, 4, -1], [32, BlockDB.TALL_GRASS, 12, -1],
+		[33, BlockDB.PINE_LEAVES, 3, -1], [34, BlockDB.SAND, 2, -1],
+	]
+	for entry: Array in tools + storage:
+		var index := int(entry[0])
+		var item_id := int(entry[1])
+		var count := int(entry[2])
+		var wear := int(entry[3])
+		inventory.put_stack(index, {
+			"item": item_id, "count": count,
+			"durability": ItemDB.max_durability(item_id) if wear < 0 else wear,
+		})
+	inventory.select(0)
+	_place_m40_capture_table()
+	inventory_panel.set_station(_current_station())
+	inventory_panel.debug_seed_crafting_grid([
+		[0, BlockDB.PLANKS, 1], [1, BlockDB.PLANKS, 1], [2, BlockDB.PLANKS, 1],
+		[4, ItemDB.STICK, 1], [7, ItemDB.STICK, 1],
+	])
+	inventory_panel.set_page(str(_options.get("inventory_page", "inventory")))
+	_refresh_inventory_vitals()
+	print("M17_M40_CAPTURE items=%d grid=wood_pickaxe station=%s page=%s" % [
+		inventory.used_slots(), inventory_panel.station(), inventory_panel.page(),
+	])
+
+
+## A real crafting table in front of the player, so the capture's table recipes
+## are gated by an object that actually exists in the world.
+func _place_m40_capture_table() -> void:
+	var forward: Vector3 = player.look_basis() * Vector3(0.0, 0.0, -1.0)
+	var base := player.global_position + forward * 2.6
+	var cell := Vector3i(floori(base.x), floori(player.global_position.y), floori(base.z))
+	if not world.is_loaded(cell):
+		world.ensure_chunk(VoxelWorld.world_to_chunk(cell))
+	if not world.is_loaded(cell):
+		return
+	if world.get_block(cell) != BlockDB.AIR:
+		cell.y += 1
+	world.set_block(cell, BlockDB.CRAFTING_TABLE)
+
+
 ## Diagnostic (`--find-structure`): places the player above the nearest structure
 ## so a capture or a manual check can inspect one without a long walk.
 func _apply_find_structure() -> void:
@@ -1034,6 +1131,8 @@ func _enter_play(area_ready: bool) -> void:
 		_open_inventory()
 	if bool(_options["open_settings"]):
 		_open_settings()
+	if bool(_options["m40_capture"]):
+		_prepare_m40_capture()
 	_apply_find_structure()
 	print("M17_GAME_READY seed=%d player=%s chunks=%d views=%d meshed=%d" % [
 		world.world_seed, player.global_position, streamer.loaded_count(), streamer.view_count(), int(streamer.stats["meshed"]),
@@ -1312,6 +1411,8 @@ func _update_survival(delta: float) -> void:
 		health.heal(float(regen["healed"]))
 	hud.set_breath(breath, Survival.MAX_BREATH, submerged or breath < Survival.MAX_BREATH - 0.001)
 	hud.set_hunger(hunger, Survival.MAX_HUNGER)
+	if inventory_panel != null and inventory_panel.is_open():
+		_refresh_inventory_vitals()
 
 
 ## Exhaustion per second for what the player is doing right now.
@@ -1418,6 +1519,8 @@ func _on_landed(fall_distance: float) -> void:
 func _on_health_changed() -> void:
 	if hud != null and health != null:
 		hud.set_health(health.health, health.max_health)
+	if inventory_panel != null and inventory_panel.is_open():
+		_refresh_inventory_vitals()
 
 
 func _on_health_damaged(_amount: float, source: String) -> void:
@@ -1933,9 +2036,40 @@ func _open_inventory() -> void:
 	if station_panel != null and station_panel.is_open():
 		if not station_panel.close():
 			return
+	# The screen's crafting grid is gated by the station the player really has,
+	# and its vitals are the live survival state.
+	inventory_panel.set_station(_current_station())
+	_refresh_inventory_vitals()
 	inventory_panel.open()
 	player.can_interact = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+## Pushes the authoritative survival values into the open inventory screen.  The
+## screen never drives these numbers; it only displays them.
+func _refresh_inventory_vitals() -> void:
+	if inventory_panel == null or health == null:
+		return
+	var submerged := player != null and player.is_submerged()
+	inventory_panel.set_vitals(health.health, health.max_health, hunger,
+		Survival.MAX_HUNGER, breath, Survival.MAX_BREATH,
+		submerged or breath < Survival.MAX_BREATH - 0.001)
+
+
+## The inventory screen's navigation: Crafting and Settings open the existing
+## overlays; Map is unavailable and never reaches this handler.
+func _on_inventory_navigate(target: String) -> void:
+	if state != State.PLAYING:
+		return
+	match target:
+		"crafting":
+			if inventory_panel != null and inventory_panel.is_open() and not inventory_panel.close():
+				return
+			_open_crafting()
+		"settings":
+			if inventory_panel != null and inventory_panel.is_open() and not inventory_panel.close():
+				return
+			_open_settings()
 
 
 func _close_inventory() -> void:
@@ -2321,7 +2455,7 @@ func _save_silently(reason: String) -> void:
 func _flush_cursor_stacks() -> bool:
 	var ok := true
 	if inventory_panel != null and inventory_panel.is_open() \
-			and not inventory_panel.flush_cursor():
+			and not inventory_panel.flush_all():
 		ok = false
 	if station_panel != null and station_panel.is_open() \
 			and not station_panel.flush_cursor():

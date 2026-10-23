@@ -1,29 +1,25 @@
 class_name GameHUD
 extends CanvasLayer
 
-## In-game interface: crosshair, hotbar with real block icons, a status readout
-## and a transient message line.
+## In-game interface: crosshair, hotbar with real item icons, health/hunger
+## hearts, a status readout and a transient message line (M40 restyle).
 ##
 ## The HUD is presentation only.  It reads the inventory and is told what to
-## display; it never mutates game state.
+## display; it never mutates game state.  Experience and level are not shown
+## because the game does not implement them.
 
 const SLOT_SIZE := 54
 const SLOT_GAP := 6
 const ICON_MARGIN := 5
-## Health / breath readout, bottom-left above the control hint.
-const HEALTH_BAR := Vector2(240, 16)
-const BREATH_BAR := Vector2(180, 10)
-## The hunger bar sits beside the health bar on the same row.
-const HUNGER_BAR := Vector2(180, 16)
-const HEALTH_ROW_WIDTH := 260.0
 const HURT_FLASH_SECONDS := 0.5
 
 var inventory: Inventory
 var library: TextureLibrary
 
+var _hotbar_root: Control
 var _hotbar: HBoxContainer
 var _slots: Array[Panel] = []
-var _icons: Array[TextureRect] = []
+var _icons: Array[ItemIcon] = []
 var _counts: Array[Label] = []
 var _status: Label
 var _selected_label: Label
@@ -34,15 +30,9 @@ var _crosshair: Control
 var _message_timer := 0.0
 var _debug_visible := true
 
-var _health_label: Label
-var _health_fill: ColorRect
+var _vitals: VitalsBar
 var _health_text := ""
-var _hunger_label: Label
-var _hunger_fill: ColorRect
 var _hunger_text := ""
-var _breath_root: Control
-var _breath_label: Label
-var _breath_fill: ColorRect
 var _hurt: ColorRect
 var _hurt_timer := 0.0
 var _hurt_strength := 0.55
@@ -76,12 +66,20 @@ func _build() -> void:
 	_build_hurt_overlay()
 	_crosshair = _build_crosshair()
 	_status = _build_label(Vector2(18, 14), 15, Color(1, 1, 1, 0.92))
-	_hint = _build_label(Vector2.ZERO, 13, Color(1, 1, 1, 0.62))
-	_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_hint.offset_left = 18
-	_hint.offset_top = -52
-	_hint.offset_right = 780
-	_hint.offset_bottom = -14
+	# A dark backing strip keeps the control hint readable over bright terrain
+	# (sand, snow) without covering the hotbar above it.
+	var hint_panel := PanelContainer.new()
+	hint_panel.name = "ControlHint"
+	hint_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	hint_panel.offset_left = 10
+	hint_panel.offset_top = -24
+	hint_panel.offset_right = 1010
+	hint_panel.offset_bottom = -2
+	hint_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint_panel.add_theme_stylebox_override("panel", UiStyle.hotbar_style())
+	add_child(hint_panel)
+	_hint = _make_label(11, Color(1, 1, 1, 0.82))
+	hint_panel.add_child(_hint)
 	_message = _build_label(Vector2.ZERO, 18, Color(1, 1, 1, 0.95))
 	_message.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	_message.offset_left = -420
@@ -103,8 +101,8 @@ func _build() -> void:
 	_build_prompt.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	_build_prompt.offset_left = -380
 	_build_prompt.offset_right = 380
-	_build_prompt.offset_top = -(SLOT_SIZE + 56)
-	_build_prompt.offset_bottom = -(SLOT_SIZE + 32)
+	_build_prompt.offset_top = -(SLOT_SIZE + 74)
+	_build_prompt.offset_bottom = -(SLOT_SIZE + 50)
 	_build_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_build_prompt.visible = false
 	_build_hotbar()
@@ -159,89 +157,18 @@ func _build_hurt_overlay() -> void:
 	add_child(_hurt)
 
 
-## Health and breath readouts, placed bottom-left above the control hint.
+## Hearts and hunger icons, bottom-left above the control hint.  The values are
+## the game's real health and hunger; no XP/level is drawn.
 func _build_vitals() -> void:
-	var health_root := Control.new()
-	health_root.name = "HealthPanel"
-	health_root.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	health_root.offset_left = 18
-	health_root.offset_top = -142
-	health_root.offset_right = 18 + HEALTH_BAR.x
-	health_root.offset_bottom = -78
-	health_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(health_root)
-
-	_health_label = _make_label(15, Color(1, 0.86, 0.86, 0.95))
-	_health_label.position = Vector2.ZERO
-	health_root.add_child(_health_label)
-
-	var health_bg := ColorRect.new()
-	health_bg.color = Color(0.09, 0.02, 0.02, 0.72)
-	health_bg.position = Vector2(0, HEALTH_BAR.y + 8)
-	health_bg.size = HEALTH_BAR
-	health_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	health_root.add_child(health_bg)
-	_health_fill = ColorRect.new()
-	_health_fill.color = Color(0.86, 0.16, 0.18)
-	_health_fill.position = health_bg.position
-	_health_fill.size = HEALTH_BAR
-	_health_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	health_root.add_child(_health_fill)
-
-	_breath_root = Control.new()
-	_breath_root.name = "BreathPanel"
-	_breath_root.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_breath_root.offset_left = 18
-	_breath_root.offset_top = -196
-	_breath_root.offset_right = 18 + BREATH_BAR.x
-	_breath_root.offset_bottom = -142
-	_breath_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_breath_root.visible = false
-	add_child(_breath_root)
-
-	_breath_label = _make_label(15, Color(0.82, 0.93, 1.0, 0.95))
-	_breath_label.position = Vector2.ZERO
-	_breath_root.add_child(_breath_label)
-	var breath_bg := ColorRect.new()
-	breath_bg.color = Color(0.02, 0.05, 0.09, 0.72)
-	breath_bg.position = Vector2(0, BREATH_BAR.y + 8)
-	breath_bg.size = BREATH_BAR
-	breath_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_breath_root.add_child(breath_bg)
-	_breath_fill = ColorRect.new()
-	_breath_fill.color = Color(0.35, 0.72, 0.95)
-	_breath_fill.position = breath_bg.position
-	_breath_fill.size = BREATH_BAR
-	_breath_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_breath_root.add_child(_breath_fill)
-
-	# Hunger sits on the same row as health, to its right.
-	var hunger_root := Control.new()
-	hunger_root.name = "HungerPanel"
-	hunger_root.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	hunger_root.offset_left = 18 + HEALTH_ROW_WIDTH
-	hunger_root.offset_top = -142
-	hunger_root.offset_right = 18 + HEALTH_ROW_WIDTH + HUNGER_BAR.x
-	hunger_root.offset_bottom = -78
-	hunger_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(hunger_root)
-
-	_hunger_label = _make_label(15, Color(1.0, 0.92, 0.78, 0.95))
-	_hunger_label.position = Vector2.ZERO
-	hunger_root.add_child(_hunger_label)
-
-	var hunger_bg := ColorRect.new()
-	hunger_bg.color = Color(0.09, 0.06, 0.02, 0.72)
-	hunger_bg.position = Vector2(0, HUNGER_BAR.y + 8)
-	hunger_bg.size = HUNGER_BAR
-	hunger_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hunger_root.add_child(hunger_bg)
-	_hunger_fill = ColorRect.new()
-	_hunger_fill.color = Color(0.85, 0.62, 0.24)
-	_hunger_fill.position = hunger_bg.position
-	_hunger_fill.size = HUNGER_BAR
-	_hunger_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hunger_root.add_child(_hunger_fill)
+	_vitals = VitalsBar.new()
+	_vitals.name = "Vitals"
+	_vitals.setup(library)
+	_vitals.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_vitals.offset_left = 10
+	_vitals.offset_top = -100
+	_vitals.offset_right = 10 + 344
+	_vitals.offset_bottom = -62
+	add_child(_vitals)
 
 
 func _build_crosshair() -> Control:
@@ -291,49 +218,60 @@ func _make_label(font_size: int, colour: Color) -> Label:
 
 
 func _build_hotbar() -> void:
-	var root := Control.new()
-	root.name = "HotbarRoot"
-	root.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	root.offset_top = -(SLOT_SIZE + 34)
-	root.offset_bottom = -18
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(root)
+	_hotbar_root = Control.new()
+	_hotbar_root.name = "HotbarRoot"
+	_hotbar_root.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_hotbar_root.offset_top = -(SLOT_SIZE + 68)
+	_hotbar_root.offset_bottom = -30
+	_hotbar_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_hotbar_root)
+
+	var strip := PanelContainer.new()
+	strip.name = "HotbarStrip"
+	strip.add_theme_stylebox_override("panel", UiStyle.hotbar_style())
+	strip.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	strip.offset_left = -(Inventory.HOTBAR_SIZE * (SLOT_SIZE + SLOT_GAP)) * 0.5 - 8
+	strip.offset_right = (Inventory.HOTBAR_SIZE * (SLOT_SIZE + SLOT_GAP)) * 0.5 + 8
+	strip.offset_top = -SLOT_SIZE * 0.5 - 6
+	strip.offset_bottom = SLOT_SIZE * 0.5 + 16
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hotbar_root.add_child(strip)
+
 	_hotbar = HBoxContainer.new()
 	_hotbar.name = "Hotbar"
 	_hotbar.add_theme_constant_override("separation", SLOT_GAP)
-	_hotbar.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	_hotbar.offset_left = -(Inventory.HOTBAR_SIZE * (SLOT_SIZE + SLOT_GAP)) * 0.5
-	_hotbar.offset_right = (Inventory.HOTBAR_SIZE * (SLOT_SIZE + SLOT_GAP)) * 0.5
-	_hotbar.offset_top = -SLOT_SIZE * 0.5
-	_hotbar.offset_bottom = SLOT_SIZE * 0.5
+	_hotbar.alignment = BoxContainer.ALIGNMENT_CENTER
 	_hotbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_hotbar)
-	_selected_label = _build_label(Vector2.ZERO, 15, Color(1, 1, 1, 0.95))
+	strip.add_child(_hotbar)
+
+	_selected_label = _build_label(Vector2.ZERO, 14, Color(1, 1, 1, 0.95))
 	_selected_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	_selected_label.offset_left = -300
 	_selected_label.offset_right = 300
-	_selected_label.offset_top = -(SLOT_SIZE + 30)
-	_selected_label.offset_bottom = -(SLOT_SIZE + 4)
+	_selected_label.offset_top = -(SLOT_SIZE + 86)
+	_selected_label.offset_bottom = -(SLOT_SIZE + 62)
 	_selected_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	for index in Inventory.HOTBAR_SIZE:
 		_build_slot(index)
 
 
 func _build_slot(index: int) -> void:
+	var cell := VBoxContainer.new()
+	cell.add_theme_constant_override("separation", 1)
+	cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hotbar.add_child(cell)
 	var panel := Panel.new()
 	panel.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_hotbar.add_child(panel)
+	cell.add_child(panel)
 	_slots.append(panel)
-	var icon := TextureRect.new()
+	var icon := ItemIcon.new()
+	icon.name = "Icon"
 	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	icon.offset_left = ICON_MARGIN
 	icon.offset_top = ICON_MARGIN
 	icon.offset_right = -ICON_MARGIN
 	icon.offset_bottom = -ICON_MARGIN
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(icon)
 	_icons.append(icon)
@@ -352,8 +290,6 @@ func _build_slot(index: int) -> void:
 	count.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(count)
 	_counts.append(count)
-	# A thin durability bar along the bottom of tool slots; hidden for everything
-	# else.  Sits above the icon but inside the slot border.
 	var wear := ColorRect.new()
 	wear.name = "Durability"
 	wear.color = Color(0.42, 0.88, 0.45, 0.95)
@@ -363,6 +299,13 @@ func _build_slot(index: int) -> void:
 	wear.visible = false
 	panel.add_child(wear)
 	_durability_bars.append(wear)
+	var number := Label.new()
+	number.text = str(index + 1)
+	number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	number.add_theme_font_size_override("font_size", 10)
+	number.add_theme_color_override("font_color", Color(1, 1, 1, 0.42))
+	number.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.add_child(number)
 
 
 # --- state ---------------------------------------------------------------
@@ -375,9 +318,7 @@ func refresh() -> void:
 		var item_id := inventory.slots[index]
 		var count := inventory.counts[index]
 		panel.add_theme_stylebox_override("panel", _slot_style(index == inventory.selected, item_id != BlockDB.AIR))
-		_icons[index].texture = _icon_for(item_id)
-		var tint := ItemDB.icon_tint(item_id)
-		_icons[index].modulate = Color(tint.r, tint.g, tint.b, 1.0 if item_id != BlockDB.AIR else 0.15)
+		_icons[index].set_item(item_id, library, ItemDB.icon_tint(item_id))
 		_counts[index].text = "" if count <= 1 else str(count)
 		_refresh_durability(index, item_id)
 	var item_id := inventory.selected_item()
@@ -388,9 +329,8 @@ func refresh() -> void:
 		var max_wear := ItemDB.max_durability(item_id)
 		if max_wear > 0:
 			text += "   %d / %d" % [inventory.durability_of(inventory.selected), max_wear]
-		_selected_label.text = "%s   (slot %d)" % [text, inventory.selected + 1]
-	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  hold LMB mine  ·  RMB build/eat  ·  E use  ·  C recipes  ·  I inventory  ·  O settings\n" \
-		+ "1-9 or mouse wheel select  ·  R rotate piece  ·  F fly  ·  F5 save  ·  F9 load  ·  F3 debug  ·  Esc pause"
+		_selected_label.text = text
+	_hint.text = "WASD move  ·  Space jump  ·  Shift sprint  ·  LMB mine  ·  RMB build/eat  ·  E use  ·  I inventory  ·  C recipes  ·  O settings  ·  Esc pause"
 
 
 func _refresh_durability(index: int, item_id: int) -> void:
@@ -408,15 +348,6 @@ func _refresh_durability(index: int, item_id: int) -> void:
 		else (Color(0.95, 0.78, 0.25, 0.95) if ratio > 0.15 else Color(0.92, 0.30, 0.26, 0.95))
 
 
-func _icon_for(item_id: int) -> Texture2D:
-	if item_id == BlockDB.AIR or library == null:
-		return null
-	var key := ItemDB.icon_key(item_id)
-	if key.is_empty():
-		return null
-	return library.icon(key)
-
-
 func _slot_style(selected: bool, occupied: bool) -> StyleBoxFlat:
 	return UiStyle.slot_style(occupied, selected)
 
@@ -425,28 +356,17 @@ func set_status(text: String) -> void:
 	_status.text = text
 
 
-## Updates the health readout.  `current`/`maximum` are in health points; the bar
-## fills proportionally and the number is always shown.
+## Updates the health readout.  `current`/`maximum` are real health points.
 func set_health(current: float, maximum: float) -> void:
-	if _health_label == null:
-		return
 	_health_text = "HEALTH  %d / %d" % [int(ceil(current)), int(maximum)]
-	_health_label.text = _health_text
-	var ratio := 0.0 if maximum <= 0.0 else clampf(current / maximum, 0.0, 1.0)
-	_health_fill.size = Vector2(HEALTH_BAR.x * ratio, HEALTH_BAR.y)
+	if _vitals != null:
+		_vitals.set_vitals(current, maximum, _hunger_value(), _hunger_max())
 
 
-## Updates the breath readout; the panel is only visible while it matters (the
-## head is under water or the body is still recovering its breath).
+## Updates the breath readout; the bar is only visible while it matters.
 func set_breath(current: float, maximum: float, visible: bool) -> void:
-	if _breath_root == null:
-		return
-	_breath_root.visible = visible
-	if not visible:
-		return
-	_breath_label.text = "BREATH  %d / %d" % [int(ceil(current)), int(maximum)]
-	var ratio := 0.0 if maximum <= 0.0 else clampf(current / maximum, 0.0, 1.0)
-	_breath_fill.size = Vector2(BREATH_BAR.x * ratio, BREATH_BAR.y)
+	if _vitals != null:
+		_vitals.set_breath(current, maximum, visible)
 
 
 ## Current health readout text (used by diagnostics).
@@ -454,23 +374,32 @@ func health_text() -> String:
 	return _health_text
 
 
-## Updates the hunger readout.  An empty bar turns red, which is the signal that
-## starvation damage has started.
+## Updates the hunger readout.  Real hunger points; no fabricated values.
 func set_hunger(current: float, maximum: float) -> void:
-	if _hunger_label == null:
-		return
 	_hunger_text = "HUNGER  %d / %d" % [int(ceil(current)), int(maximum)]
-	_hunger_label.text = _hunger_text
-	var ratio := 0.0 if maximum <= 0.0 else clampf(current / maximum, 0.0, 1.0)
-	_hunger_fill.size = Vector2(HUNGER_BAR.x * ratio, HUNGER_BAR.y)
-	_hunger_fill.color = Color(0.85, 0.62, 0.24) if ratio > 0.0 else Color(0.9, 0.25, 0.2)
-	_hunger_label.add_theme_color_override("font_color",
-		Color(1.0, 0.92, 0.78, 0.95) if ratio > 0.0 else Color(1.0, 0.55, 0.5, 0.98))
+	if _vitals != null:
+		_vitals.set_vitals(_health_value(), _health_max(), current, maximum)
 
 
 ## Current hunger readout text (used by diagnostics).
 func hunger_text() -> String:
 	return _hunger_text
+
+
+func _health_value() -> float:
+	return _vitals.health if _vitals != null else 20.0
+
+
+func _health_max() -> float:
+	return _vitals.max_health if _vitals != null else 20.0
+
+
+func _hunger_value() -> float:
+	return _vitals.hunger if _vitals != null else 20.0
+
+
+func _hunger_max() -> float:
+	return _vitals.max_hunger if _vitals != null else 20.0
 
 
 ## Flashes the red damage overlay.  `strength` is the peak alpha.

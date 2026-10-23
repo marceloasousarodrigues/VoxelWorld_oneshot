@@ -12,7 +12,7 @@ var library: TextureLibrary
 var stack: Dictionary = {}
 
 var _slot: Panel
-var _icon: TextureRect
+var _icon: ItemIcon
 var _count: Label
 
 
@@ -31,15 +31,13 @@ func setup(texture_library: TextureLibrary) -> void:
 	_slot.modulate = Color(1, 1, 1, 0.92)
 	add_child(_slot)
 
-	_icon = TextureRect.new()
+	_icon = ItemIcon.new()
+	_icon.name = "Icon"
 	_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_icon.offset_left = UiStyle.SLOT_ICON_MARGIN
 	_icon.offset_top = UiStyle.SLOT_ICON_MARGIN
 	_icon.offset_right = -UiStyle.SLOT_ICON_MARGIN
 	_icon.offset_bottom = -UiStyle.SLOT_ICON_MARGIN
-	_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_slot.add_child(_icon)
 
@@ -79,9 +77,7 @@ func _refresh() -> void:
 	visible = not empty
 	if empty:
 		return
-	var key := ItemDB.icon_key(item_id)
-	_icon.texture = library.icon(key) if library != null and not key.is_empty() else null
-	_icon.modulate = ItemDB.icon_tint(item_id)
+	_icon.set_item(item_id, library, ItemDB.icon_tint(item_id))
 	_count.text = "" if count <= 1 else str(count)
 
 

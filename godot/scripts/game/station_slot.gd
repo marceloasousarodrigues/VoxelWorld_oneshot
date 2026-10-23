@@ -1,15 +1,16 @@
 class_name StationSlot
 extends Panel
 
-## One slot of a station interface (crafting table / furnace).
+## One slot of a station interface (crafting table / furnace) or of the M40
+## screen's transient crafting grid.
 ##
 ## The same control draws either a player `Inventory` slot or a `StationInventory`
 ## slot: both expose `item_at`, `count_at`, `durability_of` and `is_empty`, so the
 ## presentation never needs to know which model it is looking at.  It reports
 ## intent (`clicked`, drag & drop) and never mutates a model.
 ##
-## A slot may show a `ghost` stack instead: the crafting table's result preview
-## uses this to show what the current grid would make before the player commits.
+## A slot may show a `ghost` stack instead: the crafting result preview uses this
+## to show what the current grid would make before the player commits.
 
 signal clicked(side: String, index: int, button: int, shift: bool)
 signal stack_moved(from_side: String, from_index: int, to_side: String, to_index: int)
@@ -32,8 +33,12 @@ var override_stack: Dictionary = {}
 var ghost := false
 ## The slot refuses the currently carried item (drawn with a red border).
 var invalid := false
+## The output slot cannot be dragged from; only the station writes it.
+var draggable := true
+## Slot edge length; the M40 screen uses `UiStyle.SCREEN_SLOT`.
+var slot_size := SIZE
 
-var _icon: TextureRect
+var _icon: ItemIcon
 var _count: Label
 var _wear: ColorRect
 var _caption: Label
@@ -42,27 +47,27 @@ var _hovered := false
 
 
 func configure(slot_side: String, slot_index: int, slot_model: Variant,
-		texture_library: TextureLibrary) -> void:
+		texture_library: TextureLibrary, size_override: int = 0) -> void:
 	side = slot_side
 	index = slot_index
 	model = slot_model
 	library = texture_library
+	if size_override > 0:
+		slot_size = size_override
 	_build()
 
 
 func _build() -> void:
-	custom_minimum_size = Vector2(SIZE, SIZE)
+	custom_minimum_size = Vector2(slot_size, slot_size)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
-	_icon = TextureRect.new()
+	_icon = ItemIcon.new()
+	_icon.name = "Icon"
 	_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_icon.offset_left = ICON_MARGIN
 	_icon.offset_top = ICON_MARGIN
 	_icon.offset_right = -ICON_MARGIN
 	_icon.offset_bottom = -ICON_MARGIN
-	_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_icon)
 
@@ -102,8 +107,8 @@ func _build() -> void:
 
 	_wear = ColorRect.new()
 	_wear.color = Color(0.42, 0.88, 0.45, 0.95)
-	_wear.position = Vector2(ICON_MARGIN, SIZE - 9)
-	_wear.size = Vector2(SIZE - ICON_MARGIN * 2, 4)
+	_wear.position = Vector2(ICON_MARGIN, slot_size - 9)
+	_wear.size = Vector2(slot_size - ICON_MARGIN * 2, 4)
 	_wear.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_wear.visible = false
 	add_child(_wear)
@@ -123,12 +128,8 @@ func refresh() -> void:
 	var empty: bool = item_id == BlockDB.AIR or count <= 0
 	add_theme_stylebox_override("panel",
 		UiStyle.slot_style(not empty and not ghost, selected, ghost, _hovered, invalid))
-	_icon.texture = null if empty or library == null else library.icon(ItemDB.icon_key(item_id))
-	var tint := ItemDB.icon_tint(item_id)
-	var alpha := 0.18
-	if not empty:
-		alpha = 0.44 if ghost else 1.0
-	_icon.modulate = Color(tint.r, tint.g, tint.b, alpha)
+	_icon.set_item(BlockDB.AIR if empty else item_id, library, ItemDB.icon_tint(item_id))
+	_icon.set_ghost(ghost)
 	_count.text = "" if count <= 1 else str(count)
 	_caption.text = caption
 	_caption.visible = not caption.is_empty()
@@ -139,7 +140,7 @@ func refresh() -> void:
 	else:
 		var ratio := clampf(float(wear_value) / float(maximum), 0.0, 1.0)
 		_wear.visible = true
-		_wear.size.x = maxf(0.0, (SIZE - ICON_MARGIN * 2) * ratio)
+		_wear.size.x = maxf(0.0, (slot_size - ICON_MARGIN * 2) * ratio)
 		_wear.color = Color(0.42, 0.88, 0.45, 0.95) if ratio > 0.35 \
 			else (Color(0.95, 0.78, 0.25, 0.95) if ratio > 0.15 else Color(0.92, 0.30, 0.26, 0.95))
 
@@ -166,24 +167,21 @@ func _on_mouse_exited() -> void:
 
 
 func _get_drag_data(_position: Vector2) -> Variant:
-	if model == null or model.is_empty(index) or ghost:
+	if model == null or model.is_empty(index) or ghost or not draggable:
 		return null
 	var item_id: int = model.item_at(index)
 	var preview := Panel.new()
-	preview.custom_minimum_size = Vector2(SIZE, SIZE)
+	preview.custom_minimum_size = Vector2(slot_size, slot_size)
 	preview.add_theme_stylebox_override("panel", UiStyle.slot_style(true))
-	var icon := TextureRect.new()
-	icon.texture = library.icon(ItemDB.icon_key(item_id)) if library != null else null
+	var icon := ItemIcon.new()
 	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	icon.offset_left = ICON_MARGIN
 	icon.offset_top = ICON_MARGIN
 	icon.offset_right = -ICON_MARGIN
 	icon.offset_bottom = -ICON_MARGIN
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(icon)
+	icon.set_item(item_id, library, ItemDB.icon_tint(item_id))
 	set_drag_preview(preview)
 	# The stack stays in its model while it is dragged; the drop performs the
 	# move, so cancelling a drag can never lose an item.
@@ -194,7 +192,11 @@ func _can_drop_data(_position: Vector2, data: Variant) -> bool:
 	if typeof(data) != TYPE_DICTIONARY:
 		return false
 	var payload := data as Dictionary
-	return payload.has("side") and not (payload["side"] == side and int(payload["index"]) == index)
+	if not payload.has("side"):
+		return false
+	if index == Station.TABLE_OUTPUT_SLOT and side == "craft":
+		return false
+	return not (payload["side"] == side and int(payload["index"]) == index)
 
 
 func _drop_data(_position: Vector2, data: Variant) -> void:

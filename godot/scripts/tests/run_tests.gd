@@ -54,6 +54,7 @@ const MODULES := [
 	"res://scripts/tests/test_creatures.gd",
 	"res://scripts/tests/test_hostiles.gd",
 	"res://scripts/tests/test_settings.gd",
+	"res://scripts/tests/test_m40_inventory_ui.gd",
 ]
 
 const WATCHDOG_SECONDS := 300.0

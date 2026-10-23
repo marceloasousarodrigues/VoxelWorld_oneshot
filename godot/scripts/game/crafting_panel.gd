@@ -191,16 +191,10 @@ func _build_row(recipe: Dictionary, texture_library: TextureLibrary) -> PanelCon
 	row.add_theme_constant_override("separation", 10)
 	root.add_child(row)
 
-	var icon := TextureRect.new()
+	var icon := ItemIcon.new()
 	icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	if texture_library != null:
-		var output := int(recipe["output"])
-		icon.texture = texture_library.icon(ItemDB.icon_key(output))
-		var tint := ItemDB.icon_tint(output)
-		icon.modulate = tint
+	var output := int(recipe["output"])
+	icon.set_item(output, texture_library, ItemDB.icon_tint(output))
 	row.add_child(icon)
 
 	var text_column := VBoxContainer.new()
@@ -308,7 +302,6 @@ func _refresh_row(entry: Dictionary) -> bool:
 	batch_button.tooltip_text = craft_button.tooltip_text
 	var dim := Color(1, 1, 1, 1.0 if can_craft else 0.5)
 	(entry["root"] as Control).modulate = dim
-	(entry["icon"] as TextureRect).modulate = ItemDB.icon_tint(int(recipe["output"])) * dim
 	return can_craft
 
 

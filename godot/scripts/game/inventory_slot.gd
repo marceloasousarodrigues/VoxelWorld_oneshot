@@ -8,7 +8,8 @@ extends Panel
 ## to `Inventory`; the slot itself never changes a stack.
 ##
 ## The slot is deliberately generic enough for both the hotbar row and the main
-## grid: `index` addresses the model, and `compact` only changes the number badge.
+## grid: `index` addresses the model, `compact` only changes the number badge, and
+## `slot_size` lets the M40 screen use a denser grid than the default panel.
 
 signal clicked(index: int, button: int, shift: bool)
 ## Emitted when a stack was dragged from one slot onto another.
@@ -27,33 +28,36 @@ var selected := false
 var override_stack: Dictionary = {}
 ## Hide the little slot-number badge (the main 3x3 grid does not need it).
 var show_number := true
+## Slot edge length; the M40 screen uses `UiStyle.SCREEN_SLOT` for its grid.
+var slot_size := SIZE
 
-var _icon: TextureRect
+var _icon: ItemIcon
 var _count: Label
 var _wear: ColorRect
 var _number: Label
 var _hovered := false
 
 
-func configure(slot_index: int, player_inventory: Inventory, texture_library: TextureLibrary) -> void:
+func configure(slot_index: int, player_inventory: Inventory, texture_library: TextureLibrary,
+		size_override: int = 0) -> void:
 	index = slot_index
 	inventory = player_inventory
 	library = texture_library
+	if size_override > 0:
+		slot_size = size_override
 	_build()
 
 
 func _build() -> void:
-	custom_minimum_size = Vector2(SIZE, SIZE)
+	custom_minimum_size = Vector2(slot_size, slot_size)
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	_icon = TextureRect.new()
+	_icon = ItemIcon.new()
+	_icon.name = "Icon"
 	_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_icon.offset_left = ICON_MARGIN
 	_icon.offset_top = ICON_MARGIN
 	_icon.offset_right = -ICON_MARGIN
 	_icon.offset_bottom = -ICON_MARGIN
-	_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_icon)
 	_count = Label.new()
@@ -80,8 +84,8 @@ func _build() -> void:
 	add_child(_number)
 	_wear = ColorRect.new()
 	_wear.color = Color(0.42, 0.88, 0.45, 0.95)
-	_wear.position = Vector2(ICON_MARGIN, SIZE - 10)
-	_wear.size = Vector2(SIZE - ICON_MARGIN * 2, 4)
+	_wear.position = Vector2(ICON_MARGIN, slot_size - 10)
+	_wear.size = Vector2(slot_size - ICON_MARGIN * 2, 4)
 	_wear.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_wear.visible = false
 	add_child(_wear)
@@ -99,9 +103,7 @@ func refresh() -> void:
 	var wear_value := int(override_stack.get("durability", 0)) if carrying else inventory.durability_of(index)
 	var empty := item_id == BlockDB.AIR or count <= 0
 	add_theme_stylebox_override("panel", UiStyle.slot_style(not empty, selected, false, _hovered))
-	_icon.texture = null if empty or library == null else library.icon(ItemDB.icon_key(item_id))
-	var tint := ItemDB.icon_tint(item_id)
-	_icon.modulate = Color(tint.r, tint.g, tint.b, 0.18 if empty else 1.0)
+	_icon.set_item(BlockDB.AIR if empty else item_id, library, ItemDB.icon_tint(item_id))
 	_count.text = "" if count <= 1 else str(count)
 	tooltip_text = _tooltip(item_id, count, wear_value) if not empty else ""
 	var maximum := ItemDB.max_durability(item_id)
@@ -110,7 +112,7 @@ func refresh() -> void:
 	else:
 		var ratio := clampf(float(wear_value) / float(maximum), 0.0, 1.0)
 		_wear.visible = true
-		_wear.size.x = maxf(0.0, (SIZE - ICON_MARGIN * 2) * ratio)
+		_wear.size.x = maxf(0.0, (slot_size - ICON_MARGIN * 2) * ratio)
 		_wear.color = Color(0.42, 0.88, 0.45, 0.95) if ratio > 0.35 \
 			else (Color(0.95, 0.78, 0.25, 0.95) if ratio > 0.15 else Color(0.92, 0.30, 0.26, 0.95))
 	_number.visible = show_number
@@ -164,20 +166,17 @@ func _get_drag_data(_position: Vector2) -> Variant:
 		return null
 	var item_id := inventory.item_at(index)
 	var preview := Panel.new()
-	preview.custom_minimum_size = Vector2(SIZE, SIZE)
+	preview.custom_minimum_size = Vector2(slot_size, slot_size)
 	preview.add_theme_stylebox_override("panel", UiStyle.slot_style(true))
-	var icon := TextureRect.new()
-	icon.texture = library.icon(ItemDB.icon_key(item_id)) if library != null else null
+	var icon := ItemIcon.new()
 	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	icon.offset_left = ICON_MARGIN
 	icon.offset_top = ICON_MARGIN
 	icon.offset_right = -ICON_MARGIN
 	icon.offset_bottom = -ICON_MARGIN
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(icon)
+	icon.set_item(item_id, library, ItemDB.icon_tint(item_id))
 	set_drag_preview(preview)
 	# The stack stays in the inventory while it is dragged; the drop performs the
 	# move, so cancelling a drag can never lose an item.

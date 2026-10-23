@@ -602,6 +602,9 @@ func _main() -> void:
 	# --- Inventory interface: slots, stack moves and item details ----------
 	await _inventory_section()
 
+	# --- M40 screen: nav, grid crafting, vitals, HUD hand-off --------------
+	await _m40_section()
+
 	# --- Interactive world-object stations ---------------------------------
 	await _stations_section()
 
@@ -1413,6 +1416,68 @@ func _inventory_section() -> void:
 	await process_frame
 	_check(inventory.selected == 3, "closing the inventory leaves the selected slot alone")
 	_check(player.can_interact, "closing the inventory restores world interaction")
+
+
+## M40 screen in the real scene: the overlay opens over the game, the HUD yields,
+## the 3x3 grid crafts through the real catalogue, the character page and
+## navigation switch, and closing restores the HUD, interaction and an empty
+## transient grid.  This is the runtime counterpart to the unit suite.
+func _m40_section() -> void:
+	var player: Node = _game.player
+	var inventory: Inventory = _game.inventory
+	var panel: InventoryPanel = _game.inventory_panel
+	_game._open_inventory()
+	await process_frame
+	_check(panel.is_open(), "the M40 screen opens in the real scene")
+	_check(not _game.hud.visible, "the gameplay HUD yields to the M40 screen")
+	_check(panel.craft_grid_slot_count() == 9, "the screen exposes the real 3x3 grid")
+	_check(not panel.nav_enabled("map"), "the Map tab is explicitly unavailable")
+	_check(panel.nav_enabled("character"), "the Character tab is available")
+	_check(not panel.equipment_enabled(),
+		"equipment stays disabled because the game has no equipment system")
+	_check(panel.vitals_text().contains("Health"), "the screen shows the live health value")
+	_check(panel.vitals_text().contains("Hunger"), "the screen shows the live hunger value")
+	_check(not panel.vitals_text().to_lower().contains("xp"),
+		"the screen never invents an experience value")
+	_check(panel.slot_count() == Inventory.SIZE,
+		"the runtime screen still exposes exactly the 27+9 player slots")
+
+	# Craft sticks through the real grid: two planks, the hand recipe, the result.
+	var free: int = inventory.slots.find(BlockDB.AIR)
+	_check(free >= 0, "the runtime inventory has a free slot for the grid check")
+	if free >= 0:
+		inventory.put_stack(free, {"item": BlockDB.PLANKS, "count": 2})
+		var planks_before := inventory.count_of(BlockDB.PLANKS)
+		panel.set_station(Crafting.STATION_HAND)
+		_check(panel.pick_up(free), "the runtime grid takes a stack from the inventory")
+		_check(panel.craft_click(0), "the runtime grid accepts the planks")
+		_check(panel.craft_press(), "the runtime grid crafts the real stick recipe")
+		_check(int(panel.craft_output().get("item", BlockDB.AIR)) == ItemDB.STICK,
+			"the runtime result slot holds the crafted sticks")
+		_check(panel.craft_click(9), "the runtime result can be taken")
+		panel.flush_cursor()
+		_check(inventory.count_of(BlockDB.PLANKS) == planks_before - 2,
+			"exactly two planks were consumed by the runtime craft")
+		_check(inventory.count_of(ItemDB.STICK) > 0,
+			"the crafted sticks reached the player inventory")
+
+	panel.set_page("character")
+	_check(panel.page() == "character", "the Character page opens in the runtime screen")
+	panel.press_nav("inventory")
+	_check(panel.page() == "inventory", "the Inventory page returns in the runtime screen")
+
+	_game._close_inventory()
+	await process_frame
+	_check(not panel.is_open(), "the M40 screen closes")
+	_check(_game.hud.visible, "the gameplay HUD returns after closing")
+	_check(player.can_interact, "closing the M40 screen restores interaction")
+	_check(panel.craft_grid_item(0) == BlockDB.AIR, "closing clears the transient grid")
+	_game._open_inventory()
+	await process_frame
+	_check(panel.is_open(), "the M40 screen reopens")
+	_check(panel.craft_grid_item(0) == BlockDB.AIR, "reopening starts with an empty grid")
+	_game._close_inventory()
+	await process_frame
 
 
 ## Settlement residents through the real scene: a settlement's resident gets a
