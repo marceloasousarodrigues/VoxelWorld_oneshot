@@ -1,0 +1,73 @@
+{
+	"biome": "Forest",
+	"evidence": "offscreen Godot viewport PNG written from inside the running game scene; not a human visual inspection",
+	"eye": [
+		22.5,
+		105.619422912598,
+		8.5
+	],
+	"fluid": {
+		"changes": 0,
+		"evaluations": 2396,
+		"observed_edits": 1189,
+		"pending": 0,
+		"seeded_chunks": 0
+	},
+	"fps_last_sample": 40.9292578706963,
+	"godot_version": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"look": [
+		0.0,
+		-22.660608291626
+	],
+	"mesher": {
+		"assemble_ms": 117.737,
+		"builds": 690,
+		"emit_ms": 8704.288,
+		"faces": 272166,
+		"fill_ms": 895.599000000001,
+		"ms": 9616.644,
+		"triangles": 544332
+	},
+	"player": [
+		22.5,
+		103.999420166016,
+		8.5
+	],
+	"seed": 17017,
+	"streaming": {
+		"attach_ms_total": 6175.796,
+		"center": "(1, 6, 0)",
+		"faces": 272166,
+		"faces_hash": 5819324791505370528,
+		"generated": 678,
+		"generation_in_flight": 0,
+		"generation_ms_total": 1674.522,
+		"generation_worker_ms": 8260.267,
+		"loaded": 678,
+		"mesh_ms_total": 9616.644,
+		"meshed": 690,
+		"meshes_in_flight": 0,
+		"queued": 0,
+		"render_radius": 6,
+		"unloaded": 0,
+		"vertical_radius": 4,
+		"views": 678,
+		"wanted": 678,
+		"worst_mesh_ms": 46.124
+	},
+	"window_size": [
+		1280,
+		720
+	],
+	"world_hash": 2904731560825977308
+}

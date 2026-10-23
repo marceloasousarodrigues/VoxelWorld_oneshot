@@ -2866,3 +2866,88 @@ performance benchmark was run.
 `m40v2-preview-bug-after.png`.
 
 **Commits.** `c6bc97b` (code, UI and tests); the evidence/report commit follows.
+
+---
+
+## M40 v3 - Block Placement Preview and Orientation Feedback
+
+**Status: COMPLETE**, with the documented limitations below. This record adds the
+placement-usability fix to the completed M40 work.
+
+**Base:** `5da7cbb`. **Code commit:** `68a8d8e`
+(`M40: add block placement preview and orientation feedback`). **Canonical
+project:** `C:/Users/Admin/Documents/Projects/VoxelWorld_Godot`.
+
+**Reported defect and root cause.** Placement was only explained by a HUD line;
+the player could not see the destination cell, the block's actual partial shape,
+or its rotated state before committing the action. `VoxelPlayer.place_selected()`
+and the HUD's `placement_preview()` also implemented the same rules twice, so a
+visual preview built independently would have been able to drift from the real
+placement transaction.
+
+**Implemented.**
+- `VoxelPlayer.placement_preview()` is now the single authority for destination
+  cell, orientation, validity, refusal message and preview visibility.
+  `place_selected()` consumes that exact dictionary, so ghost and placement
+  cannot disagree.
+- `BlockPlacementPreview` builds its geometry with the real `ChunkMesher` from a
+  one-cell isolated chunk using the previewed block id and orientation. Cubes,
+  stairs, slate stairs, slabs, ramps, ridges, stations and other custom models
+  therefore use their real shapes rather than a separate approximation.
+- The ghost shows the destination cell outline and real geometry in green when
+  valid and red when invalid. Invalid occupancy is drawn through the occupying
+  block so the refusal cannot be mistaken for a valid cell.
+- The targeted surface has its own amber face patch; the destination cell is a
+  separate outline/ghost. This distinguishes the surface the crosshair hit from
+  the cell that will be filled.
+- Slabs show their actual lower or upper half geometry. The HUD names the exact
+  state (`bottom half` / `top half (upside down)`), derived from the existing
+  targeted-face rule.
+- Directional pieces reuse the existing `placement_facing` / `R` rotation path.
+  A 3D arrow and a cyan forward-face marker show stair/ramp facing; a cyan strip
+  along the long axis shows ridge orientation. The final placement consumes the
+  same orientation value the ghost displays.
+- The ghost hides when no placeable item is selected, an interface owns input,
+  the game is not playing, there is no target, or the destination is outside the
+  buildable height or an unloaded chunk. Occupied and player-overlapping cells
+  remain visible in the red invalid state.
+- `--placement-capture=cube|slab|slab_top|stair|invalid` is a capture-only
+  diagnostic that stages a flat pad and a real aimed cell; it does not add a
+  second placement path.
+- The ghost is visual only: no collision shape, no physics body, no world edit,
+  no chunk write and no raycast participation. Its mesher is private so preview
+  rebuilds do not pollute streaming performance counters.
+
+**Verified.**
+- Unit `M17_TESTS_PASS 3283 assertions` (baseline 3092; 191 new placement
+  assertions).
+- Integration `M17_INTEGRATION_PASS 519 assertions` (baseline 503; 16 new checks
+  including real-raycast ghost visibility, inventory hiding, input gating and
+  exact cell/orientation match after placement).
+- Regression `M17_REGRESSION_PASS assertions=52`.
+- Unit coverage includes cube placement on top and against all four side faces,
+  lower and upper slab geometry, all eight stair orientations, all four ramp
+  orientations, both ridge axes, occupied/inside-player/out-of-range/unloaded
+  refusal, non-placeable item hiding and changing the selected block.
+- Every unit geometry check reads the mesh built by the real chunk mesher; the
+  ghost's reported cell, block and orientation are compared with the block and
+  orientation actually written by `place_selected()`.
+- Running-game captures at 1280x720: cube, lower slab, upper slab, rotated stair
+  and invalid occupied destination. They are offscreen viewport renders from the
+  running game, not mockups or desktop screenshots. No runtime errors or failed
+  resource loads occurred in the final capture runs.
+
+**Limitations.** No human mouse/keyboard session was run; visual assessment used
+the offscreen running-game captures. The existing R control still cycles the four
+horizontal facings for stairs/ramps; upside-down placement continues to come from
+the targeted underside, as before. A slab's half is also determined by the
+targeted face, and its horizontal facing does not change its geometry; the HUD
+therefore reports the half directly instead of advertising a rotation that would
+have no visible effect.
+
+**Evidence.** `prototypes/m17/results/godot/m40-placement-preview-report.md`,
+`m40-place-cube.png`, `m40-place-slab.png`, `m40-place-slab-top.png`,
+`m40-place-stair.png`, `m40-place-invalid.png`, `m40-place-capture.json`.
+
+**Commits.** `68a8d8e` (preview, placement authority, tests and capture
+diagnostic); the evidence/report commit follows.

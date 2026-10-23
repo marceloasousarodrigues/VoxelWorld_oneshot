@@ -227,6 +227,30 @@ func _test_directional_rotation(h: TestHarness) -> void:
 	h.check(signatures[0] != signatures[4],
 		"the upside-down stair ghost is not the upright geometry")
 
+	# Slate stairs share the shaped-block path but are a separate block type; run
+	# the same eight orientations through the real ghost.
+	_select(player, BlockDB.SLATE_STAIR)
+	for orientation in 8:
+		var target := Vector3i(14, 8, 2 + orientation)
+		world.set_block(target, BlockDB.STONE)
+		var normal := Vector3i.UP if orientation < 4 else Vector3i.DOWN
+		var destination := target + normal
+		world.set_block(destination, BlockDB.AIR)
+		player.placement_facing = orientation if orientation < 4 else orientation - 4
+		player._hit = _hit(target, normal)
+		var preview: Dictionary = player.placement_preview()
+		h.eq(preview["orientation"], orientation,
+			"slate stair orientation %d is previewed" % orientation)
+		ghost.update_preview(preview)
+		h.eq(ghost.preview_orientation(), orientation,
+			"the slate stair ghost shows orientation %d" % orientation)
+		var cell: Vector3i = preview["cell"]
+		h.check(player.place_selected(), "the slate stair can be placed at orientation %d" % orientation)
+		h.eq(world.get_block(cell), BlockDB.SLATE_STAIR,
+			"the placed slate stair is present at orientation %d" % orientation)
+		h.eq(world.get_orientation(cell), orientation,
+			"placement preserves slate stair orientation %d" % orientation)
+
 	# Ramps use the same four horizontal facings and never flip upside down.
 	_select(player, BlockDB.SLATE_RAMP)
 	for orientation in 4:

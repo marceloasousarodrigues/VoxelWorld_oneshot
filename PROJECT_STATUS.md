@@ -7,11 +7,13 @@ Updated: 2026-10-23
 - **Engine:** Godot 4; the active project is [`godot/project.godot`](godot/project.godot).
 - **Repository:** `C:\Users\Admin\Documents\Projects\VoxelWorld_Godot`, branch
   `codex/m34-canopy-composition`.
-- **M40 v2 (current):** commit `c6bc97b`
-  (`M40: overhaul inventory, character and crafting UI`), with the
-  evidence/report commit following it. This supersedes the earlier inline-grid
-  M40 screen (`195b105`, `13c574a`, `47fd5fa`, `c4ac3c5`, `2afab28`), which
-  remains in history.
+- **M40 v3 (current):** commit `68a8d8e`
+  (`M40: add block placement preview and orientation feedback`), with the
+  evidence/report commit following it. This adds the real-time placement ghost,
+  exact partial/rotated geometry, valid/invalid states and the UI input gate to
+  the completed M40 work. It builds on M40 v2 (`c6bc97b`), which superseded the
+  earlier inline-grid M40 screen (`195b105`, `13c574a`, `47fd5fa`, `c4ac3c5`,
+  `2afab28`); all remain in history.
 - The Godot project was promoted from `godot` to the top-level `godot/`
   folder. Its project-relative `res://` layout is preserved.
 - The previous Python + Ursina runtime and its Python tests, scripts, dependencies,
@@ -34,17 +36,32 @@ Updated: 2026-10-23
   level, defence/armour and the Map screen are not implemented in the game and
   are presented as unavailable rather than faked.
   See [`prototypes/m17/results/godot/m40-report.md`](prototypes/m17/results/godot/m40-report.md).
+- **M40 v3 — Block Placement Preview and Orientation Feedback is COMPLETE.**
+  `VoxelPlayer.placement_preview()` is the single source for the destination,
+  orientation and validity; `place_selected()` consumes the same result. A
+  world-space ghost is meshed by the real `ChunkMesher`, so cubes, slabs, stairs,
+  ramps, ridges and stations show their actual geometry. Valid/invalid states,
+  the targeted surface, the destination cell, slab halves and directional
+  facing are visually distinct, and the ghost hides while any interface owns
+  input. See
+  [`prototypes/m17/results/godot/m40-placement-preview-report.md`](prototypes/m17/results/godot/m40-placement-preview-report.md).
 
 ## Validation
 
-Validated with Godot 4.7.2 after the overhaul:
+Validated with Godot 4.7.2 after the M40 v2/v3 work:
 
-- Unit suite: `M17_TESTS_PASS 3092 assertions` (pre-overhaul: 3043).
-- Integration suite: `M17_INTEGRATION_PASS 503 assertions` (pre-overhaul: 491;
-  includes real-scene preview-stability, navigation, crafting and amount-dialog
-  checks).
+- Unit suite: `M17_TESTS_PASS 3283 assertions` (M40 v2 baseline: 3092; v2
+  pre-overhaul baseline: 3043).
+- Integration suite: `M17_INTEGRATION_PASS 519 assertions` (M40 v2 baseline:
+  503; includes real-scene preview-stability, navigation, crafting,
+  amount-dialog and placement-ghost input/geometry checks).
 - Regression: `M17_REGRESSION_PASS assertions=52`.
-- Runtime captures: `prototypes/m17/results/godot/m40v2-inventory-1280.png`,
+- Placement captures: `prototypes/m17/results/godot/m40-place-cube.png`,
+  `m40-place-slab.png`, `m40-place-slab-top.png`, `m40-place-stair.png`,
+  `m40-place-invalid.png`, with `m40-place-capture.json`. These show the real
+  mesh ghost in the running game, the actual slab half, the rotated stair with
+  its facing arrow/face, and the red invalid occupied state.
+- M40 v2 captures: `prototypes/m17/results/godot/m40v2-inventory-1280.png`,
   `m40v2-inventory-1600.png`, `m40v2-character-1280.png`,
   `m40v2-crafting-1280.png`, `m40v2-crafting-missing-1280.png`,
   `m40v2-amount-1280.png`, `m40v2-hud-1280.png`, plus the old-defect evidence
