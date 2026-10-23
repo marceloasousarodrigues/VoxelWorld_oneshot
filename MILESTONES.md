@@ -2721,3 +2721,65 @@ straight-edged openings.
 `m37-before-seedB-*.png`, `m37-v8-seedB-*.png`, `m37-v8-*.json`.
 
 **Commits.** `e8697aa` (v8 generator and tests), `25a7416` (evidence and report).
+
+---
+
+## M40 - Inventory, Crafting and Gameplay UI
+
+**Status: COMPLETE**, with documented limitations (equipment, experience/level,
+Map and item dropping are not implemented in VoxelWorld and are not faked).
+
+**Base:** `42a97b3` (`Consolidate project around Godot`). **Branch:**
+`codex/m34-canopy-composition`, `C:/Users/Admin/Documents/Projects/VoxelWorld_Godot`.
+
+**Objective.** Implement the reference inventory experience in the running Godot
+game: navigation, player/equipment panel, the real inventory, a 3x3 crafting
+grid, hotbar, HUD and contextual controls, with working interactions and
+verification.
+
+**Implemented.**
+- `InventoryPanel` is now one M40 screen: nav (Inventory, Crafting, Character,
+  Map, Settings), a rendered voxel character preview, four armour and two
+  off-hand slots, the 27+9 inventory, a real 3x3 crafting grid, result preview,
+  crafting-table card, nine-slot hotbar, hearts/hunger vitals and contextual
+  hints.
+- The crafting grid uses the existing `Station(TABLE)` / `Station.craft_grid()`
+  and `Crafting` catalogue; no recipe logic was duplicated. Table recipes stay
+  gated by the real nearby station.
+- `ItemIcon` draws block items as isometric cubes from the real top/side
+  textures and non-block items from the existing transparent art; the inventory,
+  hotbar, cursor, catalogue and station slots share it.
+- `GameHUD` now uses hearts and hunger units from the real `Health`/`Survival`
+  models and the reference-style hotbar. No XP or level is displayed because the
+  game does not implement them.
+- The gameplay HUD yields while the screen is open and returns when it really
+  closes (cursor and grid are returned first; a full inventory refuses the close).
+- `--m40-capture` / `--inventory-page` are capture-only diagnostics that use a
+  real item loadout, a real placed crafting table and the real wood-pickaxe
+  recipe.
+
+**Verified.**
+- Unit `M17_TESTS_PASS 3043 assertions` (baseline 2923; 120 new M40 assertions).
+- Integration `M17_INTEGRATION_PASS 489 assertions` (baseline 463; 26 new
+  real-scene M40 checks).
+- Regression `M17_REGRESSION_PASS assertions=52`.
+- Runtime captures at 1280x720 and 1600x900 plus the Character page and HUD,
+  all rendered from the running game with no runtime errors or failed resource
+  loads in the final runs.
+- No known item duplication, loss or crafting atomicity defect: full/invalid/
+  missing/blocked crafts, partial transfers, stack caps, full inventories and
+  cursor/grid return on close/save are covered.
+
+**Limitations.** No equipment system exists, so the six slots are display-only.
+No experience/level system exists, so none is shown. Map is disabled with an
+explicit tooltip. Item dropping is not an existing mechanic, so no drop hint is
+offered. The storage grid is 9x3 because the model has 27 slots (the reference's
+6x5 mock grid cannot represent it without empty placeholders). Non-block icons
+reuse the existing flat 2D art rather than new 3D renders. The world is dimmed,
+not blurred.
+
+**Evidence.** `prototypes/m17/results/godot/m40-report.md`,
+`m40-inventory-1280.png`, `m40-inventory-1600.png`, `m40-character-1280.png`,
+`m40-hud-1280.png`, `game-capture.json`.
+
+**Commits.** `195b105` (code, UI and tests); the evidence/report commit follows it.
