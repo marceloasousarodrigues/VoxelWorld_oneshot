@@ -135,8 +135,6 @@ var _amount_updating := false
 
 var _cursor: ItemCursor
 var _vitals: VitalsBar
-var _hint: Label
-var _tool_card: Label
 var _hints_panel: Control
 
 
@@ -1689,6 +1687,7 @@ func _on_dim_input(event: InputEvent) -> void:
 func set_craft_category(category: String) -> void:
 	_crafting_category = category
 	_refresh_recipe_tiles()
+	_ensure_visible_selection()
 	_refresh_crafting()
 
 
@@ -1699,6 +1698,7 @@ func craft_category() -> String:
 func set_craft_search(text: String) -> void:
 	_crafting_search = text.strip_edges().to_lower()
 	_refresh_recipe_tiles()
+	_ensure_visible_selection()
 	_refresh_crafting()
 
 
@@ -1868,8 +1868,11 @@ func _refresh_recipe_tiles() -> void:
 		var search_ok := _crafting_search.is_empty() or _recipe_matches_search(recipe)
 		var category_ok := _crafting_category.is_empty() or str(recipe["category"]) == _crafting_category
 		button.visible = search_ok and category_ok
+		var is_selected := str(recipe["id"]) == selected
 		button.add_theme_stylebox_override("normal",
-			UiStyle.recipe_tile_style(str(recipe["id"]) == selected))
+			UiStyle.recipe_tile_style(is_selected))
+		button.add_theme_stylebox_override("hover",
+			UiStyle.recipe_tile_style(is_selected, true))
 		button.add_theme_stylebox_override("pressed", UiStyle.recipe_tile_style(true))
 		if not recipe_is_craftable(str(recipe["id"])):
 			button.modulate = Color(1, 1, 1, 0.55)
@@ -1884,6 +1887,25 @@ func _refresh_recipe_tiles() -> void:
 				UiStyle.category_style(key == _crafting_category))
 			button.add_theme_stylebox_override("hover", UiStyle.category_style(key == _crafting_category, true))
 			button.add_theme_stylebox_override("pressed", UiStyle.category_style(true))
+
+
+## If the selected recipe no longer matches the visible category/search, move the
+## selection to the first visible recipe (or clear it), so the details panel can
+## never describe a recipe the browser has hidden.
+func _ensure_visible_selection() -> void:
+	if _selected_recipe_id.is_empty():
+		return
+	for entry: Dictionary in _recipe_tiles:
+		if str((entry["recipe"] as Dictionary)["id"]) == _selected_recipe_id:
+			if (entry["button"] as Control).visible:
+				return
+			break
+	for entry: Dictionary in _recipe_tiles:
+		if (entry["button"] as Control).visible:
+			select_recipe(str((entry["recipe"] as Dictionary)["id"]))
+			return
+	_selected_recipe_id = ""
+	_refresh_crafting()
 
 
 func _recipe_matches_search(recipe: Dictionary) -> bool:
@@ -2062,7 +2084,6 @@ func _refresh_all() -> void:
 	_refresh_context()
 	_refresh_crafting()
 	_refresh_vitals()
-	_update_hint()
 
 
 func _refresh_vitals() -> void:
@@ -2093,12 +2114,6 @@ func _update_held() -> void:
 			var maximum := ItemDB.max_durability(item_id)
 			if maximum > 0:
 				held_label.text += "  %d / %d" % [inventory.durability_of(inventory.selected), maximum]
-
-
-func _update_hint() -> void:
-	# The cursor itself shows a carried stack; the hints card stays a fixed-size
-	# control legend so opening/closing a carry cannot resize the layout.
-	pass
 
 
 func _update_detail() -> void:
