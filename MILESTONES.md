@@ -2784,3 +2784,85 @@ not blurred.
 
 **Commits.** `195b105` (code, UI and tests), `13c574a` (report, captures, status
 and this record), `47fd5fa` (final HUD hint clearance and refreshed captures).
+
+---
+
+## M40 v2 - Inventory, Character and Crafting UI Overhaul
+
+**Status: COMPLETE**, with the documented limitations below. This record
+supersedes the inline-grid M40 screen above; the earlier commits remain in
+history.
+
+**Base:** `2afab28`. **Code commit:** `c6bc97b`
+(`M40: overhaul inventory, character and crafting UI`). **Canonical project:**
+`C:/Users/Admin/Documents/Projects/VoxelWorld_Godot`.
+
+**Reported defects and root causes.**
+- **Preview size:** the autowrapping item-details Label grew the centre panel and
+  body, so the Player panel's expanding preview cell changed from 140x236 to
+  148x433 after a slot selection; the CharacterPreview mirrored that rect into
+  its SubViewport. Fixed with a fixed-size preview cell, a fixed-height body, a
+  scrollable fixed-height facts area and removal of the control-to-viewport
+  resize feedback. The runtime test now asserts the exact `(148, 119, 200, 290)`
+  rect across focus, actions, tabs and reopening.
+- **Click inconsistency:** clicking a hotbar slot both selected it and picked up
+  its stack, making selection and one-item placement ambiguous. Clicks now only
+  move/select stacks; hotbar selection stays on 1-9/wheel. Right-click is the
+  only half/one shortcut, with explicit context and amount controls.
+- **Character opened crafting:** Crafting was a separate overlay while Character
+  was a page. Inventory/Crafting/Character are now three internal pages; C and
+  the Crafting tab open the Crafting page, Character never triggers crafting, and
+  the legacy overlay is not reachable from either.
+- **Crafting depth:** replaced the grid/catalogue-only experience with a
+  three-column recipe browser using the real catalogue.
+
+**Implemented.**
+- Three pages: Inventory, Crafting, Character; Map disabled; Settings external.
+- Stable Player panel with a rendered voxel character, four armour and two
+  off-hand display-only slots, held item and Character-page rotation controls.
+- 27-slot storage grid (6 columns) plus nine-slot hotbar, real icons/counts/
+  durability/selection.
+- Item actions card with Select All/Half/One/Amount, Quick Move, Move to Hotbar
+  and Cancel; Select Amount dialog with All/Half/One, numeric field, slider,
+  live amount, clamping, Confirm and mutation-free Cancel.
+- Explicit LMB full-stack, RMB ceil(half)/one, Shift quick move, Ctrl select all,
+  MMB actions, R amount, Esc progressive cancel/return.
+- Crafting page: actual categories (`All`, Basics, Building, Tools, Smelting,
+  Food), search, scrollable recipe grid, selected highlight, 3x3 pattern,
+  output, ingredients with have/need, station requirement, quantity with Max,
+  status and Craft.
+- `Crafting.craft_many` remains the only transaction; invalid/missing/blocked/
+  full-output crafts consume nothing. Quantity maxima respect ingredients, fuel
+  and output capacity after consumption.
+- Character Stats use real Health, Hunger, held-item Attack and Movement Speed;
+  experience/defence/armour are labelled not implemented.
+- Preview renders with `UPDATE_WHEN_VISIBLE`; a hidden screen skips
+  inventory-driven rebuilds to avoid gameplay cost.
+
+**Verified.**
+- Unit `M17_TESTS_PASS 3092 assertions` (pre-overhaul 3043).
+- Integration `M17_INTEGRATION_PASS 503 assertions` (pre-overhaul 491).
+- Regression `M17_REGRESSION_PASS assertions=52`.
+- Running-game captures at 1280x720 and 1600x900: main inventory with actions,
+  Character, Crafting ready and missing states, Select Amount, HUD, plus the
+  reproduced old preview defect. No runtime errors or failed resource loads in
+  the final captures/tests.
+- The fixed preview rect stayed `(148, 119, 200, 290)` across the runtime
+  focus/actions/Character/Crafting/return/reopen checks.
+
+**Limitations.** Equipment, experience, defence and armour are not implemented
+and are presented as unavailable. Map is disabled; Use/Drop/Move to Chest are
+omitted because those mechanics do not exist. The legacy `CraftingPanel` remains
+for the existing model-level tests and `--open-crafting` but is not reachable
+from the UI. The storage grid is 6x5 for 27 slots (partial last row); non-block
+icons reuse existing 2D art. No human mouse/keyboard session or formal
+performance benchmark was run.
+
+**Evidence.** `prototypes/m17/results/godot/m40-report.md`,
+`m40v2-inventory-1280.png`, `m40v2-inventory-1600.png`,
+`m40v2-character-1280.png`, `m40v2-crafting-1280.png`,
+`m40v2-crafting-missing-1280.png`, `m40v2-amount-1280.png`,
+`m40v2-hud-1280.png`, `m40v2-preview-bug-before.png`,
+`m40v2-preview-bug-after.png`.
+
+**Commits.** `c6bc97b` (code, UI and tests); the evidence/report commit follows.

@@ -1,157 +1,139 @@
-# M40 — Inventory, Crafting and Gameplay UI
+# M40 — Inventory, Character and Crafting UI Overhaul
 
-**Status: COMPLETE**, with the limitations listed at the end. The interface is
-integrated into the running Godot game, interactive, covered by automated tests
-and reviewed against runtime captures.
+**Status: COMPLETE**, with the limitations listed at the end. This report covers
+the final M40 overhaul; the earlier inline-grid M40 screen is superseded.
 
-**Base:** `42a97b3` (`Consolidate project around Godot`), branch
-`codex/m34-canopy-composition`, clean working tree before the work.
-**Code commits:** `195b105` (`M40: implement inventory, crafting and gameplay UI`)
-and `47fd5fa` (HUD hint clearance and refreshed captures).
-**Evidence commit:** `13c574a` (report, screenshots, status and milestone record).
-A follow-up commit gates polled WASD/jump input while an overlay owns the mouse.
+**Base:** `2afab28` (the previous M40 input-gate commit), branch
+`codex/m34-canopy-composition`, clean working tree.
+**Code commit:** `c6bc97b` (`M40: overhaul inventory, character and crafting UI`).
+The v1 implementation remains in history (`195b105`, `13c574a`, `47fd5fa`,
+`c4ac3c5`, `2afab28`) and is replaced by this work.
 **Canonical project:** `C:\Users\Admin\Documents\Projects\VoxelWorld_Godot`.
-No other project copy, worktree or branch was created.
+No other project copy, worktree or clone was created.
 
-## What was implemented
+## Root causes of the reported defects
 
-### One inventory screen
+### A. Character preview changed size
 
-`InventoryPanel` is now the full M40 experience described by the reference:
+Reproduced in the running game. The old layout measured:
 
-- top navigation with keycaps, drawn glyphs and the reference's selected-tab
-  treatment;
-- a Player panel with a real rendered voxel character (transparent SubViewport),
-  four armour slots and two off-hand slots;
-- the authoritative 27-slot storage grid plus the nine-slot hotbar;
-- a real 3x3 crafting grid with an arrow, a result slot and a crafting-table
-  note;
-- contextual Controls card with only supported actions;
-- live hearts/hunger vitals.
+```
+before selecting a slot: rect=(140, 236), viewport=(140, 236)
+after  selecting a slot: rect=(148, 433), viewport=(148, 433)
+```
 
-Every displayed number comes from `Inventory`, `Health` and `Survival`. The
-screen never owns gameplay state.
+Cause: the item-details Label autowraps, so its minimum height grew when the
+selected item changed from "no item selected" to a long tool/block description.
+That grew the centre panel, then the body HBox, and the Player panel's
+`EXPAND_FILL` preview cell expanded from 236 to 433 px. `CharacterPreview`
+mirrored the control rect into its SubViewport (a `resized` handler), so the
+rendered character grew too.
 
-### Inventory interaction
+Fix: fixed-size preview cell (`200×290`, no vertical expand), a fixed-height body
+layout that fills the available space rather than being sized by content, a
+fixed-height `ScrollContainer` for long facts, and removal of the
+control-size → viewport-size feedback. The preview rect is now exactly stable
+across slot focus, item-action opening, Character/Crafting tab switches and
+reopening. The regression asserts the full rect, not just the image size.
 
-Preserved and extended the M20 interaction model:
+### B. Inconsistent stack selection / one-item placement
 
-- left click take/place, right click split/place-one;
-- shift-click quick move between hotbar and storage;
-- drag-and-drop inside the player grid;
-- merging compatible stacks up to `ItemDB.max_stack`, swapping incompatible
-  stacks, partial transfers and refused transfers;
-- a temporary cursor stack that is returned to the inventory on close/save; a
-  genuinely full inventory refuses to close instead of deleting the stack.
+The old inventory auto-selected a hotbar slot **and** picked up its stack on the
+same click, so a click could look like a failed selection, a pick-up, or a
+one-item transfer depending on the previous cursor state. The explicit model now
+separates the concerns:
 
-The transient crafting grid follows the same rules: its contents and result are
-returned to the player on close/save, and a full inventory refuses the close.
+- click only moves/selects stacks; it never changes the held hotbar slot;
+- hotbar selection remains 1–9 / mouse wheel during gameplay;
+- one-item and half-stack actions only happen through right-click or the explicit
+  quantity controls, never as a hidden side effect of a full-stack left click.
 
-### Crafting
+### C. Character menu opened crafting
 
-The screen owns one transient `Station(TABLE)` and calls the existing
-`Station.craft_grid()` transaction. No recipe logic exists in UI code:
+Crafting used to be a separate overlay reached by a navigation signal, while
+Character was a page. The three experiences are now **internal pages of one
+screen**: Inventory, Crafting and Character. The Crafting tab and the C key both
+open the Crafting page; the Character tab opens Character and has no crafting
+callback. The legacy crafting overlay is not opened by the navigation or by C.
 
-- 3x3 matching uses `Station.matched_recipe()` / `Crafting.match_grid` and
-  `match_shapeless_counts`;
-- the result slot shows a live ghost preview of the matched output;
-- the arrow (`craft_press`) crafts atomically; the result slot delivers the
-  output, with shift-click sending it straight to the inventory;
-- `Crafting.station_satisfied` gates table recipes by the real nearby station
-  (`Crafting.best_station`), so a table recipe cannot be crafted by hand;
-- an invalid grid, missing ingredients, a missing table and a full result slot
-  are reported without consuming anything (verified by tests).
+### D. Crafting was too simple
 
-### Hotbar and HUD
+The old screen exposed a single 3x3 grid and the old catalogue overlay listed
+recipes without selection, search, quantities or rich details. The Crafting page
+is now a full three-column browser backed by the authoritative `Crafting`
+catalogue.
 
-- Nine numbered hotbar slots with real icons, stack counts, selection highlight
-  and tool durability bars.
-- The gameplay HUD is hidden while the screen is open (the screen has its own
-  hotbar/vitals) and restored when the screen really closes.
-- `GameHUD` now draws ten 2-point hearts and ten hunger units from the real
-  `Health`/`Survival` values, plus the existing breath and mining readouts.
-- Experience and level are **not** shown because VoxelWorld does not implement
-  them. No fabricated value is displayed.
+## Implemented UI
 
-### Navigation and input
+- **Navigation**: Inventory / Crafting / Character / Map / Settings, with the
+  reference's blue selected tab and `I`/`Esc` keycaps. Map is explicitly disabled;
+  Settings opens the existing settings overlay.
+- **Player panel**: stable rendered voxel character, four armour slots, two
+  off-hand slots, held-item row, Character-page rotation controls (`‹ • ›`) and
+  an honest equipment note.
+- **Inventory**: 27 storage slots in a 6-column grid plus the nine-slot hotbar.
+  Real icons, counts, durability indicators and selection.
+- **Item actions card**: the reference's context menu, with only valid actions:
+  Select All, Select Half, Select One, Select Amount…, Quick Move, Move to
+  Hotbar (storage slots), Cancel.
+- **Select Amount dialog**: item icon, available/carrying counts, All/Half/One,
+  numeric entry, slider, live amount, Confirm/Cancel. Range is clamped to the
+  actual transferable quantity; Cancel is mutation-free.
+- **Character page**: the same stable Player panel and inventory grid plus a
+  Stats panel with real Health, Hunger, held-item Attack and Movement Speed.
+  Experience, defence and armour are explicitly marked as not implemented rather
+  than fabricated.
+- **Crafting page**: categories from the real catalogue (`All`, Basics, Building,
+  Tools, Smelting, Food), search, scrollable recipe grid with selected/available
+  state, and a details panel with output, 3x3 recipe pattern, ingredients and
+  have/need counts, station requirement, quantity `− / +` with Max, status and
+  Craft.
+- **Hotbar/HUD**: nine numbered slots, selected highlight, counts, tool
+  durability; real hearts and hunger units; the existing HUD is hidden while the
+  screen owns the mouse and restored when the screen really closes.
 
-- Inventory and Character are pages of the screen; Crafting and Settings open the
-  existing overlays; Map is visibly disabled with an explicit tooltip.
-- `I` / `Esc` closing is unchanged; the screen owns the mouse while open and
-  gameplay interaction stays disabled (existing game gate).
-- The character page shows live health/hunger, the held item and an explicit
-  "equipment is not implemented" statement.
+## Interaction model (documented in the UI)
 
-### Icons
-
-One `ItemIcon` control is now used by the inventory grid, hotbar, cursor,
-crafting catalogue, station slots and the result preview:
-
-- block items are drawn as the reference's isometric cubes from the real top and
-  side textures in `TextureLibrary`, with one lighting rule (top bright, left
-  mid, right dark) and nearest filtering;
-- non-block items (tools, food, lumps, seeds) keep the existing transparent
-  VoxelWorld art with a soft shadow;
-- open/deco blocks (flowers, grass tufts) keep their flat silhouette instead of
-  being forced into a cube.
-
-No item uses an emoji, Unicode placeholder or unrelated icon. Item identity stays
-`ItemDB.icon_key`; changing an icon does not touch gameplay.
-
-**Asset sources:** the existing vendored Minetest-derived textures and the
-in-project M21/M22/M29 procedural icons, all already recorded in
-`godot/assets/texture_sources.json` and `godot/ASSET_MANIFEST.md`. No new
-third-party asset was added. **Remaining placeholder gaps: none identified**; all
-defined items resolve through the existing icon keys and block face keys. The
-non-block icons are the game's existing 2D art, not newly rendered 3D models.
-
-## Mapping to the reference
-
-| Reference element | M40 implementation |
+| Input | Behaviour |
 | --- | --- |
-| Top tabs + keycaps | Nav bar with Inventory/Crafting/Character/Map/Settings, drawn glyphs, blue selected tab, `I`/`Esc` keycaps |
-| Player + equipment | Rendered voxel character, four armour slots, two off-hand slots, held-item row |
-| Inventory grid | 27 storage slots as 9x3 (the model's capacity) with icons and counts |
-| Crafting panel | Real 3x3 grid, arrow, result slot, live status, crafting-table card |
-| Hotbar | Nine numbered slots, blue selected border, icons, counts, durability |
-| Health/hunger | Ten hearts and ten hunger units from the real models |
-| Contextual hints | LMB/RMB/Shift/close card, only supported actions |
-| Dimmed world | Full-screen translucent dim over the running world |
+| LMB | Take/place the **full** stack; merge or swap; no hotbar-selection side effect |
+| RMB | Split `ceil(half)` into the cursor, or place exactly one |
+| Shift+LMB | Quick move between hotbar and storage |
+| Ctrl+LMB | Select All (full stack) |
+| MMB | Open the item actions card for that slot |
+| R | Open the Select Amount dialog for the focused slot |
+| Esc | Cancel dialog/menu or return the carried stack; next Esc closes |
+| RMB outside the panels | Return the carried stack / close the menu |
+| 1–9 (gameplay) | Select a hotbar slot |
 
-**Deliberate deviations:** the grid is 9x3 because VoxelWorld's storage is exactly
-27 slots (the reference's 6x5 mock grid cannot represent it without empty
-placeholders); Map, XP/level, equipment gameplay and item dropping are absent
-because the game does not implement them.
+The cursor stack is temporary UI state. It is returned to the inventory on close
+or save; a genuinely full inventory refuses the close instead of deleting it.
 
-## Defects and fixes
+## Crafting and data integrity
 
-No pre-existing inventory/crafting rule defect was found: the `Inventory`,
-`Crafting`, `Station` and `StationInventory` models already had the atomic
-transactions, stack caps and station checks the milestone needs. The old interface
-simply did not expose them (no nav, character, 3x3 grid or M40 presentation), and
-the hotbar/HUD used text bars and flat face icons.
+- The Crafting page uses `Crafting.recipes()`, `ingredients()`, `fuel()`,
+  `can_craft_times()`, `craftable_count()` and `craft_many()`. No recipe is
+  redefined in UI code.
+- Category and search filters operate on the real catalogue.
+- The maximum craft quantity is the largest count whose ingredients/fuel and
+  output capacity both fit; it accounts for slots freed by consuming inputs.
+- `Crafting.craft_many()` is atomic: invalid, missing, station-blocked or
+  full-output crafts consume nothing.
+- Station gating uses the game's real nearby station (`Crafting.best_station`),
+  passed in by the game.
+- Item moves use the existing `Inventory` full-stack/merge/swap/quick-move
+  primitives; the amount dialog uses the same stack caps and conservation rules.
 
-Implementation issues found during verification and fixed:
+## Icons and assets
 
-1. `Polygon2D` has no `mouse_filter`/`antialiasing_quality`; the icon renderer
-   aborted and leaked RIDs in the first integration run. Removed those writes and
-   guarded face indices.
-2. A narrow vitals row let hunger units run under the hotbar; sizes/spacing were
-   reduced so the row ends before the hotbar.
-3. The control hint sat behind the hotbar strip and was unreadable over bright
-   terrain; it now has a dark backing strip below the hotbar.
-4. The character preview was squashed by a fixed SubViewport aspect and cropped
-   at the feet; the viewport now follows the panel size and the camera frames the
-   full body.
-5. The transient crafting grid initially risked being omitted from saves; saves
-   now use `flush_all()` (cursor + grid).
-6. **Pre-existing input defect:** `VoxelPlayer._physics_process` polled WASD,
-   jump and fly input directly, so the player could walk behind an open
-   inventory/crafting/settings/station panel (or the pause menu) even though
-   `_unhandled_input` correctly ignored gameplay actions. Polled movement now
-   respects the same `can_interact` gate. A real-scene regression presses
-   `move_forward` while the screen is open (velocity stays inert) and again after
-   closing (movement returns).
+Block items are isometric cubes drawn from the existing top/side textures in
+`TextureLibrary`, with one lighting rule. Non-block items use the existing
+transparent VoxelWorld art with a shadow; open/deco blocks stay flat. Sources are
+the existing vendored Minetest-derived textures and in-repo M21/M22/M29
+procedural icons recorded in `godot/assets/texture_sources.json`; no new
+third-party dependency or asset was added. No item uses an emoji or unrelated
+symbol. Remaining art limitation: non-block items are the game's existing 2D art,
+not newly rendered 3D icons.
 
 ## Automated verification
 
@@ -163,83 +145,88 @@ Godot_v4.7.2-stable_mono_win64_console.exe --headless --path godot --script res:
 Godot_v4.7.2-stable_mono_win64_console.exe --headless --path godot --script res://scripts/regression.gd
 ```
 
-| Suite | Baseline | Final |
-| --- | --- | --- |
-| Unit (`run_tests.gd`) | 2923 assertions | **3043 assertions** |
-| Integration (`run_integration.gd`) | 463 assertions | **491 assertions** |
-| Regression (`regression.gd`) | 52 assertions | **52 assertions** |
+| Suite | Before this pass | Final |
+| --- | ---: | ---: |
+| Unit | 3043 | **3092 assertions** |
+| Integration | 491 | **503 assertions** |
+| Regression | 52 | **52 assertions** |
 
-`godot/scripts/tests/test_m40_inventory_ui.gd` adds 120 assertions covering:
-moving between empty slots, merging, splitting, partial transfers, incompatible
-stacks, full inventory, full target stacks, duplication/loss prevention, valid
-stack counts, hotbar synchronisation, consumption, valid/invalid/missing/full
-crafting, station gating, atomic failures, displayed quantities, empty slots,
-grid return on close with a full inventory, equipment presentation, navigation
-and real health/hunger display (and the absence of invented XP/level).
+The M40 suite covers full/half/single/arbitrary-quantity moves, merging,
+swapping, partial and full inventories, invalid destinations, context actions,
+amount-dialog boundaries and cancel, quick move, hotbar synchronisation,
+duplication/loss conservation, recipe selection, category/search filters,
+missing ingredients, exact consumption, quantity maxima, repeated crafting,
+full output, atomic failure, table/furnace gating, the Character stats, distinct
+navigation, repeated tab switching and exact preview-rect stability.
 
-The runtime integration suite adds 28 assertions that open the real M40 screen
-over the game, verify the HUD hand-off, prove polled movement is inert while the
-screen is open, run a real grid craft, switch pages, close (restoring the
-HUD/interaction and movement) and reopen with an empty grid.
+The runtime suite adds 12 checks over the previous M40 section: real-scene page
+routing, the HUD hand-off, movement inert while open (and restored after),
+preview stability across focus/actions/Character/Crafting/return/reopen, a real
+recipe-browser craft, the amount dialog and the R shortcut, and the legacy
+crafting overlay staying closed.
 
 ## Runtime / visual verification
 
-Actual game captures (not mockups) are in this directory:
+Actual running-game captures (not mockups):
 
-- `m40-inventory-1280.png` — full screen at 1280x720, 35 real items, real table
-  nearby, wood-pickaxe grid and live result preview.
-- `m40-inventory-1600.png` — the same screen at 1600x900 (container/anchors, not
-  hardcoded to one resolution).
-- `m40-character-1280.png` — Character page with live Health 16/20 and Hunger
-  13/20.
-- `m40-hud-1280.png` — gameplay HUD with hearts/hunger, hotbar icons, durability
-  and control hint over the world.
-- `game-capture.json` — the 1280 capture metrics/hashes.
+- `m40v2-inventory-1280.png` — main inventory with the 64-item Grass actions
+  card, 6x5 grid, stable character preview, hotbar, hearts/hunger, controls.
+- `m40v2-inventory-1600.png` — the same screen at 1600x900.
+- `m40v2-character-1280.png` — distinct Character page with the shared Player
+  panel, inventory and real Stats.
+- `m40v2-crafting-1280.png` — Tools category, selected wood pickaxe, 3x3
+  pattern, station, ingredients and quantity.
+- `m40v2-crafting-missing-1280.png` — missing Gold Lump state, Max 0 and a
+  disabled Craft button.
+- `m40v2-amount-1280.png` — Select Amount dialog over the inventory.
+- `m40v2-hud-1280.png` — error-free gameplay HUD.
+- `m40v2-preview-bug-before.png` / `m40v2-preview-bug-after.png` — the
+  reproduced old defect (the preview grew from 236 to 433 px after selection).
 
-Capture command (representative):
+The fixed preview rect measured `(148, 119, 200, 290)` and stayed byte-for-byte
+the same across the runtime focus/actions/Character/Crafting/return/reopen
+checks.
 
-```
-Godot_v4.7.2-stable_mono_win64_console.exe --path godot -- --m40-capture \
-  --capture-name=m40-inventory-1280.png --settle=5 --health=16 --hunger=13
-```
+No runtime errors or failed resource loads occurred in the final captures or
+test runs.
 
-Observed in the captures: the nav/tab hierarchy, panel proportions, dark
-translucent panels with blue highlights, character/equipment layout, 9x3
-inventory grid with isometric block icons and readable counts, real 3x3 craft
-grid with output preview and table card, nine-slot hotbar with selection and
-durability, hearts/hunger at the bottom-left, contextual hints at the
-bottom-right, and a dimmed world behind. The 1600x900 capture confirms the layout
-stays usable at a second supported resolution. No runtime errors or failed
-resource loads occurred in the final capture or test runs.
+**Not directly verified:** no human mouse/keyboard play session was performed.
+Interactions were driven through the same handlers a mouse invokes, including
+real mouse-button events for middle-click/Ctrl in the unit suite, and polled
+movement was driven programmatically in the runtime suite. The visual review was
+an inspection of the rendered captures against the supplied references.
 
 ## Limitations
 
-- **Equipment:** VoxelWorld has no equipment/armour/off-hand gameplay. The six
-  slots are present, disabled and honestly labelled; no items or mechanics were
-  invented.
-- **Experience/level:** not implemented, so not displayed. No XP bar or level
-  number is shown.
-- **Map:** not implemented; the tab is disabled with a "Map is not available yet"
-  tooltip.
-- **Item dropping:** not an existing mechanic, so the reference's Q/drop hint is
-  not offered. The hints list only supported controls.
-- **Grid shape:** 9x3 for the 27-slot storage model rather than the reference's
-  6x5 mock grid.
-- **Icon depth:** block icons are isometric cubes; non-block items reuse the
-  existing flat 2D art rather than newly rendered 3D models. They are coherent,
-  correctly mapped and not placeholders.
-- **Background:** the world is subdued with a translucent dim, not blurred. The
-  brief permits "blurred or visually subdued".
-- The character preview is a first-party voxel model built for this screen
-  because the first-person game has no exported player model; it is not the
-  reference's exact character.
+- **Equipment, experience, defence and armour** are not implemented in
+  VoxelWorld. Equipment slots are display-only; experience/defence/armour show an
+  explicit "not implemented" note instead of values.
+- **Map** is disabled with a tooltip; **Use**, **Drop** and **Move to Chest** are
+  not offered because those mechanics do not exist.
+- The **legacy `CraftingPanel`** class and its unit tests remain for the existing
+  model-level test surface and the `--open-crafting` diagnostic. It is not
+  reachable from the tabs or the C key; the user-facing crafting menu is the new
+  page.
+- The storage grid is 6 columns × 5 rows because the model has 27 slots (the last
+  row is partial); the reference's mock grid is wider than that capacity.
+- Non-block icons are the existing 2D assets, not newly rendered 3D icons.
+- No formal performance benchmark was run. The preview now uses
+  `UPDATE_WHEN_VISIBLE`, the hidden screen skips inventory-driven rebuilds, and
+  the screen's static controls do not add per-frame work beyond the existing
+  vitals updates.
 
-## Recommended next steps
+## Recommendations
 
 1. Add an equipment model and armour items, then enable the six slots and draw
    equipped gear on the preview.
-2. Add experience/levels with a real XP source and a HUD display.
-3. Add a map screen (or keep the tab disabled).
-4. Consider 3D-rendered icons for tools/food if the flat art becomes the visual
+2. Add experience/levels with a real source and show them in Stats/HUD.
+3. Add a map screen, item dropping and chest-adjacent inventory actions if those
+   mechanics are introduced.
+4. Consider 3D icons for tools/food if the existing 2D art becomes the visual
    bottleneck.
-5. Consider a blur pass for the dimmed world if the visual brief is tightened.
+
+## Git
+
+The final working tree is clean. M40 v2 code and tests are in `c6bc97b`; the
+evidence/report commit follows it. The earlier M40 v1 commits remain in history
+and are superseded by this overhaul.
