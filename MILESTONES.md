@@ -2782,4 +2782,5 @@ not blurred.
 `m40-inventory-1280.png`, `m40-inventory-1600.png`, `m40-character-1280.png`,
 `m40-hud-1280.png`, `game-capture.json`.
 
-**Commits.** `195b105` (code, UI and tests); the evidence/report commit follows it.
+**Commits.** `195b105` (code, UI and tests), `13c574a` (report, captures, status
+and this record), `47fd5fa` (final HUD hint clearance and refreshed captures).

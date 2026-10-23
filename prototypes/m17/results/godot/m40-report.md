@@ -6,7 +6,9 @@ and reviewed against runtime captures.
 
 **Base:** `42a97b3` (`Consolidate project around Godot`), branch
 `codex/m34-canopy-composition`, clean working tree before the work.
-**Code commit:** `195b105` (`M40: implement inventory, crafting and gameplay UI`).
+**Code commits:** `195b105` (`M40: implement inventory, crafting and gameplay UI`)
+and `47fd5fa` (HUD hint clearance and refreshed captures).
+**Evidence commit:** `13c574a` (report, screenshots, status and milestone record).
 **Canonical project:** `C:\Users\Admin\Documents\Projects\VoxelWorld_Godot`.
 No other project copy, worktree or branch was created.
 

@@ -6,8 +6,9 @@ Updated: 2026-10-23
 
 - **Engine:** Godot 4; the active project is [`godot/project.godot`](godot/project.godot).
 - **Repository:** `C:\Users\Admin\Documents\Projects\VoxelWorld_Godot`, branch
-  `codex/m34-canopy-composition`. M40 code is commit
-  `195b105` (`M40: implement inventory, crafting and gameplay UI`).
+  `codex/m34-canopy-composition`. M40 code is commits `195b105`
+  (`M40: implement inventory, crafting and gameplay UI`) and `47fd5fa`
+  (`M40: finalize HUD hint clearance and refresh captures`).
 - The Godot project was promoted from `godot` to the top-level `godot/`
   folder. Its project-relative `res://` layout is preserved.
 - The previous Python + Ursina runtime and its Python tests, scripts, dependencies,
