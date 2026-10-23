@@ -2063,7 +2063,13 @@ func _stations_section() -> void:
 	inventory.clear_slot(0)
 	inventory.clear_slot(1)
 	inventory.clear_slot(2)
-	inventory.add(BlockDB.PLANKS, 4)
+	# The starter kit now begins with a full planks stack.  Remove every planks
+	# stack first so this stack-movement check has exactly one fresh source stack
+	# instead of merging into an unrelated partially used starter stack.
+	for index in Inventory.SIZE:
+		if inventory.item_at(index) == BlockDB.PLANKS:
+			inventory.clear_slot(index)
+	inventory.add(BlockDB.PLANKS, 12)
 	var planks_slot: int = inventory.slots.find(BlockDB.PLANKS)
 	_check(planks_slot >= 0, "the player holds planks for the grid")
 	var planks_before := inventory.count_of(BlockDB.PLANKS)

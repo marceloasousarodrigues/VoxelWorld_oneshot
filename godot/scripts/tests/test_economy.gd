@@ -147,8 +147,8 @@ func _scan_underground(world: VoxelWorld, wanted: Array) -> Dictionary:
 func _test_starter_kit_is_not_a_shortcut(h: TestHarness) -> void:
 	var inventory := Inventory.new()
 	inventory.give_starter_kit()
-	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE + 1,
-		"the starter kit fills the hotbar and one seed slot")
+	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE + 2,
+		"the starter kit fills the hotbar plus the table and seed slots")
 	for tool: int in [ItemDB.WOOD_PICKAXE, ItemDB.STONE_PICKAXE, ItemDB.IRON_PICKAXE]:
 		h.eq(inventory.count_of(tool), 0, "the starter kit grants no %s" % ItemDB.name_of(tool))
 	h.eq(inventory.count_of(ItemDB.IRON_INGOT), 0, "the starter kit grants no refined ingot")

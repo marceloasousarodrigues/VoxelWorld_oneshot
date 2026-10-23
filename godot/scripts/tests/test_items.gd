@@ -240,14 +240,21 @@ func _test_full_inventory(h: TestHarness) -> void:
 func _test_starter_kit_leaves_storage(h: TestHarness) -> void:
 	var inventory := Inventory.new()
 	inventory.give_starter_kit()
-	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE + 1, "the starter kit fills the hotbar and one seed slot")
-	h.eq(inventory.free_slot_count(), Inventory.MAIN_SIZE - 1, "26 of the 27 storage slots are free")
+	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE + 2,
+		"the starter kit fills the hotbar plus the table and seed storage slots")
+	h.eq(inventory.free_slot_count(), Inventory.MAIN_SIZE - 2, "25 of the 27 storage slots are free")
+	for index in Inventory.HOTBAR_SIZE:
+		h.eq(inventory.count_at(index), ItemDB.max_stack(inventory.item_at(index)),
+			"starter material slot %d holds a full stack" % index)
+	h.eq(inventory.count_of(BlockDB.CLAY), 64, "the starter kit includes a full stack of clay")
+	h.eq(inventory.count_of(BlockDB.CRAFTING_TABLE), 2,
+		"the utility crafting table keeps its small starter count")
 	h.eq(inventory.count_of(ItemDB.WHEAT_SEEDS), 8, "the starter kit provides wheat seeds for a first plot")
 	h.eq(inventory.add(ItemDB.IRON_LUMP, 1), 0, "a mined iron lump fits after spawn")
 	h.eq(inventory.count_of(ItemDB.IRON_LUMP), 1, "the iron lump is in the inventory")
 	h.eq(inventory.add(ItemDB.COAL, 1), 0, "coal also fits after spawn")
 	h.eq(inventory.add(ItemDB.APPLE, 1), 0, "a bonus drop also fits after spawn")
-	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE + 4, "each new item opened a storage slot")
+	h.eq(inventory.used_slots(), Inventory.HOTBAR_SIZE + 5, "each new item opened a storage slot")
 	var iron_slot := inventory.slots.find(ItemDB.IRON_LUMP)
 	h.check(iron_slot >= Inventory.MAIN_FIRST, "new material drops go to the storage rows")
 	h.check(inventory.select(iron_slot) == false, "a storage slot cannot become the held item")

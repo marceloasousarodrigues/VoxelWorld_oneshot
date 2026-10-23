@@ -51,28 +51,30 @@ func _init() -> void:
 
 ## Gives the player a starter kit so a new world is immediately buildable.
 ##
-## The kit fills the hotbar only; the 27 main slots stay empty, so the first
-## mining drop always has somewhere to go.  (Before M20 the nine-slot inventory
-## was full at spawn, which is why an iron/coal drop could be refused.)
+## Every building material in the hotbar starts as a full stack (64).  The 27
+## main slots stay empty, so the first mining drop still has somewhere to go.
+## (Before M20 the nine-slot inventory was full at spawn, which is why an
+## iron/coal drop could be refused.)
 func give_starter_kit() -> void:
+	var full := ItemDB.max_stack(BlockDB.STONE)
 	var kit: Array = [
-		[BlockDB.GRASS, 16],
-		[BlockDB.DIRT, 16],
-		[BlockDB.STONE, 16],
-		[BlockDB.PLANKS, 16],
-		[BlockDB.SAND, 16],
-		[BlockDB.GLASS, 8],
-		[BlockDB.COBBLESTONE, 16],
-		[BlockDB.OAK_LOG, 16],
-		[BlockDB.CRAFTING_TABLE, 2],
+		[BlockDB.GRASS, full],
+		[BlockDB.DIRT, full],
+		[BlockDB.STONE, full],
+		[BlockDB.PLANKS, full],
+		[BlockDB.SAND, full],
+		[BlockDB.GLASS, full],
+		[BlockDB.COBBLESTONE, full],
+		[BlockDB.OAK_LOG, full],
+		[BlockDB.CLAY, full],
 	]
 	for index in HOTBAR_SIZE:
 		slots[index] = int(kit[index][0])
 		counts[index] = int(kit[index][1])
 		durability[index] = _initial_durability(int(kit[index][0]))
-	# A small farming starter: eight wheat seeds in the first storage slot, so a
-	# new player can plant a plot without first finding tall grass.  The hotbar
-	# stays exactly the building kit.
+	# The crafting table is a utility station, not a building material; it and a
+	# small farming starter live in storage so the hotbar stays all full stacks.
+	add(BlockDB.CRAFTING_TABLE, 2)
 	add(ItemDB.WHEAT_SEEDS, 8)
 	changed.emit()
 
