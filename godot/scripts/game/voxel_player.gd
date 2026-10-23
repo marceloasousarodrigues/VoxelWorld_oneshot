@@ -258,15 +258,23 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
+	# `can_interact` is the game layer's "the world owns the input" flag.  It is
+	# cleared while an inventory/crafting/settings/station overlay or the death
+	# screen owns the mouse.  Movement must respect it too: polling WASD directly
+	# here would otherwise walk the player behind an open interface even though
+	# `_unhandled_input` correctly ignores discrete gameplay actions.
+	var input := Vector2.ZERO
+	var wants_sprint := false
+	if can_interact:
+		input = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
+		wants_sprint = Input.is_action_pressed("sprint")
 	var basis := look_basis()
 	var direction := basis * Vector3(input.x, 0.0, input.y)
-	var wants_sprint := Input.is_action_pressed("sprint")
 	if flying:
 		var vertical := 0.0
-		if Input.is_action_pressed("jump"):
+		if can_interact and Input.is_action_pressed("jump"):
 			vertical += 1.0
-		if Input.is_action_pressed("crouch"):
+		if can_interact and Input.is_action_pressed("crouch"):
 			vertical -= 1.0
 		var speed := fly_speed * (sprint_multiplier if wants_sprint else 1.0)
 		velocity = (direction + Vector3.UP * clampf(vertical, -1.0, 1.0)) * speed
@@ -277,7 +285,7 @@ func _physics_process(delta: float) -> void:
 		velocity.x = direction.x * speed
 		velocity.z = direction.z * speed
 		if is_on_floor():
-			if Input.is_action_just_pressed("jump"):
+			if can_interact and Input.is_action_just_pressed("jump"):
 				velocity.y = jump_velocity
 			elif velocity.y < 0.0:
 				velocity.y = -1.0

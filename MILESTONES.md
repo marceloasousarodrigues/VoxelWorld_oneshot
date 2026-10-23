@@ -2760,8 +2760,8 @@ verification.
 
 **Verified.**
 - Unit `M17_TESTS_PASS 3043 assertions` (baseline 2923; 120 new M40 assertions).
-- Integration `M17_INTEGRATION_PASS 489 assertions` (baseline 463; 26 new
-  real-scene M40 checks).
+- Integration `M17_INTEGRATION_PASS 491 assertions` (baseline 463; 28 new
+  real-scene M40 checks, including an input-gate regression).
 - Regression `M17_REGRESSION_PASS assertions=52`.
 - Runtime captures at 1280x720 and 1600x900 plus the Character page and HUD,
   all rendered from the running game with no runtime errors or failed resource

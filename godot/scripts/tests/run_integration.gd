@@ -1442,6 +1442,18 @@ func _m40_section() -> void:
 	_check(panel.slot_count() == Inventory.SIZE,
 		"the runtime screen still exposes exactly the 27+9 player slots")
 
+	# Polled WASD is a separate input path from `_unhandled_input`.  The player
+	# must not walk behind the open screen.
+	player.flying = false
+	player.velocity = Vector3.ZERO
+	Input.action_press("move_forward")
+	await physics_frame
+	await physics_frame
+	_check(Vector2(player.velocity.x, player.velocity.z).length() < 0.05,
+		"WASD movement is inert while the M40 screen is open")
+	Input.action_release("move_forward")
+	player.velocity = Vector3.ZERO
+
 	# Craft sticks through the real grid: two planks, the hand recipe, the result.
 	var free: int = inventory.slots.find(BlockDB.AIR)
 	_check(free >= 0, "the runtime inventory has a free slot for the grid check")
@@ -1472,6 +1484,23 @@ func _m40_section() -> void:
 	_check(_game.hud.visible, "the gameplay HUD returns after closing")
 	_check(player.can_interact, "closing the M40 screen restores interaction")
 	_check(panel.craft_grid_item(0) == BlockDB.AIR, "closing clears the transient grid")
+
+	# Movement comes back after closing.
+	player.flying = false
+	player.teleport_to(Vector3(8.5, float(_test_pad_y + 1), 8.5))
+	player.look_pitch(-10.0)
+	player.velocity = Vector3.ZERO
+	await physics_frame
+	Input.action_press("move_forward")
+	await physics_frame
+	await physics_frame
+	_check(Vector2(player.velocity.x, player.velocity.z).length() > 0.1,
+		"WASD movement returns after closing the M40 screen")
+	Input.action_release("move_forward")
+	player.velocity = Vector3.ZERO
+	player.teleport_to(Vector3(8.5, float(_test_pad_y + 1), 8.5))
+	await physics_frame
+
 	_game._open_inventory()
 	await process_frame
 	_check(panel.is_open(), "the M40 screen reopens")

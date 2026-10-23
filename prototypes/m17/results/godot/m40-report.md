@@ -9,6 +9,7 @@ and reviewed against runtime captures.
 **Code commits:** `195b105` (`M40: implement inventory, crafting and gameplay UI`)
 and `47fd5fa` (HUD hint clearance and refreshed captures).
 **Evidence commit:** `13c574a` (report, screenshots, status and milestone record).
+A follow-up commit gates polled WASD/jump input while an overlay owns the mouse.
 **Canonical project:** `C:\Users\Admin\Documents\Projects\VoxelWorld_Godot`.
 No other project copy, worktree or branch was created.
 
@@ -144,6 +145,13 @@ Implementation issues found during verification and fixed:
    full body.
 5. The transient crafting grid initially risked being omitted from saves; saves
    now use `flush_all()` (cursor + grid).
+6. **Pre-existing input defect:** `VoxelPlayer._physics_process` polled WASD,
+   jump and fly input directly, so the player could walk behind an open
+   inventory/crafting/settings/station panel (or the pause menu) even though
+   `_unhandled_input` correctly ignored gameplay actions. Polled movement now
+   respects the same `can_interact` gate. A real-scene regression presses
+   `move_forward` while the screen is open (velocity stays inert) and again after
+   closing (movement returns).
 
 ## Automated verification
 
@@ -158,7 +166,7 @@ Godot_v4.7.2-stable_mono_win64_console.exe --headless --path godot --script res:
 | Suite | Baseline | Final |
 | --- | --- | --- |
 | Unit (`run_tests.gd`) | 2923 assertions | **3043 assertions** |
-| Integration (`run_integration.gd`) | 463 assertions | **489 assertions** |
+| Integration (`run_integration.gd`) | 463 assertions | **491 assertions** |
 | Regression (`regression.gd`) | 52 assertions | **52 assertions** |
 
 `godot/scripts/tests/test_m40_inventory_ui.gd` adds 120 assertions covering:
@@ -169,9 +177,10 @@ crafting, station gating, atomic failures, displayed quantities, empty slots,
 grid return on close with a full inventory, equipment presentation, navigation
 and real health/hunger display (and the absence of invented XP/level).
 
-The runtime integration suite adds 26 assertions that open the real M40 screen
-over the game, verify the HUD hand-off, run a real grid craft, switch pages,
-close (restoring the HUD/interaction) and reopen with an empty grid.
+The runtime integration suite adds 28 assertions that open the real M40 screen
+over the game, verify the HUD hand-off, prove polled movement is inert while the
+screen is open, run a real grid craft, switch pages, close (restoring the
+HUD/interaction and movement) and reopen with an empty grid.
 
 ## Runtime / visual verification
 

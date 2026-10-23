@@ -35,8 +35,8 @@ Updated: 2026-10-23
 Validated with Godot 4.7.2 after the M40 implementation:
 
 - Unit suite: `M17_TESTS_PASS 3043 assertions` (M40 baseline: 2923).
-- Integration suite: `M17_INTEGRATION_PASS 489 assertions` (baseline: 463;
-  includes 26 real-scene M40 checks).
+- Integration suite: `M17_INTEGRATION_PASS 491 assertions` (baseline: 463;
+  includes 28 real-scene M40 checks).
 - Regression: `M17_REGRESSION_PASS assertions=52`.
 - Runtime captures: `prototypes/m17/results/godot/m40-inventory-1280.png`,
   `m40-inventory-1600.png`, `m40-character-1280.png`, `m40-hud-1280.png`.
