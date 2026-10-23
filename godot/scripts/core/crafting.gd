@@ -119,6 +119,9 @@ static func _build_catalogue() -> Array:
 			{BlockDB.PLANKS: 6, ItemDB.IRON_INGOT: 1}, BlockDB.BARREL, 1),
 		_shaped("lantern", "Building", STATION_TABLE, [" I ", "ICI", " I "],
 			{"I": ItemDB.IRON_INGOT, "C": ItemDB.COAL}, BlockDB.LANTERN, 1),
+		# Leaf uses: every leaf type can be composted into dirt or turned into
+		# decorative bushes.  Keeping one recipe per type means no canopy is
+		# second-class, and both recipes work by hand.
 		# --- Tools ---------------------------------------------------------
 		# Wooden: the first pickaxe, from planks and sticks.
 		_shaped("wood_pickaxe", "Tools", STATION_TABLE, ["PPP", " S ", " S "],
@@ -169,6 +172,18 @@ static func _build_catalogue() -> Array:
 		_shapeless("golden_apple", "Food", STATION_TABLE,
 			{ItemDB.APPLE: 1, ItemDB.GOLD_LUMP: 8}, ItemDB.GOLDEN_APPLE, 1),
 	]
+	for leaf: Array in [
+		["oak", BlockDB.OAK_LEAVES],
+		["pine", BlockDB.PINE_LEAVES],
+		["birch", BlockDB.BIRCH_LEAVES],
+		["blossom", BlockDB.BLOSSOM_LEAVES],
+	]:
+		var leaf_name := str(leaf[0])
+		var leaf_id := int(leaf[1])
+		recipes.append(_shapeless("leaf_compost_%s" % leaf_name, "Basics",
+			STATION_HAND, {leaf_id: 8}, BlockDB.DIRT, 1))
+		recipes.append(_shapeless("leaf_hedge_%s" % leaf_name, "Building",
+			STATION_HAND, {leaf_id: 4}, BlockDB.BUSH, 2))
 	return recipes
 
 

@@ -484,9 +484,47 @@ func _test_best_station(h: TestHarness) -> void:
 	h.eq(Crafting.best_station(world, origin, 3), Crafting.STATION_TABLE, "removing the furnace falls back to the table")
 
 
+## Every leaf type has a real use: compost into dirt and a decorative bush
+## recipe.  Both are hand recipes, so a canopy is never dead weight.
+func _test_leaf_recipes(h: TestHarness) -> void:
+	h.section("leaf recipes")
+	for leaf: Array in [
+		["oak", BlockDB.OAK_LEAVES],
+		["pine", BlockDB.PINE_LEAVES],
+		["birch", BlockDB.BIRCH_LEAVES],
+		["blossom", BlockDB.BLOSSOM_LEAVES],
+	]:
+		var leaf_name := str(leaf[0])
+		var leaf_id := int(leaf[1])
+		var compost := Crafting.recipe("leaf_compost_%s" % leaf_name)
+		h.eq(compost.get("output"), BlockDB.DIRT,
+			"%s leaves compost into dirt" % leaf_name)
+		h.eq(compost.get("station"), Crafting.STATION_HAND,
+			"%s compost works by hand" % leaf_name)
+		var inventory := Inventory.new()
+		inventory.add(leaf_id, 8)
+		var crafted: Dictionary = Crafting.craft(inventory, compost, Crafting.STATION_HAND)
+		h.check(bool(crafted["ok"]), "%s compost crafts" % leaf_name)
+		h.eq(inventory.count_of(leaf_id), 0, "%s compost consumes eight leaves" % leaf_name)
+		h.eq(inventory.count_of(BlockDB.DIRT), 1, "%s compost yields one dirt" % leaf_name)
+
+		var hedge := Crafting.recipe("leaf_hedge_%s" % leaf_name)
+		h.eq(hedge.get("output"), BlockDB.BUSH,
+			"%s leaves make a bush" % leaf_name)
+		h.eq(hedge.get("station"), Crafting.STATION_HAND,
+			"%s bush recipe works by hand" % leaf_name)
+		inventory = Inventory.new()
+		inventory.add(leaf_id, 4)
+		crafted = Crafting.craft(inventory, hedge, Crafting.STATION_HAND)
+		h.check(bool(crafted["ok"]), "%s bush recipe crafts" % leaf_name)
+		h.eq(inventory.count_of(leaf_id), 0, "%s bush recipe consumes four leaves" % leaf_name)
+		h.eq(inventory.count_of(BlockDB.BUSH), 2, "%s bush recipe yields two bushes" % leaf_name)
+
+
 func run(h: TestHarness) -> void:
 	_test_catalogue_integrity(h)
 	_test_everything_is_reachable(h)
+	_test_leaf_recipes(h)
 	_test_shaped_and_shapeless(h)
 	_test_validate_rejects(h)
 	_test_can_craft_and_consume(h)

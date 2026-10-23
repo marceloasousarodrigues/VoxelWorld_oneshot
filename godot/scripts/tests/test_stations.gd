@@ -180,6 +180,13 @@ func _test_smelting_rules(h: TestHarness) -> void:
 	h.approx(Smelting.fuel_seconds(BlockDB.STONE), 0.0, 1e-6, "stone is not fuel")
 	h.check(Smelting.is_fuel(ItemDB.COAL), "coal is fuel")
 	h.check(not Smelting.is_fuel(ItemDB.IRON_LUMP), "iron lump is not fuel")
+	for leaf_id: int in [BlockDB.OAK_LEAVES, BlockDB.PINE_LEAVES,
+			BlockDB.BIRCH_LEAVES, BlockDB.BLOSSOM_LEAVES]:
+		h.check(Smelting.is_fuel(leaf_id), "%s is fuel" % BlockDB.name_of(leaf_id))
+		h.approx(Smelting.fuel_seconds(leaf_id), 2.0, 1e-6,
+			"%s burns for two seconds" % BlockDB.name_of(leaf_id))
+		h.less(Smelting.fuel_seconds(leaf_id), Smelting.fuel_seconds(ItemDB.STICK),
+			"%s is weaker than a stick" % BlockDB.name_of(leaf_id))
 
 	h.check(Smelting.is_smeltable(ItemDB.IRON_LUMP), "iron lump is smeltable")
 	h.check(not Smelting.is_smeltable(BlockDB.PLANKS), "planks are not smeltable")

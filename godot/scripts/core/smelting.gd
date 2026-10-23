@@ -20,6 +20,12 @@ const FUEL_SECONDS := {
 	BlockDB.PLANKS: 12.0,
 	BlockDB.CRAFTING_TABLE: 12.0,
 	ItemDB.STICK: 4.0,
+	# Leaves make a quick, weak fire: useful for small batches but not a
+	# replacement for logs or coal.
+	BlockDB.OAK_LEAVES: 2.0,
+	BlockDB.PINE_LEAVES: 2.0,
+	BlockDB.BIRCH_LEAVES: 2.0,
+	BlockDB.BLOSSOM_LEAVES: 2.0,
 }
 
 ## Most items take this long to smelt.  A recipe may override it with a `time`

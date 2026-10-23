@@ -80,6 +80,20 @@ func _test_cooking_chain(h: TestHarness) -> void:
 	h.check(bool(effect["improved"]), "cooked meat is a real meal")
 	h.greater(float(effect["hunger"]), 5.0, "eating cooked meat restores hunger")
 
+	# Leaves are a real, weak furnace fuel: three two-second leaves are needed to
+	# finish one six-second cook.
+	var leaf_furnace := Station.new(Station.FURNACE)
+	leaf_furnace.inventory.insert(Station.FURNACE_INPUT_SLOT,
+		{"item": BlockDB.SAND, "count": 1})
+	leaf_furnace.inventory.insert(Station.FURNACE_FUEL_SLOT,
+		{"item": BlockDB.OAK_LEAVES, "count": 3})
+	for step in 3:
+		leaf_furnace.step(2.0)
+	h.eq(leaf_furnace.inventory.total_of(BlockDB.GLASS), 1,
+		"leaves burn long enough to smelt glass")
+	h.eq(leaf_furnace.inventory.total_of(BlockDB.OAK_LEAVES), 0,
+		"one six-second cook consumes three leaves")
+
 
 func _test_farming(h: TestHarness) -> void:
 	h.section("M21 wheat farming")
