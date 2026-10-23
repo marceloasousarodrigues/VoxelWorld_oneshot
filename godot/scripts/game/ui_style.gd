@@ -169,3 +169,68 @@ static func hotbar_style() -> StyleBoxFlat:
 	style.set_corner_radius_all(9)
 	style.set_content_margin_all(6)
 	return style
+
+
+# --- M40 v2: recipe browser, actions and amount dialog --------------------
+
+## A recipe tile.  Selected tiles use the blue selection border; unavailable
+## tiles stay legible but are dimmed by the caller.
+static func recipe_tile_style(selected: bool, hovered: bool = false) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.075, 0.095, 0.130, 0.96) if selected \
+		else (Color(0.085, 0.105, 0.140, 0.94) if hovered else Color(0.045, 0.058, 0.080, 0.92))
+	style.border_color = SLOT_BORDER_SELECTED if selected \
+		else (Color(0.72, 0.86, 1.0, 0.55) if hovered else Color(0.62, 0.74, 0.90, 0.18))
+	style.set_border_width_all(2 if selected else 1)
+	style.set_corner_radius_all(7)
+	style.set_content_margin_all(4)
+	return style
+
+
+static func category_style(selected: bool, hovered: bool = false) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = TAB_SELECTED_BG if selected \
+		else (TAB_HOVER_BG if hovered else Color(0, 0, 0, 0))
+	style.border_color = TAB_SELECTED_BORDER if selected \
+		else (Color(0.62, 0.74, 0.90, 0.20) if hovered else Color(0, 0, 0, 0))
+	style.set_border_width_all(1 if selected or hovered else 0)
+	style.set_corner_radius_all(6)
+	style.set_content_margin_all(8)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	return style
+
+
+static func dialog_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.047, 0.068, 0.985)
+	style.border_color = Color(0.62, 0.78, 0.98, 0.55)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(12)
+	style.set_content_margin_all(18)
+	return style
+
+
+## Primary (blue) and secondary action buttons for the details/actions panels.
+static func button_style(primary: bool, pressed: bool = false) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	if primary:
+		style.bg_color = Color(0.10, 0.30, 0.52, 0.98) if not pressed else Color(0.08, 0.24, 0.42, 0.98)
+		style.border_color = Color(0.38, 0.70, 1.0, 0.95)
+	else:
+		style.bg_color = Color(0.075, 0.095, 0.125, 0.94) if not pressed else Color(0.11, 0.14, 0.18, 0.94)
+		style.border_color = Color(0.62, 0.74, 0.90, 0.24)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(6)
+	style.set_content_margin_all(7)
+	return style
+
+
+static func button_disabled_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.045, 0.055, 0.075, 0.72)
+	style.border_color = Color(0.62, 0.74, 0.90, 0.10)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(6)
+	style.set_content_margin_all(7)
+	return style

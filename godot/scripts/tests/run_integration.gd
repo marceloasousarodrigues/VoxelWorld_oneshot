@@ -1429,10 +1429,12 @@ func _m40_section() -> void:
 	_game._open_inventory()
 	await process_frame
 	_check(panel.is_open(), "the M40 screen opens in the real scene")
+	_check(panel.page() == InventoryPanel.PAGE_INVENTORY,
+		"the I key opens the Inventory page")
 	_check(not _game.hud.visible, "the gameplay HUD yields to the M40 screen")
-	_check(panel.craft_grid_slot_count() == 9, "the screen exposes the real 3x3 grid")
 	_check(not panel.nav_enabled("map"), "the Map tab is explicitly unavailable")
 	_check(panel.nav_enabled("character"), "the Character tab is available")
+	_check(panel.nav_enabled("crafting"), "the Crafting tab is available")
 	_check(not panel.equipment_enabled(),
 		"equipment stays disabled because the game has no equipment system")
 	_check(panel.vitals_text().contains("Health"), "the screen shows the live health value")
@@ -1441,6 +1443,21 @@ func _m40_section() -> void:
 		"the screen never invents an experience value")
 	_check(panel.slot_count() == Inventory.SIZE,
 		"the runtime screen still exposes exactly the 27+9 player slots")
+
+	# The reported preview-scaling regression: select stacks, change pages and
+	# select a recipe without changing the preview rect.
+	var preview_rect := panel.character_preview_rect()
+	_check(preview_rect.size.x > 0.0 and preview_rect.size.y > 0.0,
+		"the runtime preview has a real rect")
+	panel.focus_slot(9)
+	await process_frame
+	_check(panel.character_preview_rect() == preview_rect,
+		"focusing an inventory slot leaves the preview rect stable")
+	panel.open_context_menu(9)
+	await process_frame
+	_check(panel.character_preview_rect() == preview_rect,
+		"opening item actions leaves the preview rect stable")
+	panel.close_context_menu()
 
 	# Polled WASD is a separate input path from `_unhandled_input`.  The player
 	# must not walk behind the open screen.
@@ -1454,36 +1471,77 @@ func _m40_section() -> void:
 	Input.action_release("move_forward")
 	player.velocity = Vector3.ZERO
 
-	# Craft sticks through the real grid: two planks, the hand recipe, the result.
+	# Character and Crafting are distinct pages.
+	panel.press_nav("character")
+	await process_frame
+	_check(panel.page() == InventoryPanel.PAGE_CHARACTER,
+		"the Character tab opens the Character page")
+	_check(panel.stats_text().contains("Health") or panel.stats_text().contains("Attack"),
+		"the Character page shows real stats")
+	_check(panel.character_preview_rect() == preview_rect,
+		"the Character page keeps the preview rect stable (%s -> %s)" % [
+			preview_rect, panel.character_preview_rect()])
+	panel.press_nav("crafting")
+	await process_frame
+	_check(panel.page() == InventoryPanel.PAGE_CRAFTING,
+		"the Crafting tab opens the Crafting page")
+	_check(not _game.crafting.is_open(),
+		"the Crafting tab does not open the legacy crafting overlay")
+	_check(not panel.character_preview_visible(),
+		"the preview is hidden on the Crafting page")
+
+	# A real transaction through the redesigned crafting page.
 	var free: int = inventory.slots.find(BlockDB.AIR)
-	_check(free >= 0, "the runtime inventory has a free slot for the grid check")
+	_check(free >= 0, "the runtime inventory has a free slot for the crafting check")
 	if free >= 0:
 		inventory.put_stack(free, {"item": BlockDB.PLANKS, "count": 2})
 		var planks_before := inventory.count_of(BlockDB.PLANKS)
+		var sticks_before := inventory.count_of(ItemDB.STICK)
 		panel.set_station(Crafting.STATION_HAND)
-		_check(panel.pick_up(free), "the runtime grid takes a stack from the inventory")
-		_check(panel.craft_click(0), "the runtime grid accepts the planks")
-		_check(panel.craft_press(), "the runtime grid crafts the real stick recipe")
-		_check(int(panel.craft_output().get("item", BlockDB.AIR)) == ItemDB.STICK,
-			"the runtime result slot holds the crafted sticks")
-		_check(panel.craft_click(9), "the runtime result can be taken")
-		panel.flush_cursor()
+		_check(panel.select_recipe("sticks"), "the runtime recipe browser selects sticks")
+		panel.set_craft_quantity(1)
+		_check(panel.craft_selected(), "the runtime recipe browser crafts sticks")
 		_check(inventory.count_of(BlockDB.PLANKS) == planks_before - 2,
-			"exactly two planks were consumed by the runtime craft")
-		_check(inventory.count_of(ItemDB.STICK) > 0,
-			"the crafted sticks reached the player inventory")
+			"the runtime craft consumed exactly two planks")
+		_check(inventory.count_of(ItemDB.STICK) == sticks_before + 4,
+			"the runtime craft produced four sticks")
 
-	panel.set_page("character")
-	_check(panel.page() == "character", "the Character page opens in the runtime screen")
+	# The amount dialog works in the real scene, without duplication.
+	free = inventory.slots.find(BlockDB.AIR)
+	if free >= 0:
+		inventory.put_stack(free, {"item": BlockDB.STONE, "count": 10})
+		var stone_total := inventory.count_of(BlockDB.STONE)
+		panel.set_page(InventoryPanel.PAGE_INVENTORY)
+		_check(panel.open_amount_dialog(free) == 10, "the amount dialog opens on the slot")
+		panel.set_amount_value(3)
+		_check(panel.confirm_amount(), "the amount dialog confirms three stones")
+		_check(int(panel.carried().get("count", 0)) == 3, "three stones are carried")
+		panel.flush_cursor()
+		_check(inventory.count_of(BlockDB.STONE) == stone_total,
+			"the amount dialog conserved every stone")
+
+	# R is the explicit quantity shortcut while the screen owns the mouse.
+	if free >= 0:
+		panel.focus_slot(9)
+		var r_event := InputEventAction.new()
+		r_event.action = "rotate_placement"
+		r_event.pressed = true
+		_game._unhandled_input(r_event)
+		_check(panel.amount_dialog_open(), "R opens the amount dialog in the real scene")
+		panel.cancel_amount()
+
 	panel.press_nav("inventory")
-	_check(panel.page() == "inventory", "the Inventory page returns in the runtime screen")
+	await process_frame
+	_check(panel.page() == InventoryPanel.PAGE_INVENTORY, "the Inventory page returns")
+	_check(panel.character_preview_rect() == preview_rect,
+		"returning to Inventory keeps the preview rect stable (%s -> %s)" % [
+			preview_rect, panel.character_preview_rect()])
 
 	_game._close_inventory()
 	await process_frame
 	_check(not panel.is_open(), "the M40 screen closes")
 	_check(_game.hud.visible, "the gameplay HUD returns after closing")
 	_check(player.can_interact, "closing the M40 screen restores interaction")
-	_check(panel.craft_grid_item(0) == BlockDB.AIR, "closing clears the transient grid")
 
 	# Movement comes back after closing.
 	player.flying = false
@@ -1504,7 +1562,9 @@ func _m40_section() -> void:
 	_game._open_inventory()
 	await process_frame
 	_check(panel.is_open(), "the M40 screen reopens")
-	_check(panel.craft_grid_item(0) == BlockDB.AIR, "reopening starts with an empty grid")
+	_check(panel.page() == InventoryPanel.PAGE_INVENTORY, "reopening starts on Inventory")
+	_check(panel.character_preview_rect() == preview_rect,
+		"reopening keeps the preview rect stable")
 	_game._close_inventory()
 	await process_frame
 

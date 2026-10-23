@@ -133,6 +133,10 @@ var _options := {
 	"open_settings": false,
 	"m40_capture": false,
 	"inventory_page": "inventory",
+	"m40_recipe": "wood_pickaxe",
+	"m40_quantity": 0,
+	"m40_dialog": "",
+	"m40_category": "",
 	"station_capture": "",
 	"build_demo": "",
 	"final_demo": "",
@@ -429,6 +433,7 @@ func _build_ui() -> void:
 		if hud != null:
 			hud.visible = not bool(_options["hide_hud"]))
 	inventory_panel.navigate.connect(_on_inventory_navigate)
+	inventory_panel.crafted.connect(_on_crafted)
 
 	# The station interface (M19) shares the overlay layer: only one panel is
 	# open at a time, and the station panel is opened at the world object the
@@ -529,7 +534,19 @@ func _parse_arguments() -> void:
 				_options["open_inventory"] = true
 				_options["m40_capture"] = true
 			"--inventory-page":
-				_options["inventory_page"] = value.to_lower() if value.to_lower() in ["inventory", "character"] else "inventory"
+				_options["inventory_page"] = value.to_lower() if value.to_lower() in ["inventory", "character", "crafting"] else "inventory"
+			"--m40-recipe":
+				_options["m40_recipe"] = value
+			"--m40-category":
+				_options["m40_category"] = value
+			"--m40-quantity":
+				_options["m40_quantity"] = value.to_int()
+			"--m40-dialog":
+				_options["m40_dialog"] = value.to_lower()
+			"--m40-select":
+				# Diagnostic: focus a slot after seeding, so a capture can compare
+				# the character preview before and after a selection.
+				_options["m40_select"] = value.to_int()
 			"--find-structure":
 				# Diagnostic: teleport to the nearest placed structure (optionally of
 				# a given id) so a capture can show one without a long walk.
@@ -866,14 +883,38 @@ func _prepare_m40_capture() -> void:
 	inventory.select(0)
 	_place_m40_capture_table()
 	inventory_panel.set_station(_current_station())
-	inventory_panel.debug_seed_crafting_grid([
-		[0, BlockDB.PLANKS, 1], [1, BlockDB.PLANKS, 1], [2, BlockDB.PLANKS, 1],
-		[4, ItemDB.STICK, 1], [7, ItemDB.STICK, 1],
-	])
-	inventory_panel.set_page(str(_options.get("inventory_page", "inventory")))
+	var page := str(_options.get("inventory_page", "inventory"))
+	inventory_panel.set_page(page)
 	_refresh_inventory_vitals()
-	print("M17_M40_CAPTURE items=%d grid=wood_pickaxe station=%s page=%s" % [
+	var before := inventory_panel.character_preview_rect()
+	print("M17_M40_PREVIEW before=%s viewport=%s" % [
+		before, inventory_panel.character_preview_viewport_size()])
+	var dialog := str(_options.get("m40_dialog", ""))
+	if page == InventoryPanel.PAGE_CRAFTING:
+		var category := str(_options.get("m40_category", ""))
+		if not category.is_empty():
+			inventory_panel.set_craft_category(category)
+		inventory_panel.select_recipe(str(_options.get("m40_recipe", "wood_pickaxe")))
+		var quantity := int(_options.get("m40_quantity", 1))
+		if quantity > 0:
+			inventory_panel.set_craft_quantity(quantity)
+	elif dialog == "amount":
+		var slot := int(_options.get("m40_select", 9))
+		var amount := int(_options.get("m40_quantity", 0))
+		if amount <= 0:
+			amount = 32
+		inventory_panel.debug_open_amount(slot, amount)
+	elif dialog == "context":
+		inventory_panel.debug_open_context(int(_options.get("m40_select", 9)))
+	elif _options.has("m40_select"):
+		inventory_panel.focus_slot(int(_options["m40_select"]))
+	await get_tree().process_frame
+	print("M17_M40_PREVIEW after=%s viewport=%s" % [
+		inventory_panel.character_preview_rect(),
+		inventory_panel.character_preview_viewport_size()])
+	print("M17_M40_CAPTURE items=%d station=%s page=%s recipe=%s qty=%d" % [
 		inventory.used_slots(), inventory_panel.station(), inventory_panel.page(),
+		inventory_panel.selected_recipe_id(), inventory_panel.craft_quantity(),
 	])
 
 
@@ -1655,7 +1696,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("release_mouse"):
 		if state == State.PLAYING and inventory_panel != null and inventory_panel.is_open():
-			# Escape closes the inventory before it would pause the game.
+			# Escape first cancels a dialog/menu or returns a carried stack; only
+			# a second Escape closes the screen.  Closing also flushes safely.
+			if inventory_panel.handle_cancel():
+				return
 			_close_inventory()
 		elif state == State.PLAYING and settings_panel != null and settings_panel.is_open():
 			# Escape closes the settings panel before it would pause the game.
@@ -1685,9 +1729,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.is_action_pressed("open_settings"):
 			_toggle_settings()
 		elif event.is_action_pressed("open_crafting"):
-			_toggle_crafting()
+			_open_crafting_page()
 		elif event.is_action_pressed("open_inventory"):
 			_toggle_inventory()
+		elif event.is_action_pressed("rotate_placement") and inventory_panel != null \
+				and inventory_panel.is_open() and inventory_panel.page() != InventoryPanel.PAGE_CRAFTING:
+			# R is the explicit "select amount" shortcut while the inventory owns
+			# the mouse; it never rotates a world placement in that state.
+			inventory_panel.open_amount_dialog(inventory_panel.focused_index())
 		elif _overlay_open():
 			# The open overlay owns the mouse; ignore gameplay input.
 			pass
@@ -1785,6 +1834,8 @@ func _on_crafted(result: Dictionary) -> void:
 	# a robot/paste could), and the affordability of every row just changed.
 	if crafting != null and crafting.is_open():
 		crafting.set_station(_current_station())
+	if inventory_panel != null and inventory_panel.is_open():
+		inventory_panel.set_station(_current_station())
 	hud.refresh()
 
 
@@ -2017,12 +2068,15 @@ func _toggle_inventory() -> void:
 	if inventory_panel == null:
 		return
 	if inventory_panel.is_open():
-		_close_inventory()
+		if inventory_panel.page() == InventoryPanel.PAGE_INVENTORY:
+			_close_inventory()
+		else:
+			inventory_panel.set_page(InventoryPanel.PAGE_INVENTORY)
 	else:
-		_open_inventory()
+		_open_inventory(InventoryPanel.PAGE_INVENTORY)
 
 
-func _open_inventory() -> void:
+func _open_inventory(target_page: String = InventoryPanel.PAGE_INVENTORY) -> void:
 	if inventory_panel == null or state != State.PLAYING:
 		return
 	# The three overlays are mutually exclusive: opening one closes the others.
@@ -2036,13 +2090,28 @@ func _open_inventory() -> void:
 	if station_panel != null and station_panel.is_open():
 		if not station_panel.close():
 			return
-	# The screen's crafting grid is gated by the station the player really has,
-	# and its vitals are the live survival state.
+	# The screen's crafting page is gated by the station the player really has,
+	# and its vitals/stats are the live survival state.
 	inventory_panel.set_station(_current_station())
 	_refresh_inventory_vitals()
+	inventory_panel.set_page(target_page)
 	inventory_panel.open()
 	player.can_interact = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+## C opens the redesigned crafting page inside the screen.  It is a page, not a
+## separate overlay, so the Character tab can never route into crafting.
+func _open_crafting_page() -> void:
+	if inventory_panel == null or state != State.PLAYING:
+		return
+	if inventory_panel.is_open():
+		if inventory_panel.page() == InventoryPanel.PAGE_CRAFTING:
+			_close_inventory()
+		else:
+			inventory_panel.set_page(InventoryPanel.PAGE_CRAFTING)
+		return
+	_open_inventory(InventoryPanel.PAGE_CRAFTING)
 
 
 ## Pushes the authoritative survival values into the open inventory screen.  The
@@ -2054,18 +2123,15 @@ func _refresh_inventory_vitals() -> void:
 	inventory_panel.set_vitals(health.health, health.max_health, hunger,
 		Survival.MAX_HUNGER, breath, Survival.MAX_BREATH,
 		submerged or breath < Survival.MAX_BREATH - 0.001)
+	inventory_panel.set_player_stats(player.move_speed if player != null else 5.4)
 
 
-## The inventory screen's navigation: Crafting and Settings open the existing
-## overlays; Map is unavailable and never reaches this handler.
+## The inventory screen's external navigation.  Inventory/Crafting/Character are
+## internal pages; only Settings leaves the screen.  Map never reaches here.
 func _on_inventory_navigate(target: String) -> void:
 	if state != State.PLAYING:
 		return
 	match target:
-		"crafting":
-			if inventory_panel != null and inventory_panel.is_open() and not inventory_panel.close():
-				return
-			_open_crafting()
 		"settings":
 			if inventory_panel != null and inventory_panel.is_open() and not inventory_panel.close():
 				return

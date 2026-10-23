@@ -1,30 +1,32 @@
 class_name InventoryPanel
 extends Control
 
-## The M40 inventory experience: navigation, player/equipment panel, the real
-## 27+9 inventory, a 3x3 crafting grid with station gating, a hotbar and the
-## health/hunger readout, in one full-screen interface.
+## M40 v2 — the inventory, character and crafting experience.
 ##
-## Presentation and intent only: every mutation goes through `Inventory`, and the
-## grid uses the real `Station` crafting transaction, so the interface can never
-## invent state and no recipe logic is duplicated here.  A temporary cursor stack
-## is owned by this panel and is recovered into a model before closing/saving.
+## One full-screen screen with three pages:
+##   * Inventory  — Player panel, the 27+9 inventory, item actions panel, hotbar.
+##   * Character  — the same stable Player panel and inventory, plus real stats.
+##   * Crafting   — categories, searchable recipe browser and recipe details.
 ##
-## The equipment slots are deliberately presentational: VoxelWorld has no
-## equipment system, so they are disabled rather than filled with invented armour.
-## Nothing here displays experience or level values for the same reason.
+## Presentation and intent only.  Item mutations go through `Inventory`; recipe
+## facts and transactions go through `Crafting`, so the UI never invents a stack
+## or a recipe.  Hotbar selection is a gameplay action (1-9/wheel), not a side
+## effect of clicking a slot: a click always means "move this stack".
+##
+## Equipment is display-only because VoxelWorld has no equipment system, and
+## experience/defence/armour are labelled unavailable rather than fabricated.
 
 signal changed_stack(item_id: int)
 signal message(text: String)
 signal crafted(result: Dictionary)
-## Navigation to another existing screen ("crafting", "settings").
+## External navigation (Settings); the three main pages are internal.
 signal navigate(target: String)
-## The panel really opened / really closed (used by the game to hide the HUD).
 signal opened()
 signal closed()
 
 const PAGE_INVENTORY := "inventory"
 const PAGE_CHARACTER := "character"
+const PAGE_CRAFTING := "crafting"
 const NAV_TARGETS := ["inventory", "crafting", "character", "map", "settings"]
 const NAV_LABELS := {
 	"inventory": "Inventory", "crafting": "Crafting", "character": "Character",
@@ -34,59 +36,118 @@ const NAV_GLYPHS := {
 	"inventory": "inventory", "crafting": "crafting", "character": "character",
 	"map": "map", "settings": "settings",
 }
-const CRAFT_GRID := Station.TABLE_GRID_SLOTS
-const CRAFT_OUTPUT := Station.TABLE_OUTPUT_SLOT
-const SLOT := UiStyle.SCREEN_SLOT
+
+const GRID_COLUMNS := 6
+const GRID_SLOT := 66
 const GRID_GAP := 5
-const DETAIL_MIN_HEIGHT := 240
+const HOTBAR_SLOT := UiStyle.SLOT_SIZE
+const BODY_WIDTH := 1104.0
+const PLAYER_WIDTH := 320.0
+const INVENTORY_WIDTH := 460.0
+const SIDE_WIDTH := 300.0
+const CRAFT_GRID_SLOT := 42
+const RECIPE_TILE := 70
+
+const ACTION_ALL := "all"
+const ACTION_HALF := "half"
+const ACTION_ONE := "one"
+const ACTION_AMOUNT := "amount"
+const ACTION_QUICK := "quick"
+const ACTION_MOVE := "move"
+const ACTION_CANCEL := "cancel"
 
 var inventory: Inventory
 var library: TextureLibrary
 
-var _craft: Station
 var _station := Crafting.STATION_HAND
 var _page := PAGE_INVENTORY
 var _active_tab := "inventory"
 
 var _slots: Array[InventorySlot] = []
-var _craft_slots: Array[StationSlot] = []
 var _equipment_slots: Array[Control] = []
 var _tabs: Dictionary = {}
-var _detail: Label
-var _hint: Label
-var _cursor: ItemCursor
 var _carried: Dictionary = {}
 var _carry_origin := -1
 var _focus_index := 0
+var _context_index := -1
+var _context_open := false
 
-var _inventory_page: Control
-var _character_page: Control
 var _player_panel: Control
-var _craft_panel: Control
-var _held_icon: ItemIcon
-var _held_label: Label
-var _character_icon: ItemIcon
-var _character_held: Label
-var _character_vitals: Label
-var _vitals: VitalsBar
-var _craft_status: Label
-var _craft_table_label: Label
-var _craft_button: Button
-var _output_slot: StationSlot
+var _preview_cell: Control
+var _preview: CharacterPreview
+var _rotation_row: Control
+var _inventory_page: Control
+var _inventory_grid: GridContainer
+var _grid_slots: Array[InventorySlot] = []
+var _detail_label: Label
 var _storage_label: Label
+var _context_panel: Control
+var _context_icon: ItemIcon
+var _context_title: Label
+var _context_count: Label
+var _context_buttons: Dictionary = {}
+var _context_move_button: Button
+var _stats_panel: Control
+var _stats_vitals: Label
+var _stats_health_bar: ProgressBar
+var _stats_hunger_bar: ProgressBar
+var _stats_attack: Label
+var _stats_speed: Label
+var _stats_held: Label
+var _crafting_page: Control
+var _crafting_category_buttons: Dictionary = {}
+var _crafting_category := ""
+var _crafting_search := ""
+var _crafting_grid: GridContainer
+var _recipe_tiles: Array = []
+var _recipe_grid_scroll: ScrollContainer
+var _recipe_count_label: Label
+var _craft_title: Label
+var _craft_desc: Label
+var _craft_preview: Array[ItemIcon] = []
+var _craft_output_icon: ItemIcon
+var _craft_output_count: Label
+var _craft_ingredients: VBoxContainer
+var _craft_station_icon: ItemIcon
+var _craft_station_title: Label
+var _craft_station_text: Label
+var _craft_quantity_label: Label
+var _craft_max_label: Label
+var _craft_status: Label
+var _craft_button: Button
+var _selected_recipe_id := ""
+var _craft_quantity := 1
+
+var _amount_dialog: Control
+var _amount_slot := -1
+var _amount_take := true
+var _amount_value := 1
+var _amount_max := 1
+var _amount_icon: ItemIcon
+var _amount_title: Label
+var _amount_available: Label
+var _amount_value_label: Label
+var _amount_slider: HSlider
+var _amount_edit: LineEdit
+var _amount_max_label: Label
+var _amount_confirm: Button
+var _amount_updating := false
+
+var _cursor: ItemCursor
+var _vitals: VitalsBar
+var _hint: Label
+var _tool_card: Label
+var _hints_panel: Control
 
 
 func setup(player_inventory: Inventory, texture_library: TextureLibrary = null) -> void:
 	inventory = player_inventory
 	library = texture_library
-	_craft = Station.new(Station.TABLE)
 	_build()
-	if inventory != null and not inventory.changed.is_connected(_refresh):
-		inventory.changed.connect(_refresh)
-	if not _craft.inventory.changed.is_connected(_refresh_craft):
-		_craft.inventory.changed.connect(_refresh_craft)
+	if inventory != null and not inventory.changed.is_connected(_on_inventory_changed):
+		inventory.changed.connect(_on_inventory_changed)
 	visible = false
-	_refresh()
+	_refresh_all()
 
 
 # =========================================================================
@@ -96,12 +157,14 @@ func setup(player_inventory: Inventory, texture_library: TextureLibrary = null) 
 func _build() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	clip_contents = true
 
 	var dim := ColorRect.new()
 	dim.name = "Dim"
 	dim.color = UiStyle.SCREEN_DIM
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(_on_dim_input)
 	add_child(dim)
 
 	var margin := MarginContainer.new()
@@ -119,20 +182,39 @@ func _build() -> void:
 	margin.add_child(column)
 	column.add_child(_build_nav())
 
+	# A fixed-width body, horizontally centred by spacers.  The body itself fills
+	# the available height, so content changes in one panel (details, stats,
+	# rotations) can never move the Player panel or the character preview.
+	var body_row := HBoxContainer.new()
+	body_row.name = "BodyRow"
+	body_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_row.add_theme_constant_override("separation", 0)
+	column.add_child(body_row)
+	var left_spacer := Control.new()
+	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_row.add_child(left_spacer)
+
 	var body := HBoxContainer.new()
 	body.name = "Body"
-	body.add_theme_constant_override("separation", 12)
-	body.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.custom_minimum_size = Vector2(BODY_WIDTH, 0)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	column.add_child(body)
+	body.add_theme_constant_override("separation", 12)
+	body.alignment = BoxContainer.ALIGNMENT_BEGIN
+	body_row.add_child(body)
+	var right_spacer := Control.new()
+	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_row.add_child(right_spacer)
+
 	_player_panel = _build_player_panel()
 	body.add_child(_player_panel)
 	_inventory_page = _build_inventory_page()
 	body.add_child(_inventory_page)
-	_character_page = _build_character_page()
-	body.add_child(_character_page)
-	_craft_panel = _build_craft_panel()
-	body.add_child(_craft_panel)
+	_context_panel = _build_context_panel()
+	body.add_child(_context_panel)
+	_stats_panel = _build_stats_panel()
+	body.add_child(_stats_panel)
+	_crafting_page = _build_crafting_page()
+	body.add_child(_crafting_page)
 
 	column.add_child(_build_bottom())
 
@@ -140,7 +222,12 @@ func _build() -> void:
 	_cursor.name = "CursorStack"
 	add_child(_cursor)
 	_cursor.setup(library)
+
+	_amount_dialog = _build_amount_dialog()
+	add_child(_amount_dialog)
+
 	_refresh_nav()
+	_refresh_page_visibility()
 
 
 func _build_nav() -> Control:
@@ -204,10 +291,12 @@ func _tab(target: String) -> Button:
 	return button
 
 
+# --- Player panel ---------------------------------------------------------
+
 func _build_player_panel() -> Control:
 	var panel := PanelContainer.new()
 	panel.name = "PlayerPanel"
-	panel.custom_minimum_size = Vector2(272, 0)
+	panel.custom_minimum_size = Vector2(PLAYER_WIDTH, 0)
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_theme_stylebox_override("panel", UiStyle.screen_panel_style())
 
@@ -220,56 +309,77 @@ func _build_player_panel() -> Control:
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(title)
 	var survivor := _label("Survivor", 11, UiStyle.TEXT_MUTED)
-	survivor.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	survivor.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_row.add_child(survivor)
 	column.add_child(title_row)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
-	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	column.add_child(row)
-
 	var armour := VBoxContainer.new()
 	armour.name = "Equipment"
 	armour.add_theme_constant_override("separation", 6)
-	armour.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	armour.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	for entry: Array in [["helmet", "Helmet"], ["chestplate", "Chestplate"],
 			["leggings", "Leggings"], ["boots", "Boots"]]:
 		armour.add_child(_equipment_slot(str(entry[0]), str(entry[1])))
 	row.add_child(armour)
 
-	var preview := CharacterPreview.new()
-	preview.name = "CharacterPreview"
-	preview.setup()
-	preview.custom_minimum_size = Vector2(140, 236)
-	preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	row.add_child(preview)
+	var preview_column := VBoxContainer.new()
+	preview_column.add_theme_constant_override("separation", 3)
+	preview_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	preview_column.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_preview_cell = Control.new()
+	_preview_cell.name = "PreviewCell"
+	_preview_cell.custom_minimum_size = Vector2(200, 290)
+	_preview_cell.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_preview_cell.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_preview_cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview_column.add_child(_preview_cell)
+	_preview = CharacterPreview.new()
+	_preview.name = "CharacterPreview"
+	_preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_preview.custom_minimum_size = Vector2(200, 290)
+	_preview.setup()
+	_preview_cell.add_child(_preview)
+	_rotation_row = HBoxContainer.new()
+	_rotation_row.name = "RotationRow"
+	_rotation_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_rotation_row.add_theme_constant_override("separation", 6)
+	preview_column.add_child(_rotation_row)
+	_rotation_row.add_child(_rotation_button("‹", -45.0))
+	_rotation_row.add_child(_rotation_button("•", 0.0))
+	_rotation_row.add_child(_rotation_button("›", 45.0))
+	row.add_child(preview_column)
 
 	var offhand := VBoxContainer.new()
 	offhand.add_theme_constant_override("separation", 6)
-	offhand.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	offhand.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	offhand.add_child(_equipment_slot("shield", "Off Hand"))
 	offhand.add_child(_equipment_slot("shield", "Second Off Hand"))
 	row.add_child(offhand)
 
 	var held_row := HBoxContainer.new()
 	held_row.add_theme_constant_override("separation", 7)
-	_held_icon = ItemIcon.new()
-	_held_icon.custom_minimum_size = Vector2(26, 26)
-	_held_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	held_row.add_child(_held_icon)
-	_held_label = _label("", 12, UiStyle.TEXT_SECONDARY)
-	_held_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_held_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	held_row.add_child(_held_label)
+	var held_icon := ItemIcon.new()
+	held_icon.name = "HeldIcon"
+	held_icon.custom_minimum_size = Vector2(26, 26)
+	held_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	held_row.add_child(held_icon)
+	var held_label := _label("", 12, UiStyle.TEXT_SECONDARY)
+	held_label.name = "HeldLabel"
+	held_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	held_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	held_row.add_child(held_label)
 	column.add_child(held_row)
 
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(spacer)
 	var note := _label("Equipment slots are display-only: VoxelWorld has no equipment system yet.",
 		10, UiStyle.TEXT_MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.custom_minimum_size = Vector2(230, 0)
 	column.add_child(note)
 	return panel
 
@@ -277,21 +387,43 @@ func _build_player_panel() -> Control:
 func _equipment_slot(glyph: String, label_text: String) -> PanelContainer:
 	var slot := PanelContainer.new()
 	slot.name = "Equipment_%s" % glyph
-	slot.custom_minimum_size = Vector2(42, 42)
+	slot.custom_minimum_size = Vector2(38, 38)
 	slot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	slot.add_theme_stylebox_override("panel", UiStyle.slot_style(false, false, true))
 	slot.tooltip_text = "%s — equipment is not implemented in VoxelWorld yet" % label_text
 	var icon := NavIcon.new()
-	icon.setup(glyph, Color(0.56, 0.66, 0.80, 0.42), 1.5)
+	icon.setup(glyph, Color(0.58, 0.68, 0.82, 0.58), 1.6)
 	slot.add_child(icon)
 	_equipment_slots.append(slot)
 	return slot
 
 
+func _rotation_button(text: String, degrees: float) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.focus_mode = Control.FOCUS_NONE
+	button.custom_minimum_size = Vector2(34, 24)
+	button.add_theme_font_size_override("font_size", 16)
+	button.add_theme_color_override("font_color", UiStyle.TEXT_SECONDARY)
+	button.add_theme_stylebox_override("normal", UiStyle.button_style(false))
+	button.add_theme_stylebox_override("hover", UiStyle.button_style(false, true))
+	button.add_theme_stylebox_override("pressed", UiStyle.button_style(true, true))
+	if is_zero_approx(degrees):
+		button.tooltip_text = "Reset the character preview rotation"
+		button.pressed.connect(func() -> void: _preview.reset_rotation())
+	else:
+		button.tooltip_text = "Rotate the character preview"
+		button.pressed.connect(func() -> void: _preview.rotate_by(degrees))
+	return button
+
+
+# --- Inventory page -------------------------------------------------------
+
 func _build_inventory_page() -> Control:
 	var panel := PanelContainer.new()
-	panel.name = "InventoryPanel"
-	panel.custom_minimum_size = Vector2(500, 0)
+	panel.name = "InventoryCenter"
+	panel.custom_minimum_size = Vector2(INVENTORY_WIDTH, 0)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_theme_stylebox_override("panel", UiStyle.screen_panel_style(true))
 
@@ -304,217 +436,406 @@ func _build_inventory_page() -> Control:
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	_storage_label = _label("", 11, UiStyle.TEXT_MUTED)
-	_storage_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_storage_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	header.add_child(_storage_label)
 	column.add_child(header)
 
-	var grid := GridContainer.new()
-	grid.name = "MainSlots"
-	grid.columns = Inventory.HOTBAR_SIZE
-	grid.add_theme_constant_override("h_separation", GRID_GAP)
-	grid.add_theme_constant_override("v_separation", GRID_GAP)
-	column.add_child(grid)
+	_inventory_grid = GridContainer.new()
+	_inventory_grid.name = "InventoryGrid"
+	_inventory_grid.columns = GRID_COLUMNS
+	_inventory_grid.add_theme_constant_override("h_separation", GRID_GAP)
+	_inventory_grid.add_theme_constant_override("v_separation", GRID_GAP)
+	_inventory_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	column.add_child(_inventory_grid)
 	for index in range(Inventory.MAIN_FIRST, Inventory.SIZE):
-		var slot := _make_slot(index, grid, SLOT, false)
+		var slot := _make_slot(index, _inventory_grid, GRID_SLOT)
 		slot.show_number = false
+		_grid_slots.append(slot)
 
-	var rule := ColorRect.new()
-	rule.color = Color(0.62, 0.74, 0.90, 0.14)
-	rule.custom_minimum_size = Vector2(0, 1)
-	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(rule)
-
-	var detail_box := PanelContainer.new()
-	detail_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail_box.custom_minimum_size = Vector2(0, DETAIL_MIN_HEIGHT)
-	detail_box.add_theme_stylebox_override("panel", UiStyle.screen_subpanel_style())
-	column.add_child(detail_box)
-	var detail_column := VBoxContainer.new()
-	detail_column.add_theme_constant_override("separation", 4)
-	detail_box.add_child(detail_column)
-	var detail_title := _label("ITEM", 10, UiStyle.TEXT_MUTED)
-	detail_column.add_child(detail_title)
-	_detail = _label("", 12, Color(0.88, 0.93, 0.99))
-	_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_detail.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	_detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail_column.add_child(_detail)
+	# The full item facts live in the actions card so long tool/recipe text can
+	# never inflate this panel and resize the character preview.
+	var hint := _label("Hover a slot to inspect it. Middle-click for item actions.", 10, UiStyle.TEXT_MUTED)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(hint)
 	return panel
 
 
-func _build_character_page() -> Control:
+# --- Item actions / context panel ----------------------------------------
+
+func _build_context_panel() -> Control:
 	var panel := PanelContainer.new()
-	panel.name = "CharacterPage"
-	panel.custom_minimum_size = Vector2(620, 0)
-	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_theme_stylebox_override("panel", UiStyle.screen_panel_style(true))
+	panel.name = "ContextPanel"
+	panel.custom_minimum_size = Vector2(SIDE_WIDTH, 0)
+	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	panel.add_theme_stylebox_override("panel", UiStyle.screen_panel_style())
 	panel.visible = false
 
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 14)
+	column.add_theme_constant_override("separation", 8)
 	panel.add_child(column)
-	var title := _label("Character", 21, UiStyle.TEXT_PRIMARY)
-	column.add_child(title)
-	var subtitle := _label("Survivor", 14, UiStyle.TEXT_SECONDARY)
-	column.add_child(subtitle)
+	column.add_child(_label("Item Actions", 14, UiStyle.TEXT_PRIMARY))
 
-	var vitals_box := PanelContainer.new()
-	vitals_box.add_theme_stylebox_override("panel", UiStyle.screen_subpanel_style())
-	column.add_child(vitals_box)
-	var vitals_column := VBoxContainer.new()
-	vitals_column.add_theme_constant_override("separation", 6)
-	vitals_box.add_child(vitals_column)
-	vitals_column.add_child(_label("VITALS", 10, UiStyle.TEXT_MUTED))
-	_character_vitals = _label("", 14, UiStyle.TEXT_PRIMARY)
-	vitals_column.add_child(_character_vitals)
-	var vitals_note := _label(
-		"Health and hunger are the game's own survival values. VoxelWorld does not "
-		+ "implement experience or levels, so none are shown.",
-		11, UiStyle.TEXT_MUTED)
-	vitals_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vitals_note.custom_minimum_size = Vector2(440, 0)
-	vitals_column.add_child(vitals_note)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	_context_icon = ItemIcon.new()
+	_context_icon.custom_minimum_size = Vector2(42, 42)
+	head.add_child(_context_icon)
+	var head_text := VBoxContainer.new()
+	head_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head_text.add_theme_constant_override("separation", 1)
+	_context_title = _label("", 14, UiStyle.TEXT_PRIMARY)
+	head_text.add_child(_context_title)
+	_context_count = _label("", 11, UiStyle.TEXT_SECONDARY)
+	head_text.add_child(_context_count)
+	head.add_child(head_text)
+	column.add_child(head)
 
-	var held_box := PanelContainer.new()
-	held_box.add_theme_stylebox_override("panel", UiStyle.screen_subpanel_style())
-	column.add_child(held_box)
-	var held_row := HBoxContainer.new()
-	held_row.add_theme_constant_override("separation", 10)
-	held_box.add_child(held_row)
-	_character_icon = ItemIcon.new()
-	_character_icon.custom_minimum_size = Vector2(40, 40)
-	held_row.add_child(_character_icon)
-	var held_column := VBoxContainer.new()
-	held_column.add_theme_constant_override("separation", 2)
-	held_row.add_child(held_column)
-	held_column.add_child(_label("HELD ITEM", 10, UiStyle.TEXT_MUTED))
-	_character_held = _label("", 14, UiStyle.TEXT_PRIMARY)
-	held_column.add_child(_character_held)
+	var detail_scroll := ScrollContainer.new()
+	detail_scroll.name = "DetailScroll"
+	detail_scroll.custom_minimum_size = Vector2(0, 88)
+	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(detail_scroll)
+	_detail_label = _label("", 11, Color(0.84, 0.90, 0.97))
+	_detail_label.name = "DetailLabel"
+	_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_detail_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail_scroll.add_child(_detail_label)
 
-	var equipment_box := PanelContainer.new()
-	equipment_box.add_theme_stylebox_override("panel", UiStyle.screen_subpanel_style())
-	column.add_child(equipment_box)
-	var equipment_column := VBoxContainer.new()
-	equipment_column.add_theme_constant_override("separation", 6)
-	equipment_box.add_child(equipment_column)
-	equipment_column.add_child(_label("EQUIPMENT", 10, UiStyle.TEXT_MUTED))
-	var equipment_note := _label(
-		"VoxelWorld does not define armour or off-hand gameplay yet. The player "
-		+ "panel presents the six slots as unavailable rather than inventing items.",
-		11, UiStyle.TEXT_MUTED)
-	equipment_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	equipment_note.custom_minimum_size = Vector2(440, 0)
-	equipment_column.add_child(equipment_note)
+	for entry: Array in [
+		[ACTION_ALL, "Select All"], [ACTION_HALF, "Select Half"],
+		[ACTION_ONE, "Select One"], [ACTION_AMOUNT, "Select Amount…"],
+		[ACTION_QUICK, "Quick Move"], [ACTION_MOVE, "Move to Hotbar"],
+		[ACTION_CANCEL, "Cancel"],
+	]:
+		var button := _action_button(str(entry[1]))
+		var action := str(entry[0])
+		button.name = "Action_%s" % action.capitalize()
+		button.pressed.connect(func() -> void: activate_context(action))
+		column.add_child(button)
+		_context_buttons[action] = button
+	_context_move_button = _context_buttons[ACTION_MOVE] as Button
 
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	column.add_child(spacer)
-	var note := _label("Held item, health and hunger update from the live game.", 11, UiStyle.TEXT_MUTED)
+	var note := _label("Middle-click a slot to reopen these actions. R opens the amount dialog.",
+		10, UiStyle.TEXT_MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(note)
 	return panel
 
 
-func _build_craft_panel() -> Control:
+func _action_button(text: String) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.focus_mode = Control.FOCUS_NONE
+	button.custom_minimum_size = Vector2(0, 30)
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.add_theme_font_size_override("font_size", 12)
+	button.add_theme_stylebox_override("normal", UiStyle.button_style(false))
+	button.add_theme_stylebox_override("hover", UiStyle.button_style(false, true))
+	button.add_theme_stylebox_override("pressed", UiStyle.button_style(true, true))
+	button.add_theme_stylebox_override("disabled", UiStyle.button_disabled_style())
+	return button
+
+
+# --- Character stats ------------------------------------------------------
+
+func _build_stats_panel() -> Control:
 	var panel := PanelContainer.new()
-	panel.name = "CraftingPanel"
-	panel.custom_minimum_size = Vector2(306, 0)
+	panel.name = "StatsPanel"
+	panel.custom_minimum_size = Vector2(SIDE_WIDTH, 0)
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_theme_stylebox_override("panel", UiStyle.screen_panel_style())
+	panel.visible = false
 
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 10)
 	panel.add_child(column)
-	column.add_child(_label("Crafting", 21, UiStyle.TEXT_PRIMARY))
+	column.add_child(_label("Stats", 21, UiStyle.TEXT_PRIMARY))
+	_stats_vitals = _label("", 13, UiStyle.TEXT_SECONDARY)
+	column.add_child(_stats_vitals)
 
-	var grid_row := HBoxContainer.new()
-	grid_row.add_theme_constant_override("separation", 10)
-	grid_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	column.add_child(grid_row)
-	var grid := GridContainer.new()
-	grid.name = "CraftGrid"
-	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", GRID_GAP)
-	grid.add_theme_constant_override("v_separation", GRID_GAP)
-	grid_row.add_child(grid)
-	for index in CRAFT_GRID:
-		var slot := StationSlot.new()
-		slot.name = "CraftSlot%d" % index
-		slot.configure("craft", index, _craft.inventory, library, SLOT)
-		slot.clicked.connect(_on_craft_slot_clicked)
-		slot.stack_moved.connect(_on_craft_stack_moved)
-		grid.add_child(slot)
-		_craft_slots.append(slot)
+	column.add_child(_label("HEALTH", 10, UiStyle.TEXT_MUTED))
+	_stats_health_bar = _stat_bar(UiStyle.HEART_RED)
+	column.add_child(_stats_health_bar)
+	column.add_child(_label("HUNGER", 10, UiStyle.TEXT_MUTED))
+	_stats_hunger_bar = _stat_bar(UiStyle.HUNGER_AMBER)
+	column.add_child(_stats_hunger_bar)
 
-	_craft_button = Button.new()
-	_craft_button.name = "CraftArrow"
-	_craft_button.text = "→"
-	_craft_button.tooltip_text = "Craft the matching recipe"
-	_craft_button.focus_mode = Control.FOCUS_NONE
-	_craft_button.custom_minimum_size = Vector2(34, SLOT)
-	_craft_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_craft_button.add_theme_font_size_override("font_size", 22)
-	_craft_button.add_theme_color_override("font_color", UiStyle.ACCENT_BLUE)
-	_craft_button.add_theme_stylebox_override("normal", _arrow_style(false))
-	_craft_button.add_theme_stylebox_override("hover", _arrow_style(true))
-	_craft_button.add_theme_stylebox_override("pressed", _arrow_style(true))
-	_craft_button.add_theme_stylebox_override("disabled", _arrow_style(false))
-	_craft_button.pressed.connect(craft_press)
-	grid_row.add_child(_craft_button)
+	var attack_row := HBoxContainer.new()
+	var attack_label := _label("Attack", 13, UiStyle.TEXT_SECONDARY)
+	attack_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	attack_row.add_child(attack_label)
+	_stats_attack = _label("", 13, UiStyle.TEXT_PRIMARY)
+	attack_row.add_child(_stats_attack)
+	column.add_child(attack_row)
 
-	_output_slot = StationSlot.new()
-	_output_slot.name = "CraftOutput"
-	_output_slot.configure("craft", CRAFT_OUTPUT, _craft.inventory, library, SLOT)
-	_output_slot.draggable = false
-	_output_slot.tooltip_text = "Crafted result — click to take, Shift-click to send to the inventory"
-	_output_slot.clicked.connect(_on_craft_slot_clicked)
-	grid_row.add_child(_output_slot)
-	_craft_slots.append(_output_slot)
+	var speed_row := HBoxContainer.new()
+	var speed_label := _label("Movement Speed", 13, UiStyle.TEXT_SECONDARY)
+	speed_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	speed_row.add_child(speed_label)
+	_stats_speed = _label("", 13, UiStyle.TEXT_PRIMARY)
+	speed_row.add_child(_stats_speed)
+	column.add_child(speed_row)
 
-	_craft_status = _label("", 12, UiStyle.TEXT_SECONDARY)
-	_craft_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_craft_status.custom_minimum_size = Vector2(0, 34)
-	column.add_child(_craft_status)
-
-	var table_box := PanelContainer.new()
-	table_box.add_theme_stylebox_override("panel", UiStyle.screen_subpanel_style())
-	column.add_child(table_box)
-	var table_row := HBoxContainer.new()
-	table_row.add_theme_constant_override("separation", 10)
-	table_box.add_child(table_row)
-	var table_icon := ItemIcon.new()
-	table_icon.custom_minimum_size = Vector2(38, 38)
-	table_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	table_icon.set_item(BlockDB.CRAFTING_TABLE, library)
-	table_row.add_child(table_icon)
-	var table_column := VBoxContainer.new()
-	table_column.add_theme_constant_override("separation", 3)
-	table_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	table_row.add_child(table_column)
-	table_column.add_child(_label("Crafting Table", 13, UiStyle.TEXT_PRIMARY))
-	_craft_table_label = _label("", 11, UiStyle.TEXT_SECONDARY)
-	_craft_table_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	table_column.add_child(_craft_table_label)
+	var held_row := HBoxContainer.new()
+	var held_label := _label("Held", 13, UiStyle.TEXT_SECONDARY)
+	held_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	held_row.add_child(held_label)
+	_stats_held = _label("", 13, UiStyle.TEXT_PRIMARY)
+	held_row.add_child(_stats_held)
+	column.add_child(held_row)
 
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(spacer)
-	var tip := _label("The grid uses the game's real recipes. Table recipes need a crafting table nearby.",
+	var note := _label("Experience, defence and armour are not implemented in VoxelWorld, so no value is shown.",
 		10, UiStyle.TEXT_MUTED)
-	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	column.add_child(tip)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(note)
 	return panel
 
 
-func _arrow_style(hovered: bool) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.10, 0.20, 0.32, 0.85) if hovered else Color(0.06, 0.10, 0.15, 0.0)
-	style.border_color = Color(0.40, 0.68, 1.0, 0.9) if hovered else Color(0, 0, 0, 0)
-	style.set_border_width_all(1 if hovered else 0)
-	style.set_corner_radius_all(6)
-	return style
+func _stat_bar(colour: Color) -> ProgressBar:
+	var bar := ProgressBar.new()
+	bar.custom_minimum_size = Vector2(0, 10)
+	bar.show_percentage = false
+	bar.min_value = 0.0
+	bar.max_value = 100.0
+	bar.value = 100.0
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var background := StyleBoxFlat.new()
+	background.bg_color = Color(0.02, 0.03, 0.045, 0.85)
+	background.set_corner_radius_all(3)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = colour
+	fill.set_corner_radius_all(3)
+	bar.add_theme_stylebox_override("background", background)
+	bar.add_theme_stylebox_override("fill", fill)
+	return bar
 
+
+# --- Crafting page --------------------------------------------------------
+
+func _build_crafting_page() -> Control:
+	var panel := PanelContainer.new()
+	panel.name = "CraftingPage"
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel", UiStyle.screen_panel_style())
+	panel.visible = false
+
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation", 12)
+	panel.add_child(columns)
+
+	# Categories.
+	var categories := PanelContainer.new()
+	categories.custom_minimum_size = Vector2(200, 0)
+	categories.add_theme_stylebox_override("panel", UiStyle.screen_panel_style(true))
+	columns.add_child(categories)
+	var category_column := VBoxContainer.new()
+	category_column.add_theme_constant_override("separation", 4)
+	categories.add_child(category_column)
+	category_column.add_child(_label("Categories", 18, UiStyle.TEXT_PRIMARY))
+	var all_button := _category_button("All", "")
+	category_column.add_child(all_button)
+	_crafting_category_buttons[""] = all_button
+	for category: String in Crafting.categories():
+		var button := _category_button(category, category)
+		category_column.add_child(button)
+		_crafting_category_buttons[category] = button
+
+	# Recipe browser.
+	var browser := VBoxContainer.new()
+	browser.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	browser.add_theme_constant_override("separation", 8)
+	columns.add_child(browser)
+	var browser_header := HBoxContainer.new()
+	var browser_title := _label("Recipes", 18, UiStyle.TEXT_PRIMARY)
+	browser_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	browser_header.add_child(browser_title)
+	_recipe_count_label = _label("", 11, UiStyle.TEXT_MUTED)
+	_recipe_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	browser_header.add_child(_recipe_count_label)
+	browser.add_child(browser_header)
+	var search := LineEdit.new()
+	search.name = "RecipeSearch"
+	search.placeholder_text = "Search recipes…"
+	search.custom_minimum_size = Vector2(0, 32)
+	search.add_theme_font_size_override("font_size", 12)
+	search.text_changed.connect(func(text: String) -> void: set_craft_search(text))
+	browser.add_child(search)
+	_recipe_grid_scroll = ScrollContainer.new()
+	_recipe_grid_scroll.name = "RecipeScroll"
+	_recipe_grid_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_recipe_grid_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	browser.add_child(_recipe_grid_scroll)
+	_crafting_grid = GridContainer.new()
+	_crafting_grid.name = "RecipeGrid"
+	_crafting_grid.columns = 5
+	_crafting_grid.add_theme_constant_override("h_separation", 6)
+	_crafting_grid.add_theme_constant_override("v_separation", 6)
+	_crafting_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var grid_center := CenterContainer.new()
+	grid_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_recipe_grid_scroll.add_child(grid_center)
+	grid_center.add_child(_crafting_grid)
+	for recipe: Dictionary in Crafting.recipes():
+		_crafting_grid.add_child(_recipe_tile(recipe))
+
+	# Recipe details.
+	var details := PanelContainer.new()
+	details.name = "RecipeDetails"
+	details.custom_minimum_size = Vector2(330, 0)
+	details.add_theme_stylebox_override("panel", UiStyle.screen_panel_style(true))
+	columns.add_child(details)
+	var detail_column := VBoxContainer.new()
+	detail_column.add_theme_constant_override("separation", 7)
+	details.add_child(detail_column)
+	detail_column.add_child(_label("Crafting", 18, UiStyle.TEXT_PRIMARY))
+	_craft_title = _label("Select a recipe", 15, UiStyle.TEXT_PRIMARY)
+	detail_column.add_child(_craft_title)
+	_craft_desc = _label("", 11, UiStyle.TEXT_MUTED)
+	_craft_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail_column.add_child(_craft_desc)
+
+	var preview_row := HBoxContainer.new()
+	preview_row.add_theme_constant_override("separation", 8)
+	preview_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	detail_column.add_child(preview_row)
+	var preview_grid := GridContainer.new()
+	preview_grid.columns = 3
+	preview_grid.add_theme_constant_override("h_separation", 4)
+	preview_grid.add_theme_constant_override("v_separation", 4)
+	preview_row.add_child(preview_grid)
+	for index in 9:
+		var cell := ItemIcon.new()
+		cell.custom_minimum_size = Vector2(CRAFT_GRID_SLOT, CRAFT_GRID_SLOT)
+		preview_grid.add_child(cell)
+		_craft_preview.append(cell)
+	var arrow := _label("→", 20, UiStyle.TEXT_SECONDARY)
+	arrow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	preview_row.add_child(arrow)
+	var output_column := VBoxContainer.new()
+	output_column.alignment = BoxContainer.ALIGNMENT_CENTER
+	preview_row.add_child(output_column)
+	_craft_output_icon = ItemIcon.new()
+	_craft_output_icon.custom_minimum_size = Vector2(46, 46)
+	output_column.add_child(_craft_output_icon)
+	_craft_output_count = _label("", 11, UiStyle.TEXT_SECONDARY)
+	_craft_output_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	output_column.add_child(_craft_output_count)
+
+	_craft_station_title = _label("", 12, UiStyle.TEXT_PRIMARY)
+	detail_column.add_child(_craft_station_title)
+	_craft_station_text = _label("", 10, UiStyle.TEXT_MUTED)
+	_craft_station_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail_column.add_child(_craft_station_text)
+
+	detail_column.add_child(_label("INGREDIENTS", 10, UiStyle.TEXT_MUTED))
+	_craft_ingredients = VBoxContainer.new()
+	_craft_ingredients.add_theme_constant_override("separation", 3)
+	detail_column.add_child(_craft_ingredients)
+
+	var quantity_row := HBoxContainer.new()
+	quantity_row.add_theme_constant_override("separation", 6)
+	quantity_row.add_child(_label("Quantity", 12, UiStyle.TEXT_SECONDARY))
+	var minus := _small_button("−")
+	minus.pressed.connect(func() -> void: set_craft_quantity(_craft_quantity - 1))
+	quantity_row.add_child(minus)
+	_craft_quantity_label = _label("1", 14, UiStyle.TEXT_PRIMARY)
+	_craft_quantity_label.custom_minimum_size = Vector2(34, 0)
+	_craft_quantity_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	quantity_row.add_child(_craft_quantity_label)
+	var plus := _small_button("+")
+	plus.pressed.connect(func() -> void: set_craft_quantity(_craft_quantity + 1))
+	quantity_row.add_child(plus)
+	_craft_max_label = _label("", 10, UiStyle.TEXT_MUTED)
+	_craft_max_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quantity_row.add_child(_craft_max_label)
+	detail_column.add_child(quantity_row)
+
+	_craft_status = _label("", 11, UiStyle.TEXT_MUTED)
+	_craft_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail_column.add_child(_craft_status)
+	_craft_button = Button.new()
+	_craft_button.name = "CraftButton"
+	_craft_button.text = "Craft"
+	_craft_button.focus_mode = Control.FOCUS_NONE
+	_craft_button.custom_minimum_size = Vector2(0, 36)
+	_craft_button.add_theme_stylebox_override("normal", UiStyle.button_style(true))
+	_craft_button.add_theme_stylebox_override("hover", UiStyle.button_style(true, true))
+	_craft_button.add_theme_stylebox_override("pressed", UiStyle.button_style(true, true))
+	_craft_button.add_theme_stylebox_override("disabled", UiStyle.button_disabled_style())
+	_craft_button.pressed.connect(func() -> void: craft_selected())
+	detail_column.add_child(_craft_button)
+	return panel
+
+
+func _category_button(text: String, category: String) -> Button:
+	var button := Button.new()
+	button.name = "Category_%s" % (text if not text.is_empty() else "All")
+	button.text = text
+	button.focus_mode = Control.FOCUS_NONE
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.custom_minimum_size = Vector2(0, 32)
+	button.add_theme_font_size_override("font_size", 12)
+	button.add_theme_stylebox_override("normal", UiStyle.category_style(false))
+	button.add_theme_stylebox_override("hover", UiStyle.category_style(false, true))
+	button.add_theme_stylebox_override("pressed", UiStyle.category_style(true))
+	button.pressed.connect(func() -> void: set_craft_category(category))
+	return button
+
+
+func _recipe_tile(recipe: Dictionary) -> Button:
+	var button := Button.new()
+	button.name = "RecipeTile_%s" % str(recipe["id"])
+	button.focus_mode = Control.FOCUS_NONE
+	button.custom_minimum_size = Vector2(RECIPE_TILE, RECIPE_TILE)
+	button.tooltip_text = "%s — %s" % [ItemDB.name_of(int(recipe["output"])), str(recipe["category"])]
+	button.add_theme_stylebox_override("normal", UiStyle.recipe_tile_style(false))
+	button.add_theme_stylebox_override("hover", UiStyle.recipe_tile_style(false, true))
+	button.add_theme_stylebox_override("pressed", UiStyle.recipe_tile_style(true))
+	var icon := ItemIcon.new()
+	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon.offset_left = 8
+	icon.offset_top = 8
+	icon.offset_right = -8
+	icon.offset_bottom = -8
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.set_item(int(recipe["output"]), library, ItemDB.icon_tint(int(recipe["output"])))
+	button.add_child(icon)
+	var count := Label.new()
+	count.text = "" if int(recipe["output_count"]) <= 1 else str(int(recipe["output_count"]))
+	count.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	count.offset_left = -26
+	count.offset_top = -22
+	count.offset_right = -4
+	count.offset_bottom = -2
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	count.add_theme_font_size_override("font_size", 11)
+	count.add_theme_color_override("font_color", Color(1, 1, 1, 0.9))
+	count.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	count.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(count)
+	var id := str(recipe["id"])
+	button.pressed.connect(func() -> void: select_recipe(id))
+	_recipe_tiles.append({"recipe": recipe, "button": button, "icon": icon, "count": count})
+	return button
+
+
+func _small_button(text: String) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.focus_mode = Control.FOCUS_NONE
+	button.custom_minimum_size = Vector2(28, 26)
+	button.add_theme_font_size_override("font_size", 14)
+	button.add_theme_stylebox_override("normal", UiStyle.button_style(false))
+	button.add_theme_stylebox_override("hover", UiStyle.button_style(false, true))
+	button.add_theme_stylebox_override("pressed", UiStyle.button_style(true, true))
+	return button
+
+
+# --- Bottom strip ---------------------------------------------------------
 
 func _build_bottom() -> Control:
 	var bottom := Control.new()
@@ -523,7 +844,6 @@ func _build_bottom() -> Control:
 	bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var center := CenterContainer.new()
-	center.name = "HotbarCenter"
 	center.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	center.offset_top = -126
 	center.offset_bottom = -45
@@ -542,8 +862,9 @@ func _build_bottom() -> Control:
 		var cell := VBoxContainer.new()
 		cell.add_theme_constant_override("separation", 1)
 		hotbar.add_child(cell)
-		var slot := _make_slot(index, cell, UiStyle.SLOT_SIZE, false)
-		slot.custom_minimum_size = Vector2(UiStyle.SLOT_SIZE, UiStyle.SLOT_SIZE)
+		var slot := _make_slot(index, cell, HOTBAR_SLOT)
+		slot.custom_minimum_size = Vector2(HOTBAR_SLOT, HOTBAR_SLOT)
+		slot.show_number = false
 		var number := _label(str(index + 1), 11, UiStyle.TEXT_MUTED)
 		number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cell.add_child(number)
@@ -558,106 +879,201 @@ func _build_bottom() -> Control:
 	_vitals.offset_bottom = -16
 	bottom.add_child(_vitals)
 
-	var hints := PanelContainer.new()
-	hints.name = "Hints"
-	hints.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	hints.offset_left = -260
-	hints.offset_top = -132
-	hints.offset_right = 0
-	hints.offset_bottom = 0
-	hints.add_theme_stylebox_override("panel", UiStyle.screen_subpanel_style())
-	bottom.add_child(hints)
+	_hints_panel = PanelContainer.new()
+	_hints_panel.name = "Hints"
+	_hints_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_hints_panel.offset_left = -270
+	_hints_panel.offset_top = -132
+	_hints_panel.offset_right = 0
+	_hints_panel.offset_bottom = 0
+	_hints_panel.custom_minimum_size = Vector2(270, 0)
+	var hint_style := UiStyle.screen_subpanel_style()
+	hint_style.set_content_margin_all(6)
+	_hints_panel.add_theme_stylebox_override("panel", hint_style)
+	bottom.add_child(_hints_panel)
 	var hint_column := VBoxContainer.new()
-	hint_column.add_theme_constant_override("separation", 3)
-	hints.add_child(hint_column)
-	_hint = _label("", 10, UiStyle.TEXT_MUTED)
-	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_hint.visible = false
-	hint_column.add_child(_hint)
-	hint_column.add_child(_hint_row("LMB", "Move item"))
-	hint_column.add_child(_hint_row("RMB", "Split stack"))
+	hint_column.add_theme_constant_override("separation", 2)
+	_hints_panel.add_child(hint_column)
+	hint_column.add_child(_hint_row("LMB", "Move full stack"))
+	hint_column.add_child(_hint_row("RMB", "Half / one item"))
 	hint_column.add_child(_hint_row("Shift", "Quick move"))
-	hint_column.add_child(_hint_row("I / Esc", "Close"))
+	hint_column.add_child(_hint_row("Ctrl", "Select all"))
+	hint_column.add_child(_hint_row("MMB / R", "Actions / amount"))
 	return bottom
 
 
 func _hint_row(key: String, text: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", 7)
 	var cap := PanelContainer.new()
-	cap.custom_minimum_size = Vector2(52, 21)
-	cap.add_theme_stylebox_override("panel", UiStyle.keycap_style())
-	var key_label := _label(key, 10, UiStyle.TEXT_SECONDARY)
+	cap.custom_minimum_size = Vector2(54, 16)
+	var cap_style := UiStyle.keycap_style()
+	cap_style.set_content_margin_all(2)
+	cap.add_theme_stylebox_override("panel", cap_style)
+	var key_label := _label(key, 9, UiStyle.TEXT_SECONDARY)
 	key_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	key_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	cap.add_child(key_label)
 	row.add_child(cap)
-	var label := _label(text, 11, UiStyle.TEXT_SECONDARY)
+	var label := _label(text, 9, UiStyle.TEXT_SECONDARY)
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(label)
 	return row
 
 
-func _label(text: String, font_size: int, colour: Color) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", colour)
-	return label
+# --- Amount dialog --------------------------------------------------------
 
+func _build_amount_dialog() -> Control:
+	var root := Control.new()
+	root.name = "AmountDialog"
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.z_index = 110
+	root.visible = false
 
-func _make_slot(index: int, parent: Control, size: int, show_number: bool) -> InventorySlot:
-	var slot := InventorySlot.new()
-	slot.name = "Slot%d" % index
-	slot.configure(index, inventory, library, size)
-	slot.show_number = show_number
-	slot.clicked.connect(_on_slot_clicked)
-	slot.stack_moved.connect(_on_stack_moved)
-	slot.hovered.connect(func(hovered_index: int) -> void: _focus_index = hovered_index)
-	parent.add_child(slot)
-	_slots.append(slot)
-	return slot
+	var dim := ColorRect.new()
+	dim.color = Color(0.01, 0.015, 0.025, 0.55)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(center)
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(430, 0)
+	panel.add_theme_stylebox_override("panel", UiStyle.dialog_style())
+	center.add_child(panel)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 10)
+	panel.add_child(column)
+	column.add_child(_label("Select Amount", 18, UiStyle.TEXT_PRIMARY))
+
+	var item_row := HBoxContainer.new()
+	item_row.add_theme_constant_override("separation", 10)
+	_amount_icon = ItemIcon.new()
+	_amount_icon.custom_minimum_size = Vector2(48, 48)
+	item_row.add_child(_amount_icon)
+	var item_text := VBoxContainer.new()
+	item_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_amount_title = _label("", 14, UiStyle.TEXT_PRIMARY)
+	item_text.add_child(_amount_title)
+	_amount_available = _label("", 11, UiStyle.TEXT_MUTED)
+	item_text.add_child(_amount_available)
+	item_row.add_child(item_text)
+	column.add_child(item_row)
+
+	var quick := HBoxContainer.new()
+	quick.add_theme_constant_override("separation", 6)
+	for entry: Array in [["All", 0], ["Half", 1], ["One", 2]]:
+		var button := _small_button(str(entry[0]))
+		button.custom_minimum_size = Vector2(0, 28)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var mode := int(entry[1])
+		button.pressed.connect(func() -> void: _amount_quick(mode))
+		quick.add_child(button)
+	column.add_child(quick)
+
+	var amount_row := HBoxContainer.new()
+	amount_row.add_theme_constant_override("separation", 8)
+	amount_row.add_child(_label("Enter Amount", 11, UiStyle.TEXT_SECONDARY))
+	_amount_edit = LineEdit.new()
+	_amount_edit.name = "AmountEdit"
+	_amount_edit.custom_minimum_size = Vector2(76, 28)
+	_amount_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_amount_edit.add_theme_font_size_override("font_size", 13)
+	_amount_edit.text_changed.connect(_on_amount_text_changed)
+	_amount_edit.text_submitted.connect(func(_text: String) -> void: _commit_amount_edit())
+	amount_row.add_child(_amount_edit)
+	_amount_value_label = _label("", 12, UiStyle.TEXT_PRIMARY)
+	_amount_value_label.custom_minimum_size = Vector2(80, 0)
+	amount_row.add_child(_amount_value_label)
+	column.add_child(amount_row)
+
+	_amount_slider = HSlider.new()
+	_amount_slider.name = "AmountSlider"
+	_amount_slider.min_value = 1
+	_amount_slider.max_value = 1
+	_amount_slider.step = 1
+	_amount_slider.custom_minimum_size = Vector2(0, 20)
+	_amount_slider.value_changed.connect(_on_amount_slider_changed)
+	column.add_child(_amount_slider)
+	_amount_max_label = _label("", 10, UiStyle.TEXT_MUTED)
+	column.add_child(_amount_max_label)
+
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 8)
+	var cancel := Button.new()
+	cancel.text = "Cancel"
+	cancel.focus_mode = Control.FOCUS_NONE
+	cancel.custom_minimum_size = Vector2(0, 34)
+	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cancel.add_theme_stylebox_override("normal", UiStyle.button_style(false))
+	cancel.add_theme_stylebox_override("hover", UiStyle.button_style(false, true))
+	cancel.pressed.connect(cancel_amount)
+	buttons.add_child(cancel)
+	_amount_confirm = Button.new()
+	_amount_confirm.name = "AmountConfirm"
+	_amount_confirm.text = "Confirm"
+	_amount_confirm.focus_mode = Control.FOCUS_NONE
+	_amount_confirm.custom_minimum_size = Vector2(0, 34)
+	_amount_confirm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_amount_confirm.add_theme_stylebox_override("normal", UiStyle.button_style(true))
+	_amount_confirm.add_theme_stylebox_override("hover", UiStyle.button_style(true, true))
+	_amount_confirm.add_theme_stylebox_override("disabled", UiStyle.button_disabled_style())
+	_amount_confirm.pressed.connect(confirm_amount)
+	buttons.add_child(_amount_confirm)
+	column.add_child(buttons)
+	return root
 
 
 # =========================================================================
-# Navigation
+# Navigation / pages
 # =========================================================================
 
 func nav_enabled(target: String) -> bool:
 	return target != "map" and NAV_TARGETS.has(target)
 
 
-## Activates a navigation target.  Inventory/Character switch the page; Crafting
-## and Settings are existing overlays the game opens; Map is explicitly not
-## available.  Returns false when nothing happened.
 func press_nav(target: String) -> bool:
 	if not nav_enabled(target):
 		return false
 	match target:
-		"inventory", "character":
+		"inventory", "character", "crafting":
 			set_page(target)
-		_:
+		"settings":
 			navigate.emit(target)
 	return true
 
 
 func set_page(value: String) -> void:
-	if value != PAGE_INVENTORY and value != PAGE_CHARACTER:
+	if value != PAGE_INVENTORY and value != PAGE_CHARACTER and value != PAGE_CRAFTING:
 		return
 	_page = value
 	_active_tab = value
-	if _inventory_page != null:
-		_inventory_page.visible = value == PAGE_INVENTORY
-	if _character_page != null:
-		_character_page.visible = value == PAGE_CHARACTER
-	if _craft_panel != null:
-		_craft_panel.visible = value == PAGE_INVENTORY
+	_refresh_page_visibility()
 	_refresh_nav()
-	_refresh()
+	_refresh_all()
 
 
 func page() -> String:
 	return _page
+
+
+func _refresh_page_visibility() -> void:
+	var inventory_page := _page != PAGE_CRAFTING
+	if _player_panel != null:
+		_player_panel.visible = inventory_page
+	if _inventory_page != null:
+		_inventory_page.visible = inventory_page
+	if _context_panel != null:
+		_context_panel.visible = inventory_page and _page == PAGE_INVENTORY and _context_open
+	if _stats_panel != null:
+		_stats_panel.visible = inventory_page and _page == PAGE_CHARACTER
+	if _crafting_page != null:
+		_crafting_page.visible = _page == PAGE_CRAFTING
+	if _rotation_row != null:
+		_rotation_row.visible = _page == PAGE_CHARACTER
 
 
 func _refresh_nav() -> void:
@@ -678,15 +1094,14 @@ func _refresh_nav() -> void:
 
 
 # =========================================================================
-# Configuration (game -> screen)
+# Configuration
 # =========================================================================
 
-## The best station the player currently has.  Table recipes stay gated by it.
 func set_station(station: String) -> void:
 	if _station == station:
 		return
 	_station = station
-	_refresh_craft()
+	_refresh_crafting()
 
 
 func station() -> String:
@@ -700,8 +1115,19 @@ func set_vitals(health: float, max_health: float, hunger: float, max_hunger: flo
 		return
 	_vitals.set_vitals(health, max_health, hunger, max_hunger)
 	_vitals.set_breath(breath, max_breath, breath_visible)
-	if _character_vitals != null:
-		_character_vitals.text = _vitals.summary_text()
+	if _stats_vitals != null:
+		_stats_vitals.text = _vitals.summary_text()
+	if _stats_health_bar != null:
+		_stats_health_bar.value = 0.0 if max_health <= 0.0 else clampf(health / max_health * 100.0, 0.0, 100.0)
+	if _stats_hunger_bar != null:
+		_stats_hunger_bar.value = 0.0 if max_hunger <= 0.0 else clampf(hunger / max_hunger * 100.0, 0.0, 100.0)
+
+
+## Real gameplay stats for the Character page.  Experience/defence/armour have
+## no model and are deliberately absent.
+func set_player_stats(move_speed: float) -> void:
+	if _stats_speed != null:
+		_stats_speed.text = "%.1f" % move_speed
 
 
 func vitals_text() -> String:
@@ -716,50 +1142,121 @@ func equipment_enabled() -> bool:
 	return false
 
 
+func stats_text() -> String:
+	if _stats_vitals == null:
+		return ""
+	return "%s · Attack %s · Speed %s" % [
+		_stats_vitals.text, _stats_attack.text, _stats_speed.text,
+	]
+
+
+## Experience/defence/armour are not implemented; the UI says so instead of
+## presenting a fabricated value.
+func stats_experience_available() -> bool:
+	return false
+
+
+func stats_defence_available() -> bool:
+	return false
+
+
+## Diagnostic/test accessors for preview stability.
+func character_preview_rect() -> Rect2:
+	return _preview.preview_rect() if _preview != null else Rect2()
+
+
+func character_preview_viewport_size() -> Vector2i:
+	return _preview.viewport_size() if _preview != null else Vector2i.ZERO
+
+
+func character_preview_visible() -> bool:
+	return _preview != null and _preview.is_visible_in_tree()
+
+
+func rotate_preview(degrees: float) -> void:
+	if _preview != null:
+		_preview.rotate_by(degrees)
+
+
+func reset_preview_rotation() -> void:
+	if _preview != null:
+		_preview.reset_rotation()
+
+
 # =========================================================================
-# Player slot interaction
+# Player slots
 # =========================================================================
 
-func _on_slot_clicked(index: int, button: int, shift: bool) -> bool:
+func _make_slot(index: int, parent: Control, size: int) -> InventorySlot:
+	var slot := InventorySlot.new()
+	slot.name = "Slot%d" % index
+	slot.configure(index, inventory, library, size)
+	slot.clicked.connect(_on_slot_clicked)
+	slot.stack_moved.connect(_on_stack_moved)
+	slot.hovered.connect(_on_slot_hovered)
+	parent.add_child(slot)
+	_slots.append(slot)
+	return slot
+
+
+func _on_slot_hovered(index: int) -> void:
 	_focus_index = index
-	if index < Inventory.HOTBAR_SIZE and inventory != null:
-		# An explicit click on a hotbar slot is a selection action, exactly like
-		# pressing 1-9 in the world.  Merely opening the panel never changes it.
-		inventory.select(index)
+	_update_detail()
+	if _context_open and _page == PAGE_INVENTORY:
+		_context_index = index
+		_refresh_context()
+
+
+func _on_slot_clicked(index: int, button: int, shift: bool, ctrl: bool) -> bool:
+	_focus_index = index
+	if button == MOUSE_BUTTON_MIDDLE:
+		open_context_menu(index)
+		return true
 	if shift:
 		var moved := quick_move(index)
-		_refresh()
+		_refresh_all()
 		return moved
-	if button == MOUSE_BUTTON_RIGHT:
+	var select_all := ctrl
+	if button == MOUSE_BUTTON_RIGHT and not select_all:
 		if _carried.is_empty():
 			split_half(index)
 		else:
 			put_one(index)
 	else:
+		# Left click (and Ctrl+left) moves the full stack.  It deliberately does
+		# not change the hotbar selection: that is a gameplay action (1-9/wheel).
 		if _carried.is_empty():
 			pick_up(index)
 		else:
 			put_down(index)
-	_refresh()
+	if _context_open and _page == PAGE_INVENTORY:
+		_context_index = index
+		_refresh_context()
+	_refresh_all()
 	return true
 
 
-func click_slot(index: int, button: int = MOUSE_BUTTON_LEFT, shift: bool = false) -> bool:
-	return _on_slot_clicked(index, button, shift)
+func click_slot(index: int, button: int = MOUSE_BUTTON_LEFT, shift: bool = false,
+		ctrl: bool = false) -> bool:
+	return _on_slot_clicked(index, button, shift, ctrl)
 
 
-func _on_stack_moved(from: int, to: int) -> void:
+func _on_stack_moved(from_index: int, to_index: int) -> void:
 	if inventory == null or not _carried.is_empty():
-		# Dragging is a whole-stack model move; it cannot run while the temporary
-		# cursor already owns a stack, or the two operations could double up.
 		return
-	if inventory.move_slot(from, to):
-		_focus_index = to
-		changed_stack.emit(inventory.item_at(to))
-	_refresh()
+	if inventory.move_slot(from_index, to_index):
+		_focus_index = to_index
+		changed_stack.emit(inventory.item_at(to_index))
+	_refresh_all()
 
 
-## Picks the whole stack out of a slot (and makes it the cursor stack).
+func _on_inventory_changed() -> void:
+	# A hidden screen must not rebuild the recipe browser and icons on every
+	# pickup while the player is in the world; opening the screen refreshes it.
+	if visible:
+		_refresh_all()
+
+
 func pick_up(index: int) -> bool:
 	if inventory == null or not _carried.is_empty():
 		return false
@@ -770,11 +1267,10 @@ func pick_up(index: int) -> bool:
 	_carry_origin = index
 	_focus_index = index
 	changed_stack.emit(int(stack["item"]))
-	_refresh()
+	_refresh_all()
 	return true
 
 
-## Puts the cursor stack into a slot.  Whatever does not fit stays carried.
 func put_down(index: int) -> bool:
 	if inventory == null or _carried.is_empty():
 		return false
@@ -785,12 +1281,10 @@ func put_down(index: int) -> bool:
 	if _carried.is_empty():
 		_carry_origin = -1
 	elif int(_carried["item"]) != before_item:
-		# A swap displaced the target stack; that stack is now the cursor stack
-		# and its original home is this slot.
 		_carry_origin = index
 	if not _carried.is_empty():
 		changed_stack.emit(int(_carried["item"]))
-	_refresh()
+	_refresh_all()
 	return true
 
 
@@ -799,26 +1293,10 @@ func split_half(index: int) -> bool:
 	if inventory == null or not _carried.is_empty() or inventory.is_empty(index):
 		return false
 	var count := inventory.count_at(index)
-	var half := maxi(1, int(ceil(float(count) * 0.5)))
-	var whole := inventory.take_stack(index)
-	if whole.is_empty():
-		return false
-	var take := mini(int(whole["count"]), half)
-	var remainder := {"item": int(whole["item"]),
-		"count": int(whole["count"]) - take,
-		"durability": int(whole.get("durability", 0))}
-	if not remainder.is_empty() and int(remainder["count"]) > 0:
-		inventory.put_stack(index, remainder)
-	_carried = {"item": int(whole["item"]), "count": take,
-		"durability": int(whole.get("durability", 0))}
-	_carry_origin = index
-	_focus_index = index
-	changed_stack.emit(int(_carried["item"]))
-	_refresh()
-	return true
+	return _take_amount(index, maxi(1, int(ceil(float(count) * 0.5))))
 
 
-## Right-click while carrying: place exactly one item into a compatible slot.
+## Right-click while carrying: place exactly one item.
 func put_one(index: int) -> bool:
 	if inventory == null or _carried.is_empty():
 		return false
@@ -834,11 +1312,11 @@ func put_one(index: int) -> bool:
 		_carried = {}
 		_carry_origin = -1
 	_focus_index = index
-	_refresh()
+	_refresh_all()
 	return true
 
 
-## Shift-click: move a whole stack between the hotbar and the main rows.
+## Shift-click: move a whole stack between the hotbar and the storage rows.
 func quick_move(index: int) -> bool:
 	if inventory == null or not _carried.is_empty():
 		return false
@@ -846,15 +1324,14 @@ func quick_move(index: int) -> bool:
 		return false
 	_focus_index = index
 	changed_stack.emit(inventory.item_at(index))
-	_refresh()
+	_refresh_all()
 	return true
 
 
-## Swaps two slots (also the model path used by the drag & drop drop handler).
 func swap(a: int, b: int) -> bool:
 	if inventory == null or not _carried.is_empty() or not inventory.swap_slots(a, b):
 		return false
-	_refresh()
+	_refresh_all()
 	return true
 
 
@@ -866,7 +1343,6 @@ func slot_count() -> int:
 	return _slots.size()
 
 
-## Text of a slot's count badge (empty when the count is 1 or the slot is empty).
 func slot_count_text(index: int) -> String:
 	for slot: InventorySlot in _slots:
 		if slot.index == index:
@@ -874,397 +1350,765 @@ func slot_count_text(index: int) -> String:
 	return ""
 
 
-## Text of the item facts pane, for diagnostics.
 func detail_text() -> String:
-	return _detail.text
+	return _detail_label.text if _detail_label != null else ""
 
 
 func focus_slot(index: int) -> void:
 	_focus_index = clampi(index, 0, Inventory.SIZE - 1)
-	if inventory != null and _focus_index < Inventory.HOTBAR_SIZE:
-		inventory.select(_focus_index)
-	_refresh()
+	_update_detail()
+	if _context_open and _page == PAGE_INVENTORY:
+		_context_index = _focus_index
+		_refresh_context()
+
+
+func focused_index() -> int:
+	return _focus_index
 
 
 # =========================================================================
-# Crafting grid
+# Context actions
 # =========================================================================
 
-func craft_grid_slot_count() -> int:
-	return CRAFT_GRID
+func open_context_menu(index: int) -> bool:
+	if index < 0 or index >= Inventory.SIZE:
+		return false
+	_context_index = index
+	_context_open = true
+	_focus_index = index
+	_context_panel.visible = _page == PAGE_INVENTORY
+	_update_detail()
+	_refresh_context()
+	return true
 
 
-func craft_grid_item(index: int) -> int:
-	if _craft == null:
-		return BlockDB.AIR
-	return _craft.inventory.item_at(index)
+func close_context_menu() -> void:
+	_context_open = false
+	if _context_panel != null:
+		_context_panel.visible = false
 
 
-func craft_grid_count(index: int) -> int:
-	if _craft == null:
-		return 0
-	return _craft.inventory.count_at(index)
+func context_menu_open() -> bool:
+	return _context_open
 
 
-## The current output: a real stack in the result slot, or the ghost preview of
-## the recipe the grid matches.  Empty when nothing matches.
-func craft_output() -> Dictionary:
-	if _craft == null:
-		return {}
-	if not _craft.inventory.is_empty(CRAFT_OUTPUT):
-		return {
-			"item": _craft.inventory.item_at(CRAFT_OUTPUT),
-			"count": _craft.inventory.count_at(CRAFT_OUTPUT),
-			"ghost": false,
-		}
-	var preview := _craft.result_preview()
-	if preview.is_empty():
-		return {}
-	var recipe: Dictionary = preview["recipe"]
-	return {
-		"recipe": recipe,
-		"item": int(preview["output"]),
-		"count": int(preview["count"]),
-		"ghost": true,
-		"station_ok": Crafting.station_satisfied(recipe, _station),
+func context_actions() -> Array:
+	var actions: Array = []
+	if _context_index < 0 or _context_index >= Inventory.SIZE:
+		return actions
+	if not _carried.is_empty():
+		actions.append(ACTION_CANCEL)
+		return actions
+	if inventory.is_empty(_context_index):
+		return actions
+	actions.append(ACTION_ALL)
+	if inventory.count_at(_context_index) > 1:
+		actions.append(ACTION_HALF)
+	actions.append(ACTION_ONE)
+	actions.append(ACTION_AMOUNT)
+	actions.append(ACTION_QUICK)
+	if _context_index >= Inventory.HOTBAR_SIZE:
+		actions.append(ACTION_MOVE)
+	actions.append(ACTION_CANCEL)
+	return actions
+
+
+func activate_context(action: String) -> bool:
+	if _context_index < 0 or _context_index >= Inventory.SIZE:
+		return false
+	match action:
+		ACTION_ALL:
+			return _take_amount(_context_index, inventory.count_at(_context_index))
+		ACTION_HALF:
+			var half := maxi(1, int(ceil(float(inventory.count_at(_context_index)) * 0.5)))
+			return _take_amount(_context_index, half)
+		ACTION_ONE:
+			return _take_amount(_context_index, 1)
+		ACTION_AMOUNT:
+			return open_amount_dialog(_context_index) > 0
+		ACTION_QUICK:
+			return quick_move(_context_index)
+		ACTION_MOVE:
+			if _context_index < Inventory.HOTBAR_SIZE:
+				return _move_to_storage(_context_index)
+			return _move_to_hotbar(_context_index)
+		ACTION_CANCEL:
+			if not _carried.is_empty():
+				flush_cursor()
+			close_context_menu()
+			return true
+	return false
+
+
+## Takes `amount` from a slot into the cursor, leaving the rest in the slot.
+func _take_amount(index: int, amount: int) -> bool:
+	if inventory == null or not _carried.is_empty() or inventory.is_empty(index):
+		return false
+	var wanted := clampi(amount, 1, inventory.count_at(index))
+	var whole := inventory.take_stack(index)
+	if whole.is_empty():
+		return false
+	var take := mini(wanted, int(whole["count"]))
+	var remainder := {
+		"item": int(whole["item"]),
+		"count": int(whole["count"]) - take,
+		"durability": int(whole.get("durability", 0)),
 	}
+	if int(remainder["count"]) > 0:
+		inventory.put_stack(index, remainder)
+	_carried = {"item": int(whole["item"]), "count": take,
+		"durability": int(whole.get("durability", 0))}
+	_carry_origin = index
+	_focus_index = index
+	changed_stack.emit(int(_carried["item"]))
+	_refresh_all()
+	return true
+
+
+## Moves a storage stack into the first suitable hotbar slot (or merges).
+func _move_to_hotbar(index: int) -> bool:
+	if index < Inventory.HOTBAR_SIZE or inventory.is_empty(index):
+		return false
+	if inventory.quick_move(index):
+		_focus_index = index
+		_refresh_all()
+		return true
+	return false
+
+
+## Moves a hotbar stack into the first suitable storage slot (or merges).
+func _move_to_storage(index: int) -> bool:
+	if index >= Inventory.HOTBAR_SIZE or inventory.is_empty(index):
+		return false
+	if inventory.quick_move(index):
+		_focus_index = index
+		_refresh_all()
+		return true
+	return false
+
+
+func _refresh_context() -> void:
+	if _context_panel == null:
+		return
+	if not _context_open or _page != PAGE_INVENTORY or _context_index < 0:
+		_context_panel.visible = false
+		return
+	var item_id := inventory.item_at(_context_index)
+	var count := inventory.count_at(_context_index)
+	var empty := item_id == BlockDB.AIR or count <= 0
+	_context_panel.visible = true
+	_context_icon.set_item(item_id, library, ItemDB.icon_tint(item_id))
+	_context_title.text = ItemDB.name_of(item_id) if not empty else "Empty slot"
+	_context_count.text = "" if empty else ("×%d" % count)
+	var available := context_actions()
+	for action: String in _context_buttons:
+		var button := _context_buttons[action] as Button
+		var valid := available.has(action)
+		button.visible = valid or action == ACTION_CANCEL
+		button.disabled = not valid
+	if _context_move_button != null:
+		_context_move_button.text = "Move to Storage" if _context_index < Inventory.HOTBAR_SIZE else "Move to Hotbar"
+
+
+# =========================================================================
+# Amount dialog
+# =========================================================================
+
+## Opens the quantity dialog for a slot.  With an empty cursor this selects an
+## amount to pick up; with a carried stack it selects an amount to place into
+## the slot.  Returns the maximum selectable amount (0 when the action is invalid).
+func open_amount_dialog(index: int) -> int:
+	if inventory == null or index < 0 or index >= Inventory.SIZE:
+		return 0
+	if _amount_dialog == null:
+		return 0
+	var item_id := BlockDB.AIR
+	var maximum := 0
+	var take_mode := _carried.is_empty()
+	if take_mode:
+		if inventory.is_empty(index):
+			return 0
+		item_id = inventory.item_at(index)
+		maximum = inventory.count_at(index)
+	else:
+		item_id = int(_carried["item"])
+		if inventory.is_empty(index):
+			maximum = mini(int(_carried["count"]), ItemDB.max_stack(item_id))
+		elif inventory.item_at(index) == item_id:
+			maximum = mini(int(_carried["count"]),
+				maxi(0, ItemDB.max_stack(item_id) - inventory.count_at(index)))
+		else:
+			return 0
+	if maximum <= 0:
+		return 0
+	_amount_slot = index
+	_amount_take = take_mode
+	_amount_max = maximum
+	_focus_index = index
+	_update_detail()
+	if _context_open and _page == PAGE_INVENTORY:
+		_context_index = index
+		_refresh_context()
+	var initial := maxi(1, int(ceil(float(maximum) * 0.5)))
+	_amount_slider.min_value = 1
+	_amount_slider.max_value = maximum
+	_amount_icon.set_item(item_id, library, ItemDB.icon_tint(item_id))
+	_amount_title.text = ItemDB.name_of(item_id)
+	_amount_available.text = ("Available: %d" % maximum) if take_mode \
+		else ("Carrying: %d · Room: %d" % [int(_carried["count"]), maximum])
+	_amount_max_label.text = "1 – %d" % maximum
+	_amount_confirm.disabled = false
+	_amount_dialog.visible = true
+	set_amount_value(initial)
+	return maximum
+
+
+func amount_dialog_open() -> bool:
+	return _amount_dialog != null and _amount_dialog.visible
+
+
+func amount_value() -> int:
+	return _amount_value
+
+
+func amount_max() -> int:
+	return _amount_max
+
+
+func amount_slot() -> int:
+	return _amount_slot
+
+
+func set_amount_value(value: int) -> void:
+	if not amount_dialog_open():
+		return
+	_amount_value = clampi(value, 1, _amount_max)
+	_amount_updating = true
+	_amount_slider.value = _amount_value
+	_amount_edit.text = str(_amount_value)
+	_amount_value_label.text = "%d / %d" % [_amount_value, _amount_max]
+	_amount_updating = false
+
+
+func _on_amount_slider_changed(value: float) -> void:
+	if _amount_updating:
+		return
+	set_amount_value(int(round(value)))
+
+
+func _on_amount_text_changed(text: String) -> void:
+	if _amount_updating:
+		return
+	if text.strip_edges().is_empty():
+		return
+	if text.is_valid_int():
+		set_amount_value(text.to_int())
+
+
+func _commit_amount_edit() -> void:
+	set_amount_value(_amount_edit.text.to_int() if _amount_edit.text.is_valid_int() else _amount_value)
+
+
+func _amount_quick(mode: int) -> void:
+	match mode:
+		0:
+			set_amount_value(_amount_max)
+		1:
+			set_amount_value(maxi(1, int(ceil(float(_amount_max) * 0.5))))
+		_:
+			set_amount_value(1)
+
+
+func confirm_amount() -> bool:
+	if not amount_dialog_open():
+		return false
+	var chosen := clampi(_amount_value, 1, _amount_max)
+	var ok := false
+	if _amount_take:
+		ok = _take_amount(_amount_slot, chosen)
+	else:
+		ok = _place_amount(_amount_slot, chosen)
+	_amount_dialog.visible = false
+	_refresh_all()
+	return ok
+
+
+func cancel_amount() -> void:
+	if _amount_dialog != null:
+		_amount_dialog.visible = false
+
+
+func _place_amount(index: int, amount: int) -> bool:
+	if _carried.is_empty() or index < 0 or index >= Inventory.SIZE:
+		return false
+	var item_id := int(_carried["item"])
+	var one := {"item": item_id, "count": amount,
+		"durability": int(_carried.get("durability", 0))}
+	var leftover: Dictionary = inventory.put_stack(index, one)
+	var placed := amount - int(leftover.get("count", 0))
+	if placed <= 0:
+		return false
+	_carried["count"] = int(_carried["count"]) - placed
+	if int(_carried["count"]) <= 0:
+		_carried = {}
+		_carry_origin = -1
+	_focus_index = index
+	_refresh_all()
+	return true
+
+
+func handle_cancel() -> bool:
+	if amount_dialog_open():
+		cancel_amount()
+		return true
+	if _context_open:
+		close_context_menu()
+		return true
+	if not _carried.is_empty():
+		return flush_cursor()
+	return false
+
+
+func _on_dim_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var button := event as InputEventMouseButton
+		if button.pressed and button.button_index == MOUSE_BUTTON_RIGHT:
+			if amount_dialog_open():
+				cancel_amount()
+			elif not _carried.is_empty():
+				flush_cursor()
+			else:
+				close_context_menu()
+			_refresh_all()
+
+
+# =========================================================================
+# Crafting page
+# =========================================================================
+
+func set_craft_category(category: String) -> void:
+	_crafting_category = category
+	_refresh_recipe_tiles()
+	_refresh_crafting()
+
+
+func craft_category() -> String:
+	return _crafting_category
+
+
+func set_craft_search(text: String) -> void:
+	_crafting_search = text.strip_edges().to_lower()
+	_refresh_recipe_tiles()
+	_refresh_crafting()
+
+
+func craft_search_text() -> String:
+	return _crafting_search
+
+
+func visible_recipe_count() -> int:
+	var count := 0
+	for entry: Dictionary in _recipe_tiles:
+		if (entry["button"] as Control).visible:
+			count += 1
+	return count
+
+
+func visible_recipe_ids() -> Array:
+	var ids: Array = []
+	for entry: Dictionary in _recipe_tiles:
+		if (entry["button"] as Control).visible:
+			ids.append(str((entry["recipe"] as Dictionary)["id"]))
+	return ids
+
+
+func recipe_count() -> int:
+	return _recipe_tiles.size()
+
+
+func recipe_is_craftable(id: String) -> bool:
+	var recipe := Crafting.recipe(id)
+	if recipe.is_empty() or inventory == null:
+		return false
+	return Crafting.can_craft(inventory, recipe, _station)
+
+
+func select_recipe(id: String) -> bool:
+	var recipe := Crafting.recipe(id)
+	if recipe.is_empty():
+		return false
+	_selected_recipe_id = id
+	_craft_quantity = 1
+	_refresh_recipe_tiles()
+	_refresh_crafting()
+	call_deferred("_scroll_selected_recipe")
+	return true
+
+
+## Keeps the selected recipe visible in the scrollable browser, so the blue
+## selection highlight is never hidden below the fold.
+func _scroll_selected_recipe() -> void:
+	if _recipe_grid_scroll == null or _selected_recipe_id.is_empty():
+		return
+	for entry: Dictionary in _recipe_tiles:
+		if str((entry["recipe"] as Dictionary)["id"]) == _selected_recipe_id:
+			var button := entry["button"] as Control
+			if button.visible:
+				_recipe_grid_scroll.ensure_control_visible(button)
+			return
+
+
+func selected_recipe_id() -> String:
+	return _selected_recipe_id
+
+
+func selected_recipe() -> Dictionary:
+	return Crafting.recipe(_selected_recipe_id) if not _selected_recipe_id.is_empty() else {}
+
+
+func set_craft_quantity(value: int) -> void:
+	var maximum := max_craft_quantity()
+	if maximum <= 0:
+		_craft_quantity = 1
+	else:
+		_craft_quantity = clampi(value, 1, maximum)
+	_refresh_quantity()
+
+
+func craft_quantity() -> int:
+	return _craft_quantity
+
+
+func max_craft_quantity() -> int:
+	var recipe := selected_recipe()
+	if recipe.is_empty() or inventory == null:
+		return 0
+	if not Crafting.station_satisfied(recipe, _station):
+		return 0
+	var ingredient_limit := Crafting.craftable_count(inventory, recipe, _station)
+	if ingredient_limit <= 0:
+		return 0
+	ingredient_limit = mini(ingredient_limit, 999)
+	for count in range(ingredient_limit, 0, -1):
+		if Crafting.can_craft_times(inventory, recipe, count, _station):
+			return count
+	return 0
+
+
+## Crafts the selected recipe at the selected quantity.  `Crafting.craft_many`
+## is atomic, so a failed transaction consumes nothing.
+func craft_selected() -> bool:
+	var recipe := selected_recipe()
+	if recipe.is_empty() or inventory == null:
+		return false
+	var maximum := max_craft_quantity()
+	if maximum <= 0:
+		_refresh_crafting()
+		return false
+	var quantity := clampi(_craft_quantity, 1, maximum)
+	var result: Dictionary = Crafting.craft_many(inventory, recipe, quantity, _station)
+	crafted.emit(result)
+	_refresh_all()
+	return bool(result.get("ok", false))
 
 
 func craft_status_text() -> String:
 	return "" if _craft_status == null else _craft_status.text
 
 
-## Crafts the matching recipe into the result slot.  Atomic: `Station.craft_grid`
-## validates the result slot before consuming anything, and the station check runs
-## first.  Returns true when the output slot received the craft.
-func craft_press() -> bool:
-	if inventory == null or _craft == null:
-		return false
-	var preview := _craft.result_preview()
-	if preview.is_empty():
-		message.emit("Nothing matches this grid")
-		return false
-	var recipe: Dictionary = preview["recipe"]
+## Compatibility-ish diagnostics used by the runtime test and captures.
+func row_count() -> int:
+	return _recipe_tiles.size()
+
+
+func row_enabled(id: String) -> bool:
+	return recipe_is_craftable(id)
+
+
+func row_status(id: String) -> String:
+	var recipe := Crafting.recipe(id)
+	if recipe.is_empty():
+		return ""
 	if not Crafting.station_satisfied(recipe, _station):
-		message.emit("%s needs a crafting table" % ItemDB.name_of(int(recipe["output"])))
-		_refresh()
+		return "needs %s" % _station_name(Crafting.station_of(recipe))
+	var missing := Crafting.missing(inventory, recipe, _station)
+	if not missing.is_empty():
+		return "missing %s" % _shortfall(missing)
+	if not Crafting.can_craft(inventory, recipe, _station):
+		return "inventory full"
+	return "ready"
+
+
+func press_craft(id: String, batch: bool = false) -> bool:
+	if not select_recipe(id):
 		return false
-	var result: Dictionary = _craft.craft_grid()
-	if not bool(result.get("ok", false)):
-		message.emit(str(result.get("reason", "Cannot craft")))
-		_refresh()
+	if batch:
+		set_craft_quantity(5)
+	return craft_selected()
+
+
+func debug_open_amount(index: int, quantity: int = -1) -> bool:
+	var maximum := open_amount_dialog(index)
+	if maximum <= 0:
 		return false
-	crafted.emit(result)
-	_refresh()
+	if quantity > 0:
+		set_amount_value(quantity)
 	return true
 
 
-## The result slot: crafts (if empty) and takes the output.  Shift-click sends it
-## straight to the inventory.
-func craft_click(index: int, button: int = MOUSE_BUTTON_LEFT, shift: bool = false) -> bool:
-	if index != CRAFT_OUTPUT:
-		return _click_craft_grid(index, button, shift)
-	if inventory == null or _craft == null:
-		return false
-	if not _carried.is_empty():
-		message.emit("Place the held stack first")
-		return false
-	if _craft.inventory.is_empty(CRAFT_OUTPUT):
-		if not craft_press():
-			return false
-	var stack := _craft.inventory.take(CRAFT_OUTPUT, -1)
-	if stack.is_empty():
-		return false
-	if shift:
-		var leftover: Dictionary = inventory.add_stack(stack)
-		if not leftover.is_empty():
-			_craft.inventory.insert(CRAFT_OUTPUT, leftover, true)
-			message.emit("No room for %d %s" % [
-				int(leftover["count"]), ItemDB.name_of(int(leftover["item"]))])
-			_refresh()
-			return false
-		_refresh()
-		return true
-	_carried = stack
-	_carry_origin = -1
-	changed_stack.emit(int(stack["item"]))
-	_focus_index = -1
-	_refresh()
-	return true
+func debug_open_context(index: int) -> bool:
+	return open_context_menu(index)
 
 
-func _on_craft_slot_clicked(_side: String, index: int, button: int, shift: bool) -> void:
-	craft_click(index, button, shift)
-
-
-func _click_craft_grid(index: int, button: int, shift: bool) -> bool:
-	if _craft == null or index < 0 or index >= CRAFT_GRID:
-		return false
-	if shift:
-		if not _carried.is_empty():
-			return false
-		var stack := _craft.inventory.take(index, -1)
-		if stack.is_empty():
-			return false
-		var leftover: Dictionary = inventory.add_stack(stack)
-		if not leftover.is_empty():
-			_craft.inventory.insert(index, leftover)
-			message.emit("No room for %d %s" % [
-				int(leftover["count"]), ItemDB.name_of(int(leftover["item"]))])
-		_refresh()
-		return true
-	if button == MOUSE_BUTTON_RIGHT:
-		if _carried.is_empty():
-			if _craft.inventory.is_empty(index):
-				return false
-			var count := _craft.inventory.count_at(index)
-			var take := maxi(1, int(ceil(float(count) * 0.5)))
-			_carried = _craft.inventory.take(index, take)
-			_carry_origin = -1
-			_refresh()
-			return true
-		var one := {"item": int(_carried["item"]), "count": 1,
-			"durability": int(_carried.get("durability", 0))}
-		var leftover_one: Dictionary = _craft.inventory.insert(index, one)
-		if not leftover_one.is_empty():
-			return false
-		_carried["count"] = int(_carried["count"]) - 1
-		if int(_carried["count"]) <= 0:
-			_carried = {}
-			_carry_origin = -1
-		_refresh()
-		return true
-	if _carried.is_empty():
-		if _craft.inventory.is_empty(index):
-			return false
-		_carried = _craft.inventory.take(index, -1)
-		_carry_origin = -1
-		_refresh()
-		return true
-	var before := int(_carried["count"])
-	var leftover: Dictionary = _craft.inventory.insert(index, _carried)
-	if leftover.is_empty():
-		_carried = {}
-		_carry_origin = -1
-		_refresh()
-		return true
-	_carried = leftover
-	if int(_carried["count"]) == before:
-		message.emit("That slot already holds a different item")
-		return false
-	_refresh()
-	return true
-
-
-func _on_craft_stack_moved(from_side: String, from_index: int, to_side: String,
-		to_index: int) -> void:
-	if _craft == null or inventory == null or not _carried.is_empty():
-		return
-	if to_side == "craft" and to_index == CRAFT_OUTPUT:
-		return
-	if from_side == to_side:
-		if from_side == "player":
-			inventory.move_slot(from_index, to_index)
+func _refresh_recipe_tiles() -> void:
+	var selected := _selected_recipe_id
+	for entry: Dictionary in _recipe_tiles:
+		var recipe: Dictionary = entry["recipe"]
+		var button := entry["button"] as Button
+		var search_ok := _crafting_search.is_empty() or _recipe_matches_search(recipe)
+		var category_ok := _crafting_category.is_empty() or str(recipe["category"]) == _crafting_category
+		button.visible = search_ok and category_ok
+		button.add_theme_stylebox_override("normal",
+			UiStyle.recipe_tile_style(str(recipe["id"]) == selected))
+		button.add_theme_stylebox_override("pressed", UiStyle.recipe_tile_style(true))
+		if not recipe_is_craftable(str(recipe["id"])):
+			button.modulate = Color(1, 1, 1, 0.55)
 		else:
-			_craft.inventory.move(from_index, to_index)
-	elif from_side == "player" and to_side == "craft":
-		var stack := inventory.take_stack(from_index)
-		if stack.is_empty():
-			return
-		var leftover: Dictionary = _craft.inventory.insert(to_index, stack)
-		if not leftover.is_empty():
-			inventory.put_stack(from_index, leftover)
-	elif from_side == "craft" and to_side == "player":
-		var stack: Dictionary = _craft.inventory.take(from_index, -1)
-		if stack.is_empty():
-			return
-		var leftover: Dictionary = inventory.add_stack(stack)
-		if not leftover.is_empty():
-			_craft.inventory.insert(from_index, leftover)
-	_refresh()
+			button.modulate = Color.WHITE
+	if _recipe_count_label != null:
+		_recipe_count_label.text = "%d shown" % visible_recipe_count()
+	if _crafting_category_buttons.has(_crafting_category):
+		for key: String in _crafting_category_buttons:
+			var button := _crafting_category_buttons[key] as Button
+			button.add_theme_stylebox_override("normal",
+				UiStyle.category_style(key == _crafting_category))
+			button.add_theme_stylebox_override("hover", UiStyle.category_style(key == _crafting_category, true))
+			button.add_theme_stylebox_override("pressed", UiStyle.category_style(true))
 
 
-func _refresh_craft() -> void:
-	if _craft == null or _craft_status == null or _output_slot == null:
+func _recipe_matches_search(recipe: Dictionary) -> bool:
+	var haystack := "%s %s %s %s" % [
+		ItemDB.name_of(int(recipe["output"])), str(recipe["id"]),
+		str(recipe["category"]), Crafting.label(recipe),
+	]
+	for item_id in Crafting.ingredients(recipe):
+		haystack += " " + ItemDB.name_of(int(item_id))
+	return haystack.to_lower().contains(_crafting_search)
+
+
+func _refresh_crafting() -> void:
+	if _craft_status == null:
 		return
-	var output_empty := _craft.inventory.is_empty(CRAFT_OUTPUT)
-	var preview := _craft.result_preview()
-	if output_empty and not preview.is_empty():
-		_output_slot.override_stack = {
-			"item": int(preview["output"]), "count": int(preview["count"]),
-		}
-		_output_slot.ghost = true
-		_output_slot.selected = true
+	_refresh_recipe_tiles()
+	var recipe := selected_recipe()
+	var maximum := max_craft_quantity()
+	if recipe.is_empty():
+		_craft_title.text = "Select a recipe"
+		_craft_desc.text = "Choose a recipe from the browser."
+		for cell: ItemIcon in _craft_preview:
+			cell.set_item(BlockDB.AIR, library)
+		_craft_output_icon.set_item(BlockDB.AIR, library)
+		_craft_output_count.text = ""
+		for child: Node in _craft_ingredients.get_children():
+			child.queue_free()
+		_craft_station_title.text = "Crafting Table"
+		_craft_station_text.text = _station_note()
+		_craft_quantity_label.text = "1"
+		_craft_max_label.text = "Max 0"
+		_craft_status.text = "Select a recipe to see its ingredients."
+		_craft_status.add_theme_color_override("font_color", UiStyle.TEXT_MUTED)
+		_craft_button.disabled = true
+		return
+	var output := int(recipe["output"])
+	_craft_title.text = ItemDB.name_of(output)
+	_craft_desc.text = "%s · %s" % [str(recipe["category"]), _station_name(Crafting.station_of(recipe))]
+	_craft_output_icon.set_item(output, library, ItemDB.icon_tint(output))
+	_craft_output_count.text = "×%d" % int(recipe["output_count"])
+	_refresh_recipe_pattern(recipe)
+	_craft_station_title.text = _station_name(Crafting.station_of(recipe))
+	_craft_station_text.text = _station_note()
+	if maximum <= 0:
+		_craft_quantity = 1
+		_craft_quantity_label.text = "1"
+		_craft_max_label.text = "Max 0"
 	else:
-		_output_slot.override_stack = {}
-		_output_slot.ghost = false
-		_output_slot.selected = false
-	_output_slot.refresh()
-	for slot: StationSlot in _craft_slots:
-		if slot != _output_slot:
-			slot.refresh()
-
+		_craft_quantity = clampi(_craft_quantity, 1, maximum)
+		_craft_quantity_label.text = str(_craft_quantity)
+		_craft_max_label.text = "Max %d" % maximum
+	_craft_button.disabled = maximum <= 0
+	_refresh_quantity()
 	var status := ""
-	var can := false
-	var status_colour := UiStyle.TEXT_MUTED
-	if not output_empty:
-		status = "Take the crafted %s" % ItemDB.name_of(_craft.inventory.item_at(CRAFT_OUTPUT))
-		can = _carried.is_empty()
-		status_colour = UiStyle.READY
-	elif preview.is_empty():
-		var hint := _closest_recipe()
-		if hint.is_empty():
-			status = "Place ingredients in the 3x3 grid" if _grid_empty() else "No matching recipe"
-			status_colour = UiStyle.TEXT_MUTED
-		else:
-			status = "Missing: %s · %s" % [
-				_shortfall_text(hint),
-				ItemDB.name_of(int((hint["recipe"] as Dictionary)["output"])),
-			]
-			if not Crafting.station_satisfied(hint["recipe"], _station):
-				status += " (needs a table)"
-			status_colour = UiStyle.MISSING
+	var colour := UiStyle.TEXT_MUTED
+	if not Crafting.station_satisfied(recipe, _station):
+		status = "Requires a %s" % _station_name(Crafting.station_of(recipe))
+		colour = UiStyle.BLOCKED
+	elif not Crafting.missing(inventory, recipe, _station).is_empty():
+		status = "Missing: %s" % _shortfall(Crafting.missing(inventory, recipe, _station))
+		colour = UiStyle.MISSING
+	elif maximum <= 0:
+		status = "Not enough room for the output"
+		colour = UiStyle.BLOCKED
 	else:
-		var recipe: Dictionary = preview["recipe"]
-		if not Crafting.station_satisfied(recipe, _station):
-			status = "%s needs a crafting table" % ItemDB.name_of(int(recipe["output"]))
-			status_colour = UiStyle.BLOCKED
-		elif not _output_fits(preview):
-			status = "Result slot is full"
-			status_colour = UiStyle.BLOCKED
-		else:
-			status = "Ready: %d %s" % [int(preview["count"]), ItemDB.name_of(int(preview["output"]))]
-			can = true
-			status_colour = UiStyle.READY
+		status = "Ready to craft" if _craft_quantity == 1 else "Ready to craft ×%d" % _craft_quantity
+		colour = UiStyle.READY
 	_craft_status.text = status
-	_craft_status.add_theme_color_override("font_color", status_colour)
-	_craft_button.disabled = not can
-	_craft_button.modulate.a = 1.0 if can else 0.4
-	_refresh_table_note()
+	_craft_status.add_theme_color_override("font_color", colour)
 
 
-func _refresh_table_note() -> void:
-	if _craft_table_label == null:
+func _refresh_quantity() -> void:
+	if _craft_quantity_label == null:
 		return
+	_craft_quantity_label.text = str(_craft_quantity)
+	# Re-render ingredient requirements for the selected quantity.
+	var recipe := selected_recipe()
+	if not recipe.is_empty():
+		_refresh_ingredient_rows(recipe, max_craft_quantity())
+
+
+func _refresh_recipe_pattern(recipe: Dictionary) -> void:
+	for cell: ItemIcon in _craft_preview:
+		cell.set_item(BlockDB.AIR, library)
+		cell.set_ghost(false)
+	if recipe.has("pattern") and recipe.has("key"):
+		var pattern: Array = recipe["pattern"]
+		var key: Dictionary = recipe["key"]
+		for row in mini(3, pattern.size()):
+			var line := str(pattern[row])
+			for column in mini(3, line.length()):
+				var symbol := line[column]
+				if symbol == " ":
+					continue
+				var item_id := int(key.get(symbol, BlockDB.AIR))
+				if item_id != BlockDB.AIR:
+					_craft_preview[row * 3 + column].set_item(item_id, library,
+						ItemDB.icon_tint(item_id))
+	else:
+		var item_ids: Array = []
+		for item_id in Crafting.ingredients(recipe):
+			item_ids.append(int(item_id))
+		item_ids.sort()
+		for index in mini(9, item_ids.size()):
+			_craft_preview[index].set_item(int(item_ids[index]), library,
+				ItemDB.icon_tint(int(item_ids[index])))
+	for cell: ItemIcon in _craft_preview:
+		cell.set_ghost(true)
+
+
+func _refresh_ingredient_rows(recipe: Dictionary, maximum: int) -> void:
+	for child: Node in _craft_ingredients.get_children():
+		child.queue_free()
+	var rows: Array = []
+	var ingredients := Crafting.ingredients(recipe)
+	for item_id in ingredients:
+		rows.append({"item": int(item_id), "need": int(ingredients[item_id]), "fuel": false})
+	var fuel := Crafting.fuel(recipe)
+	for item_id in fuel:
+		rows.append({"item": int(item_id), "need": int(fuel[item_id]), "fuel": true})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return str(a["item"]) < str(b["item"]))
+	var quantity := maxi(1, _craft_quantity)
+	for row: Dictionary in rows:
+		var line := HBoxContainer.new()
+		line.add_theme_constant_override("separation", 6)
+		var icon := ItemIcon.new()
+		icon.custom_minimum_size = Vector2(20, 20)
+		icon.set_item(int(row["item"]), library, ItemDB.icon_tint(int(row["item"])))
+		line.add_child(icon)
+		var name_label := _label(ItemDB.name_of(int(row["item"])) + (" (fuel)" if bool(row["fuel"]) else ""),
+			11, UiStyle.TEXT_SECONDARY)
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.add_child(name_label)
+		var need := int(row["need"]) * quantity
+		var have := inventory.count_of(int(row["item"]))
+		var amount_label := _label("%d / %d" % [mini(have, need), need], 11,
+			UiStyle.READY if have >= need else UiStyle.MISSING)
+		line.add_child(amount_label)
+		_craft_ingredients.add_child(line)
+
+
+func _station_name(station: String) -> String:
+	match station:
+		Crafting.STATION_TABLE:
+			return "Crafting Table"
+		Crafting.STATION_FURNACE:
+			return "Furnace"
+	return "Hand"
+
+
+func _station_note() -> String:
 	var table_rank := int(Crafting.STATION_RANK.get(Crafting.STATION_TABLE, 1))
 	var have := int(Crafting.STATION_RANK.get(_station, 0))
 	if have >= table_rank:
-		_craft_table_label.text = "A crafting table is nearby: table recipes are unlocked."
-	else:
-		_craft_table_label.text = "Craft more advanced items using a crafting table. None nearby."
-
-
-func _output_fits(preview: Dictionary) -> bool:
-	var output := int(preview.get("output", preview.get("item", BlockDB.AIR)))
-	var amount := int(preview.get("count", 0))
-	if _craft.inventory.is_empty(CRAFT_OUTPUT):
-		return amount <= maxi(1, ItemDB.max_stack(output))
-	if _craft.inventory.item_at(CRAFT_OUTPUT) != output:
-		return false
-	return _craft.inventory.count_at(CRAFT_OUTPUT) + amount <= maxi(1, ItemDB.max_stack(output))
-
-
-func _grid_empty() -> bool:
-	for index in CRAFT_GRID:
-		if not _craft.inventory.is_empty(index):
-			return false
-	return true
-
-
-## The closest recipe by multiset when the grid does not match one exactly, so
-## the interface can say what is missing instead of only "no recipe".
-func _closest_recipe() -> Dictionary:
-	var counts := _craft.grid_counts()
-	if counts.is_empty():
-		return {}
-	var best: Dictionary = {}
-	var best_missing := 1 << 30
-	var best_parts: Array = []
-	for recipe: Dictionary in Crafting.recipes():
-		if Crafting.station_of(recipe) == Crafting.STATION_FURNACE:
-			continue
-		var ingredients := Crafting.ingredients(recipe)
-		var compatible := true
-		for item_id in counts:
-			if not ingredients.has(int(item_id)) or int(counts[item_id]) > int(ingredients[int(item_id)]):
-				compatible = false
-				break
-		if not compatible:
-			continue
-		var missing := 0
-		var parts: Array = []
-		for item_id in ingredients:
-			var short := int(ingredients[item_id]) - int(counts.get(int(item_id), 0))
-			if short > 0:
-				missing += short
-				parts.append("%d %s" % [short, ItemDB.name_of(int(item_id))])
-		if missing > 0 and missing < best_missing:
-			best_missing = missing
-			best = recipe
-			best_parts = parts
-	if best.is_empty():
-		return {}
-	return {"recipe": best, "missing": best_parts}
-
-
-func _shortfall_text(hint: Dictionary) -> String:
-	return " + ".join(hint.get("missing", []))
+		return "A crafting station is nearby."
+	return "Craft more advanced items using a crafting table."
 
 
 # =========================================================================
-# State
+# Refresh
 # =========================================================================
 
-func _refresh() -> void:
-	if inventory == null or _detail == null:
+func _refresh_all() -> void:
+	if inventory == null or _detail_label == null:
 		return
-	var selected := inventory.selected
 	for slot: InventorySlot in _slots:
-		slot.selected = slot.index == selected
+		slot.selected = slot.index == inventory.selected
 		slot.override_stack = {}
 		slot.refresh()
 	_cursor.set_stack(_carried)
 	if _storage_label != null:
 		_storage_label.text = "%d slots · %d free" % [Inventory.MAIN_SIZE, inventory.free_slot_count()]
-	_update_held()
 	_update_detail()
-	if _hint != null:
-		if _carried.is_empty():
-			_hint.text = ""
-			_hint.visible = false
-		else:
-			_hint.text = "Carrying %d %s" % [int(_carried["count"]), ItemDB.name_of(int(_carried["item"]))]
-			_hint.visible = true
-	_refresh_craft()
+	_update_held()
+	_refresh_context()
+	_refresh_crafting()
+	_refresh_vitals()
+	_update_hint()
+
+
+func _refresh_vitals() -> void:
+	if _stats_vitals != null and _vitals != null:
+		_stats_vitals.text = _vitals.summary_text()
+	if _stats_attack != null and inventory != null:
+		var item_id := inventory.selected_item()
+		var attack := 1.0 if item_id == BlockDB.AIR else ItemDB.attack_damage(item_id)
+		_stats_attack.text = "%.1f" % attack
+	if _stats_held != null and inventory != null:
+		var item_id := inventory.selected_item()
+		_stats_held.text = "Empty" if item_id == BlockDB.AIR else ItemDB.name_of(item_id)
 
 
 func _update_held() -> void:
+	if inventory == null:
+		return
+	var held_icon := find_child("HeldIcon", true, false) as ItemIcon
+	var held_label := find_child("HeldLabel", true, false) as Label
 	var item_id := inventory.selected_item()
-	var text := "Hand: empty"
-	var icon_item := BlockDB.AIR
-	if item_id != BlockDB.AIR:
-		icon_item = item_id
-		text = "Hand: %s" % ItemDB.name_of(item_id)
-		var maximum := ItemDB.max_durability(item_id)
-		if maximum > 0:
-			text += "  %d / %d" % [inventory.durability_of(inventory.selected), maximum]
-	if _held_icon != null:
-		_held_icon.set_item(icon_item, library, ItemDB.icon_tint(icon_item))
-	if _held_label != null:
-		_held_label.text = text
-	if _character_icon != null:
-		_character_icon.set_item(icon_item, library, ItemDB.icon_tint(icon_item))
-	if _character_held != null:
-		_character_held.text = "Nothing" if item_id == BlockDB.AIR else (
-			"%s (slot %d)" % [ItemDB.name_of(item_id), inventory.selected + 1])
+	if held_icon != null:
+		held_icon.set_item(item_id, library, ItemDB.icon_tint(item_id))
+	if held_label != null:
+		if item_id == BlockDB.AIR:
+			held_label.text = "Hand: empty"
+		else:
+			held_label.text = "Hand: %s" % ItemDB.name_of(item_id)
+			var maximum := ItemDB.max_durability(item_id)
+			if maximum > 0:
+				held_label.text += "  %d / %d" % [inventory.durability_of(inventory.selected), maximum]
+
+
+func _update_hint() -> void:
+	# The cursor itself shows a carried stack; the hints card stays a fixed-size
+	# control legend so opening/closing a carry cannot resize the layout.
+	pass
 
 
 func _update_detail() -> void:
+	if _detail_label == null or inventory == null:
+		return
 	var item_id := inventory.item_at(_focus_index)
 	if item_id == BlockDB.AIR and not _carried.is_empty():
 		item_id = int(_carried["item"])
 	if item_id == BlockDB.AIR:
-		_detail.text = "No item selected.\n\nClick or hover a stack, pick one up, or press 1-9."
+		_detail_label.text = "No item selected. Hover a slot, pick one up, or press 1-9 in game."
 		return
 	var lines: Array = []
 	lines.append(ItemDB.name_of(item_id))
@@ -1309,7 +2153,7 @@ func _update_detail() -> void:
 		lines.append("Used in %d recipe%s:" % [used_in.size(), "" if used_in.size() == 1 else "s"])
 		for recipe: Dictionary in used_in:
 			lines.append("  · %s" % Crafting.label(recipe))
-	_detail.text = "\n".join(lines)
+	_detail_label.text = "\n".join(lines)
 
 
 func _kind_text(item_id: int) -> String:
@@ -1339,34 +2183,32 @@ func _recipes_using(item_id: int) -> Array:
 	return found
 
 
+func _shortfall(missing: Dictionary) -> String:
+	var parts: Array = []
+	var keys: Array = missing.keys()
+	keys.sort()
+	for item_id in keys:
+		parts.append("%d more %s" % [int(missing[item_id]), ItemDB.name_of(int(item_id))])
+	return " + ".join(parts)
+
+
 # =========================================================================
-# Visibility / ownership
+# Ownership / visibility
 # =========================================================================
 
 func open() -> void:
-	_refresh()
+	_refresh_all()
 	visible = true
+	_refresh_page_visibility()
 	_refresh_nav()
+	# The reference's main inventory opens with the item-actions card beside the
+	# selected stack.  It is a real context menu, not decoration: its buttons use
+	# the same transfer rules as the slots.
+	if _page == PAGE_INVENTORY and inventory != null and not inventory.is_empty(inventory.selected):
+		open_context_menu(inventory.selected)
 	opened.emit()
 
 
-## Puts the cursor stack back into the inventory model, preferring its origin
-## slot, and returns every crafting-grid item to the player.  Returns whatever
-## could not be stored.  `_carried` still owns it.
-func _recover_cursor() -> Dictionary:
-	var leftover := _carried
-	if _carry_origin >= 0 and _carry_origin < Inventory.SIZE:
-		if inventory.is_empty(_carry_origin) \
-				or inventory.item_at(_carry_origin) == int(_carried["item"]):
-			leftover = inventory.put_stack(_carry_origin, leftover)
-	if not leftover.is_empty():
-		leftover = inventory.add_stack(leftover)
-	return leftover
-
-
-## Returns the temporary cursor stack to the inventory *without* closing the
-## panel.  Returns false when there is genuinely no room; the stack stays on the
-## cursor (nothing is destroyed).
 func flush_cursor() -> bool:
 	if inventory == null:
 		return true
@@ -1380,33 +2222,27 @@ func flush_cursor() -> bool:
 	return true
 
 
-## Returns the cursor stack *and* the crafting grid to the models, so a save or a
-## close always contains every owned item.  False when something has nowhere to
-## go; the items stay where they are.
+## No transient crafting grid exists on the screen any more, so flushing is the
+## cursor plus dialog/menu state.  Kept as the save/close choke point.
 func flush_all() -> bool:
 	if not flush_cursor():
 		return false
-	return _flush_grid()
-
-
-## Returns the 3x3 grid and the result slot to the player.  False when an item
-## could not fit, so the caller must not treat the model as complete.
-func _flush_grid() -> bool:
-	if _craft == null:
-		return true
-	_craft.return_crafting_items(inventory)
-	for index in CRAFT_GRID + 1:
-		if not _craft.inventory.is_empty(index):
-			return false
-	_refresh_craft()
+	cancel_amount()
+	close_context_menu()
 	return true
 
 
-## Closes the interface, recovering the cursor and the crafting grid:
-##   1. the cursor returns to its origin/any matching slot;
-##   2. the grid returns to the player;
-##   3. if anything has nowhere to go, the panel stays open and explains why.
-## Returns true when the panel actually closed.
+func _recover_cursor() -> Dictionary:
+	var leftover := _carried
+	if _carry_origin >= 0 and _carry_origin < Inventory.SIZE:
+		if inventory.is_empty(_carry_origin) \
+				or inventory.item_at(_carry_origin) == int(_carried["item"]):
+			leftover = inventory.put_stack(_carry_origin, leftover)
+	if not leftover.is_empty():
+		leftover = inventory.add_stack(leftover)
+	return leftover
+
+
 func close() -> bool:
 	if not flush_all():
 		message.emit("No room for every held item — make space before closing")
@@ -1428,42 +2264,9 @@ func is_open() -> bool:
 	return visible
 
 
-# =========================================================================
-# Diagnostics (captures and tests)
-# =========================================================================
-
-## Fills grid cells from `[index, item_id, count]` entries.  Diagnostic only.
-func debug_seed_crafting_grid(entries: Array) -> void:
-	debug_clear_crafting_grid()
-	for entry: Array in entries:
-		if entry.size() < 2:
-			continue
-		var index := int(entry[0])
-		var item_id := int(entry[1])
-		var count := int(entry[2]) if entry.size() > 2 else 1
-		_craft.inventory.insert(index, {"item": item_id, "count": count})
-	_refresh()
-
-
-func debug_seed_output(item_id: int, count: int) -> void:
-	_craft.inventory.clear_slot(CRAFT_OUTPUT)
-	_craft.inventory.insert(CRAFT_OUTPUT, {"item": item_id, "count": count}, true)
-	_refresh()
-
-
-## Diagnostic only: empties the grid losslessly, returning each stack to the
-## player.  Anything that does not fit stays in the grid.
-func debug_clear_crafting_grid() -> void:
-	for index in CRAFT_GRID:
-		var stack := _craft.inventory.take(index, -1)
-		if stack.is_empty():
-			continue
-		var leftover: Dictionary = inventory.add_stack(stack)
-		if not leftover.is_empty():
-			_craft.inventory.insert(index, leftover)
-	_refresh()
-
-
-func debug_clear_output() -> void:
-	_craft.inventory.clear_slot(CRAFT_OUTPUT)
-	_refresh()
+func _label(text: String, font_size: int, colour: Color) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", colour)
+	return label

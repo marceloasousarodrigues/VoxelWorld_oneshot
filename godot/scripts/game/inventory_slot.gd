@@ -11,7 +11,7 @@ extends Panel
 ## grid: `index` addresses the model, `compact` only changes the number badge, and
 ## `slot_size` lets the M40 screen use a denser grid than the default panel.
 
-signal clicked(index: int, button: int, shift: bool)
+signal clicked(index: int, button: int, shift: bool, ctrl: bool)
 ## Emitted when a stack was dragged from one slot onto another.
 signal stack_moved(from: int, to: int)
 signal hovered(index: int)
@@ -144,8 +144,9 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
 		if button.pressed and (button.button_index == MOUSE_BUTTON_LEFT \
-				or button.button_index == MOUSE_BUTTON_RIGHT):
-			clicked.emit(index, button.button_index, button.shift_pressed)
+				or button.button_index == MOUSE_BUTTON_RIGHT \
+				or button.button_index == MOUSE_BUTTON_MIDDLE):
+			clicked.emit(index, button.button_index, button.shift_pressed, button.ctrl_pressed)
 
 
 func _on_mouse_entered() -> void:
