@@ -3,27 +3,20 @@ extends SubViewportContainer
 
 ## A real rendered voxel character for the inventory's Player panel (M40).
 ##
-## VoxelWorld is first person and has no exported player model, so this builds a
-## small voxel person from boxes in a transparent SubViewport.  It is a scene
-## element, not a flattened texture: the camera, two lights and the parts are real
-## 3D nodes, and the preview can be reused anywhere.
+## VoxelWorld has no exported player model, so the preview and the third-person
+## camera share `PlayerCharacter`, a box-built voxel person in a transparent
+## SubViewport.  It is a scene element, not a flattened texture: the camera, two
+## lights and the parts are real 3D nodes, and the preview can be reused anywhere.
 ##
-## It reflects only supported state: the model itself and (optionally) a tint on
-## the held-hand accent.  Equipment is *not* drawn because the game has no
-## equipment system; the panel marks those slots as unavailable instead of
-## inventing armour on the character.
+## It reflects only supported state: the same model proportions as the in-world
+## body and the actually held hotbar item.  Equipment is *not* drawn because the
+## game has no equipment system; the panel marks those slots as unavailable
+## instead of inventing armour on the character.
 
-const SKIN := Color(0.72, 0.52, 0.36)
-const HAIR := Color(0.25, 0.16, 0.10)
-const TUNIC := Color(0.84, 0.78, 0.64)
-const BELT := Color(0.35, 0.24, 0.15)
-const PANTS := Color(0.44, 0.34, 0.24)
-const BOOTS := Color(0.24, 0.17, 0.12)
-const EYE := Color(0.10, 0.08, 0.07)
+const PlayerCharacterScript = preload("res://scripts/game/player_character.gd")
 
 var _viewport: SubViewport
-var _character: Node3D
-var _held_material: StandardMaterial3D
+var _character
 
 
 func _init() -> void:
@@ -67,11 +60,18 @@ func viewport_size() -> Vector2i:
 	return _viewport.size if _viewport != null else Vector2i.ZERO
 
 
-## Tints a small accent part so a future held-item preview can hook in without
-## rebuilding the model.  Today the panel only uses it for a subtle highlight.
+## Tints the right-hand skin material so the preview and the in-world character
+## stay one model.  The inventory does not use this to fake equipment.
 func set_accent(colour: Color) -> void:
-	if _held_material != null:
-		_held_material.albedo_color = colour
+	if _character != null:
+		_character.set_accent(colour)
+
+
+## Shows the item actually held in the hotbar on the preview character.  No
+## inventory model is read here; the panel passes the authoritative item id.
+func set_held_item(item_id: int, library: TextureLibrary) -> void:
+	if _character != null:
+		_character.set_held_item(item_id, library)
 
 
 ## Rotates the model (not the camera), so the preview framing never changes.
@@ -115,59 +115,7 @@ func _build_scene() -> void:
 	fill.look_at_from_position(Vector3(-2.0, 1.4, 1.6), Vector3(0.0, 1.0, 0.0))
 	_viewport.add_child(fill)
 
-	_character = Node3D.new()
+	_character = PlayerCharacterScript.new()
 	_character.name = "Character"
 	_character.rotation.y = deg_to_rad(17.0)
 	_viewport.add_child(_character)
-	_build_character()
-
-
-func _build_character() -> void:
-	# Head and hair.
-	_box("Head", Vector3(0.46, 0.46, 0.46), Vector3(0.0, 1.77, 0.0), SKIN)
-	_box("HairTop", Vector3(0.50, 0.12, 0.50), Vector3(0.0, 1.99, 0.0), HAIR)
-	_box("HairBack", Vector3(0.50, 0.46, 0.12), Vector3(0.0, 1.74, -0.21), HAIR)
-	_box("HairLeft", Vector3(0.04, 0.22, 0.44), Vector3(-0.22, 1.88, 0.0), HAIR)
-	_box("HairRight", Vector3(0.04, 0.22, 0.44), Vector3(0.22, 1.88, 0.0), HAIR)
-	_box("HairFringe", Vector3(0.44, 0.08, 0.04), Vector3(0.0, 1.95, 0.235), HAIR)
-	_box("EyeLeft", Vector3(0.08, 0.09, 0.03), Vector3(-0.10, 1.79, 0.240), EYE)
-	_box("EyeRight", Vector3(0.08, 0.09, 0.03), Vector3(0.10, 1.79, 0.240), EYE)
-	_box("BrowLeft", Vector3(0.10, 0.025, 0.02), Vector3(-0.10, 1.862, 0.240), HAIR)
-	_box("BrowRight", Vector3(0.10, 0.025, 0.02), Vector3(0.10, 1.862, 0.240), HAIR)
-	_box("Mouth", Vector3(0.14, 0.03, 0.02), Vector3(0.0, 1.69, 0.242), Color(0.45, 0.28, 0.24))
-	_box("Neck", Vector3(0.18, 0.10, 0.18), Vector3(0.0, 1.49, 0.0), SKIN)
-
-	# Torso, arms and hands.  The arms sit just outside the narrower tunic so
-	# their silhouette is readable at preview size.
-	_box("Tunic", Vector3(0.56, 0.66, 0.32), Vector3(0.0, 1.13, 0.0), TUNIC)
-	_box("Collar", Vector3(0.32, 0.06, 0.34), Vector3(0.0, 1.44, 0.0), Color(0.70, 0.63, 0.50))
-	_box("Belt", Vector3(0.58, 0.09, 0.34), Vector3(0.0, 0.84, 0.0), BELT)
-	_box("Buckle", Vector3(0.10, 0.08, 0.03), Vector3(0.0, 0.84, 0.18), Color(0.78, 0.66, 0.36))
-	_box("ArmLeft", Vector3(0.18, 0.60, 0.19), Vector3(-0.42, 1.15, 0.0), Color(0.74, 0.68, 0.55))
-	_box("ArmRight", Vector3(0.18, 0.60, 0.19), Vector3(0.42, 1.15, 0.0), Color(0.74, 0.68, 0.55))
-	_box("HandLeft", Vector3(0.18, 0.14, 0.20), Vector3(-0.42, 0.80, 0.0), SKIN)
-	var right_hand := _box("HandRight", Vector3(0.18, 0.14, 0.20), Vector3(0.42, 0.80, 0.0), SKIN)
-	_held_material = right_hand.material_override as StandardMaterial3D
-
-	# Legs and boots.
-	_box("LegLeft", Vector3(0.22, 0.62, 0.24), Vector3(-0.15, 0.45, 0.0), PANTS)
-	_box("LegRight", Vector3(0.22, 0.62, 0.24), Vector3(0.15, 0.45, 0.0), PANTS)
-	_box("BootLeft", Vector3(0.24, 0.14, 0.29), Vector3(-0.15, 0.10, 0.02), BOOTS)
-	_box("BootRight", Vector3(0.24, 0.14, 0.29), Vector3(0.15, 0.10, 0.02), BOOTS)
-
-
-func _box(node_name: String, box_size: Vector3, at: Vector3, colour: Color) -> MeshInstance3D:
-	var mesh := BoxMesh.new()
-	mesh.size = box_size
-	var instance := MeshInstance3D.new()
-	instance.name = node_name
-	instance.mesh = mesh
-	instance.position = at
-	var material := StandardMaterial3D.new()
-	material.albedo_color = colour
-	material.roughness = 0.88
-	material.metallic = 0.0
-	material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-	instance.material_override = material
-	_character.add_child(instance)
-	return instance

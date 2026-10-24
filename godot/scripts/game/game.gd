@@ -157,6 +157,10 @@ var _options := {
 	"submerge": false,
 	"visual_test": "",
 	"show_target_marker": true,
+	"camera_mode": "",
+	"camera_distance": -1.0,
+	"camera_shoulder": -1.0,
+	"select_slot": -1,
 }
 
 ## Set when `--time-rate=` appears on the command line, so the capture harness
@@ -337,6 +341,7 @@ func _set_sun_angles(pitch: float, yaw: float) -> void:
 func _build_nodes() -> void:
 	player = VoxelPlayer.new()
 	player.name = "Player"
+	player.texture_library = library
 	player.show_target_marker = str(_options["visual_test"]).is_empty() and bool(_options["show_target_marker"])
 	player.gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 24.0))
 	player.can_interact = false
@@ -383,6 +388,7 @@ func _build_nodes() -> void:
 	player.eat_requested.connect(_on_eat_requested)
 	player.plant_requested.connect(_on_plant_requested)
 	player.fertilize_requested.connect(_on_fertilize_requested)
+	player.camera_mode_changed.connect(_on_camera_mode_changed)
 
 
 func _build_ui() -> void:
@@ -523,6 +529,22 @@ func _parse_arguments() -> void:
 				var look := value.split(",")
 				if look.size() == 2:
 					_options["look"] = Vector2(look[0].to_float(), look[1].to_float())
+			"--camera-mode":
+				# Diagnostic: start in first/third person without a scripted input.
+				var mode_name := value.to_lower()
+				if mode_name in ["first", "first_person"]:
+					_options["camera_mode"] = "first_person"
+				elif mode_name in ["third", "third_person"]:
+					_options["camera_mode"] = "third_person"
+			"--camera-distance":
+				_options["camera_distance"] = value.to_float()
+			"--camera-shoulder":
+				# Diagnostic: choose the over-the-shoulder offset for a capture.
+				_options["camera_shoulder"] = value.to_float()
+			"--select-slot":
+				# Diagnostic: choose a hotbar slot after the loadout is seeded, so
+				# a capture can show a specific tool or block in hand.
+				_options["select_slot"] = value.to_int()
 			"--sun":
 				var sun_angles := value.split(",")
 				if sun_angles.size() == 2:
@@ -752,6 +774,16 @@ func _start_world(seed_value: int, save: Variant) -> void:
 		lantern_lights.set_daylight(clock.daylight())
 	player.world = world
 	player.inventory = inventory
+	player.refresh_visuals()
+	player.camera_distance = settings.camera_distance
+	player.camera_shoulder = settings.camera_shoulder
+	player.set_camera_mode_name(settings.camera_mode)
+	if not str(_options["camera_mode"]).is_empty():
+		player.set_camera_mode_name(str(_options["camera_mode"]))
+	if float(_options["camera_distance"]) > 0.0:
+		player.camera_distance = float(_options["camera_distance"])
+	if float(_options["camera_shoulder"]) >= 0.0:
+		player.camera_shoulder = float(_options["camera_shoulder"])
 	mesher.stats["builds"] = 0
 	mesher.stats["fill_ms"] = 0.0
 	mesher.stats["emit_ms"] = 0.0
@@ -1269,6 +1301,10 @@ func _enter_play(area_ready: bool) -> void:
 		_prepare_m40_capture()
 	if not str(_options["placement_capture"]).is_empty():
 		_prepare_placement_capture(str(_options["placement_capture"]))
+	var requested_slot := int(_options["select_slot"])
+	if requested_slot >= 0 and requested_slot < Inventory.HOTBAR_SIZE:
+		inventory.select(requested_slot)
+		player.refresh_visuals()
 	_apply_find_structure()
 	print("M17_GAME_READY seed=%d player=%s chunks=%d views=%d meshed=%d" % [
 		world.world_seed, player.global_position, streamer.loaded_count(), streamer.view_count(), int(streamer.stats["meshed"]),
@@ -1843,6 +1879,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_open_crafting_page()
 		elif event.is_action_pressed("open_inventory"):
 			_toggle_inventory()
+		elif event.is_action_pressed("toggle_camera"):
+			# The toggle is ignored while a modal interface owns input, so F4 can
+			# never act as a hidden menu action.  It also never captures/release
+			# the mouse itself.
+			if not _overlay_open():
+				_toggle_camera_view()
 		elif event.is_action_pressed("rotate_placement") and inventory_panel != null \
 				and inventory_panel.is_open() and inventory_panel.page() != InventoryPanel.PAGE_CRAFTING:
 			# R is the explicit "select amount" shortcut while the inventory owns
@@ -2286,6 +2328,26 @@ func _close_settings() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
+## F4: switch the live view without touching position, inventory or mouse mode.
+func _toggle_camera_view() -> void:
+	if player == null or state != State.PLAYING:
+		return
+	player.toggle_camera_mode()
+	if settings != null:
+		settings.set_camera_mode(player.camera_mode_name())
+		_save_settings()
+	if hud != null:
+		hud.flash("Camera: %s  (F4)" % ("Third person" if player.is_third_person() else "First person"), 1.5)
+
+
+## Called for both the input toggle and the Settings menu.  The settings model is
+## the persisted preference; the player remains the authority for this frame.
+func _on_camera_mode_changed(mode: int) -> void:
+	if settings == null:
+		return
+	settings.set_camera_mode("third_person" if mode == VoxelPlayer.CAMERA_THIRD else "first_person")
+
+
 ## Applies one changed setting to the live game and persists the whole set.
 func _on_setting_changed(key: String, value: Variant) -> void:
 	if settings == null:
@@ -2302,6 +2364,18 @@ func _on_setting_changed(key: String, value: Variant) -> void:
 		"vsync":
 			settings.set_vsync(bool(value))
 			_apply_display_settings()
+		"camera_mode":
+			settings.set_camera_mode(str(value))
+			if player != null:
+				player.set_camera_mode_name(settings.camera_mode)
+		"camera_distance":
+			settings.set_camera_distance(float(value))
+			if player != null:
+				player.camera_distance = settings.camera_distance
+		"camera_shoulder":
+			settings.set_camera_shoulder(float(value))
+			if player != null:
+				player.camera_shoulder = settings.camera_shoulder
 	_save_settings()
 
 
@@ -2322,6 +2396,9 @@ func _load_settings() -> void:
 				"render_distance": config.get_value("game", "render_distance", settings.render_distance),
 				"mouse_sensitivity": config.get_value("game", "mouse_sensitivity", settings.mouse_sensitivity),
 				"vsync": config.get_value("game", "vsync", settings.vsync),
+				"camera_mode": config.get_value("game", "camera_mode", settings.camera_mode),
+				"camera_distance": config.get_value("game", "camera_distance", settings.camera_distance),
+				"camera_shoulder": config.get_value("game", "camera_shoulder", settings.camera_shoulder),
 			})
 	# A command-line render distance is explicit intent for this run (captures,
 	# profiling) and wins over the saved value.
@@ -2337,6 +2414,9 @@ func _save_settings() -> void:
 	config.set_value("game", "render_distance", values["render_distance"])
 	config.set_value("game", "mouse_sensitivity", values["mouse_sensitivity"])
 	config.set_value("game", "vsync", values["vsync"])
+	config.set_value("game", "camera_mode", values["camera_mode"])
+	config.set_value("game", "camera_distance", values["camera_distance"])
+	config.set_value("game", "camera_shoulder", values["camera_shoulder"])
 	config.save(SETTINGS_PATH)
 
 
@@ -2792,6 +2872,9 @@ func _smoke_summary() -> void:
 		"player": [player.global_position.x, player.global_position.y, player.global_position.z],
 		"eye": [player.eye_position().x, player.eye_position().y, player.eye_position().z],
 		"look": [player.look_angles().x, player.look_angles().y],
+		"camera_mode": player.camera_mode_name(),
+		"camera_distance": player.current_camera_distance(),
+		"camera_shoulder": player.camera_shoulder,
 		"biome": _center_biome_name() if world != null else "",
 		"fps": _last_fps,
 		"streaming": streamer.report() if streamer != null else {},
@@ -2850,6 +2933,9 @@ func _write_capture_metrics() -> String:
 		"player": [player.global_position.x, player.global_position.y, player.global_position.z],
 		"eye": [player.eye_position().x, player.eye_position().y, player.eye_position().z],
 		"look": [player.look_angles().x, player.look_angles().y],
+		"camera_mode": player.camera_mode_name(),
+		"camera_distance": player.current_camera_distance(),
+		"camera_shoulder": player.camera_shoulder,
 		"biome": _center_biome_name(),
 		"world_hash": world.fingerprint(),
 		"streaming": streamer.report(),

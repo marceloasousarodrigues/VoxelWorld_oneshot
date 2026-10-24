@@ -1,5 +1,8 @@
 {
 	"biome": "Forest",
+	"camera_distance": 0.0,
+	"camera_mode": "first_person",
+	"camera_shoulder": 0.7,
 	"evidence": "offscreen Godot viewport PNG written from inside the running game scene; not a human visual inspection",
 	"eye": [
 		8.5,
@@ -13,7 +16,7 @@
 		"pending": 0,
 		"seeded_chunks": 0
 	},
-	"fps_last_sample": 58.2998289254756,
+	"fps_last_sample": 60.0892051563822,
 	"godot_version": {
 		"build": "official",
 		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
@@ -30,13 +33,13 @@
 		-12.0
 	],
 	"mesher": {
-		"assemble_ms": 108.467,
-		"builds": 628,
-		"emit_ms": 7715.349,
-		"faces": 202230,
-		"fill_ms": 884.579,
-		"ms": 8618.20400000001,
-		"triangles": 404460
+		"assemble_ms": 96.4530000000001,
+		"builds": 661,
+		"emit_ms": 7691.942,
+		"faces": 212707,
+		"fill_ms": 847.334,
+		"ms": 8553.994,
+		"triangles": 425414
 	},
 	"player": [
 		8.5,
@@ -45,29 +48,29 @@
 	],
 	"seed": 17017,
 	"streaming": {
-		"attach_ms_total": 4411.103,
+		"attach_ms_total": 4690.69,
 		"center": "(0, 5, 0)",
-		"faces": 199949,
-		"faces_hash": 2688137221511580933,
+		"faces": 212166,
+		"faces_hash": 7038915888535673703,
 		"generated": 791,
 		"generation_in_flight": 0,
-		"generation_ms_total": 2124.322,
-		"generation_worker_ms": 10499.007,
+		"generation_ms_total": 2027.042,
+		"generation_worker_ms": 9571.706,
 		"loaded": 791,
-		"mesh_ms_total": 8524.513,
-		"meshed": 624,
-		"meshes_in_flight": 4,
-		"queued": 176,
+		"mesh_ms_total": 8531.293,
+		"meshed": 660,
+		"meshes_in_flight": 1,
+		"queued": 139,
 		"render_radius": 6,
 		"unloaded": 0,
 		"vertical_radius": 4,
-		"views": 615,
+		"views": 651,
 		"wanted": 791,
-		"worst_mesh_ms": 58.396
+		"worst_mesh_ms": 48.386
 	},
 	"window_size": [
-		1600,
-		900
+		1280,
+		720
 	],
 	"world_hash": 1171464389127336522
 }

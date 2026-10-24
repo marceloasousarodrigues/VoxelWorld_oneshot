@@ -19,6 +19,11 @@ var _render_value: Label
 var _sensitivity_slider: HSlider
 var _sensitivity_value: Label
 var _vsync_check: CheckButton
+var _camera_option: OptionButton
+var _camera_distance_slider: HSlider
+var _camera_distance_value: Label
+var _camera_shoulder_slider: HSlider
+var _camera_shoulder_value: Label
 ## Guards `refresh()` from re-emitting the change signal while it writes controls.
 var _updating := false
 
@@ -84,6 +89,44 @@ func _build() -> void:
 		if not _updating:
 			setting_changed.emit("render_distance", int(round(value))))
 
+	# Camera view: the same setting drives the live camera and is saved with the
+	# other preferences.  F4 is shown because it is the unbound view toggle (F5
+	# already saves this game).
+	var camera_row := HBoxContainer.new()
+	camera_row.add_theme_constant_override("separation", 12)
+	var camera_label := Label.new()
+	camera_label.text = "Camera view"
+	camera_label.custom_minimum_size = Vector2(170, 0)
+	camera_label.add_theme_font_size_override("font_size", 16)
+	camera_label.add_theme_color_override("font_color", Color(0.92, 0.96, 1.0))
+	camera_row.add_child(camera_label)
+	_camera_option = OptionButton.new()
+	_camera_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_camera_option.add_item("First person (arms)", 0)
+	_camera_option.add_item("Third person (full character)", 1)
+	_camera_option.item_selected.connect(func(index: int) -> void:
+		if not _updating:
+			var mode: String = GameSettingsModel.CAMERA_MODES[clampi(index, 0, 1)]
+			setting_changed.emit("camera_mode", mode))
+	camera_row.add_child(_camera_option)
+	list.add_child(camera_row)
+
+	var distance_row := _build_slider_row(list, "Camera distance",
+		GameSettingsModel.CAMERA_DISTANCE_MIN, GameSettingsModel.CAMERA_DISTANCE_MAX, 0.5)
+	_camera_distance_slider = distance_row[0]
+	_camera_distance_value = distance_row[1]
+	_camera_distance_slider.value_changed.connect(func(value: float) -> void:
+		if not _updating:
+			setting_changed.emit("camera_distance", value))
+
+	var shoulder_row := _build_slider_row(list, "Camera side offset",
+		GameSettingsModel.CAMERA_SHOULDER_MIN, GameSettingsModel.CAMERA_SHOULDER_MAX, 0.05)
+	_camera_shoulder_slider = shoulder_row[0]
+	_camera_shoulder_value = shoulder_row[1]
+	_camera_shoulder_slider.value_changed.connect(func(value: float) -> void:
+		if not _updating:
+			setting_changed.emit("camera_shoulder", value))
+
 	var sensitivity_row := _build_slider_row(list, "Mouse sensitivity",
 		GameSettingsModel.SENSITIVITY_MIN, GameSettingsModel.SENSITIVITY_MAX, 0.0001)
 	_sensitivity_slider = sensitivity_row[0]
@@ -108,7 +151,7 @@ func _build() -> void:
 	list.add_child(vsync_row)
 
 	var hint := Label.new()
-	hint.text = "O or Esc closes  ·  saved to user://voxelworld_settings.cfg"
+	hint.text = "F4 toggles the camera view  ·  O or Esc closes  ·  saved to user://voxelworld_settings.cfg"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 12)
 	hint.add_theme_color_override("font_color", Color(0.68, 0.78, 0.88, 0.85))
@@ -152,6 +195,11 @@ func refresh() -> void:
 	_sensitivity_slider.value = settings.mouse_sensitivity
 	_sensitivity_value.text = "%.4f" % settings.mouse_sensitivity
 	_vsync_check.button_pressed = settings.vsync
+	_camera_option.select(1 if settings.camera_mode == GameSettingsModel.CAMERA_MODE_THIRD else 0)
+	_camera_distance_slider.value = settings.camera_distance
+	_camera_distance_value.text = "%.1f" % settings.camera_distance
+	_camera_shoulder_slider.value = settings.camera_shoulder
+	_camera_shoulder_value.text = "%.2f" % settings.camera_shoulder
 	_updating = false
 
 

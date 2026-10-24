@@ -620,6 +620,9 @@ func _main() -> void:
 	# --- M28 final player-built village/castle survives save + reload ------
 	await _final_journey_section()
 
+	# --- First/third-person camera, character and shared gameplay ----------
+	await _camera_views_section()
+
 	if _failures.is_empty():
 		print("M17_INTEGRATION_PASS %d assertions" % _passes)
 		quit(0)
@@ -2453,3 +2456,314 @@ func _final_journey_section() -> void:
 		"the player position survives save and reload")
 	_game.saves.delete_save()
 	await process_frame
+
+
+## First/third-person end-to-end: the real input action, shared controller state,
+## collision-clamped rear camera, held item, block targeting/placement, menu
+## ownership and restoration, all against the running game scene.
+func _camera_views_section() -> void:
+	var world: VoxelWorld = _game.world
+	var player = _game.player
+	var inventory: Inventory = _game.inventory
+
+	# The rest of the suite may leave an interface open; start from gameplay.
+	if _game.inventory_panel.is_open():
+		_game._close_inventory()
+	if _game.settings_panel.is_open():
+		_game._close_settings()
+	if _game.crafting.is_open():
+		_game._close_crafting()
+	if _game.station_panel.is_open():
+		_game._close_station()
+	await process_frame
+	# Normalise a clean gameplay input state.  Earlier sections exercise the
+	# panel ownership rules and may leave `can_interact` cleared even though no
+	# panel remains open; this section must start from live gameplay input.
+	if not _game._overlay_open() and int(_game.state) == 2:
+		player.can_interact = true
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		player.set_physics_process(true)
+	await process_frame
+
+	var settings = _game.settings
+	var original_mode: String = settings.camera_mode
+	var original_distance: float = settings.camera_distance
+	var original_shoulder: float = settings.camera_shoulder
+	var player_distance: float = player.camera_distance
+	var player_shoulder: float = player.camera_shoulder
+	var selected_before: int = inventory.selected
+	var items_before: int = inventory.used_slots()
+	var edits_before: int = world.edits.size()
+	var mouse_before := Input.mouse_mode
+	player.set_camera_mode(VoxelPlayer.CAMERA_FIRST)
+	await process_frame
+
+	_check(player.camera_mode == VoxelPlayer.CAMERA_FIRST, "the player starts this section in first person")
+	_check(player.camera.current, "the first-person camera is current")
+	_check(player.first_person_arms.visible, "the first-person arms are visible")
+	_check(not player.character.visible, "the full body is hidden in first person")
+	_check(player.first_person_arms.reticle_clear(), "the first-person arms do not cover the reticle")
+
+	# F4 through the real InputMap action, repeatedly.  Nothing gameplay-related
+	# may change: position, hotbar, inventory, mouse mode or world edits.
+	var toggles := 7
+	for index in toggles:
+		_press_camera_toggle()
+		await process_frame
+		var expected := VoxelPlayer.CAMERA_THIRD if index % 2 == 0 else VoxelPlayer.CAMERA_FIRST
+		_check(player.camera_mode == expected,
+			"camera toggle %d selects %s" % [index + 1, "third" if expected == VoxelPlayer.CAMERA_THIRD else "first"])
+		_check(player.camera.current != player.third_person_camera.current,
+			"exactly one camera is current after toggle %d" % (index + 1))
+		_check(player.global_position.is_finite(),
+			"the player position remains valid after toggle %d" % (index + 1))
+		_check(inventory.selected == selected_before, "the hotbar selection is untouched by toggle %d" % (index + 1))
+		_check(inventory.used_slots() == items_before, "the inventory is untouched by toggle %d" % (index + 1))
+		_check(world.edits.size() == edits_before, "no world edit happens when toggling views")
+		_check(Input.mouse_mode == mouse_before, "camera switching preserves mouse capture")
+	_check(player.camera_mode == VoxelPlayer.CAMERA_THIRD, "seven toggles leave the third-person view active")
+	player._sync_camera_rig(1.0)
+	_check(player.character.visible, "the character model is visible in third person")
+
+	# Flat, collision-backed pad for camera and placement checks.
+	_prepare_test_pad(Vector2i(24, 24), 10)
+	player.flying = true
+	player.teleport_to(Vector3(24.5, float(_test_pad_y) + 2.0, 24.5))
+	player.look_yaw(0.0)
+	player.look_pitch(0.0)
+	_game.streamer.focus_at(player.global_position)
+	await _stream_until_settled()
+	player.set_camera_mode(VoxelPlayer.CAMERA_THIRD)
+	player.camera_distance = 4.0
+	for index in 90:
+		await process_frame
+	_check(player.current_camera_distance() > 3.0,
+		"the third-person camera extends to its configured distance in open space")
+	_check(is_finite(player.third_person_camera.global_position.x)
+		and is_finite(player.third_person_camera.global_position.y)
+		and is_finite(player.third_person_camera.global_position.z),
+		"the third-person camera position stays finite while following")
+
+	# A wall directly behind the player must shorten the camera before it enters
+	# the stone, then release it again when the wall is removed.
+	var wall_z := floori(player.global_position.z) + 2
+	var wall_feet := floori(player.global_position.y)
+	var wall_cells: Array[Vector3i] = []
+	for x in range(floori(player.global_position.x) - 2, floori(player.global_position.x) + 3):
+		for y in range(wall_feet, wall_feet + 4):
+			var cell := Vector3i(x, y, wall_z)
+			wall_cells.append(cell)
+			world.set_block(cell, BlockDB.STONE)
+	await _stream_until_settled()
+	for index in 60:
+		await process_frame
+	var collided_distance: float = player.current_camera_distance()
+	_check(collided_distance < 2.5,
+		"a wall behind the player shortens the third-person camera (%.2f m)" % collided_distance)
+	_check(player.third_person_camera.global_position.z < float(wall_z) - 0.05,
+		"the shortened camera stays on the player's side of the wall")
+	for cell: Vector3i in wall_cells:
+		world.set_block(cell, BlockDB.AIR)
+	await _stream_until_settled()
+	for index in 90:
+		await process_frame
+	_check(player.current_camera_distance() > 3.0,
+		"removing the wall lets the third-person camera extend again")
+
+	# Turning and jumping must keep a stable, finite rear camera.
+	player.look_yaw(90.0)
+	await process_frame
+	_check(player.aim_direction().dot(Vector3.LEFT) > 0.95,
+		"the third-person aim direction follows the player's turn")
+	player.look_yaw(0.0)
+	player.look_pitch(0.0)
+	player.flying = false
+	player.teleport_to(Vector3(24.5, float(_test_pad_y) + 1.05, 24.5))
+	for index in 30:
+		await physics_frame
+	_check(player.is_on_floor(), "the third-person test player settles on the pad")
+	var jump_start: float = player.global_position.y
+	var jump_press := InputEventAction.new()
+	jump_press.action = "jump"
+	jump_press.pressed = true
+	Input.parse_input_event(jump_press)
+	for index in 8:
+		await physics_frame
+	var jump_release := InputEventAction.new()
+	jump_release.action = "jump"
+	jump_release.pressed = false
+	Input.parse_input_event(jump_release)
+	_check(player.global_position.y > jump_start + 0.15,
+		"jumping still moves the shared controller in third person")
+	_check(is_finite(player.third_person_camera.global_position.y),
+		"the rear camera remains stable through a jump")
+	for index in 60:
+		await physics_frame
+	player.flying = true
+
+	# Block targeting and placement through the exact same preview/transaction.
+	player.teleport_to(Vector3(24.5, float(_test_pad_y) + 5.0, 24.5))
+	player.look_yaw(0.0)
+	player.look_pitch(-89.0)
+	for index in 4:
+		await process_frame
+	var target: Dictionary = player.target()
+	_check(bool(target.get("hit", false)), "third person still targets the block under the crosshair")
+	var block_slot := -1
+	for index in Inventory.HOTBAR_SIZE:
+		if ItemDB.is_block(inventory.slots[index]):
+			block_slot = index
+			break
+	if block_slot < 0:
+		inventory.clear_slot(0)
+		inventory.add(BlockDB.STONE, 10)
+		block_slot = 0
+	inventory.select(block_slot)
+	await process_frame
+	var preview: Dictionary = player.placement_preview()
+	_check(bool(preview.get("valid", false)), "the third-person placement preview is valid on the pad")
+	if bool(preview.get("valid", false)):
+		var place_cell: Vector3i = preview["cell"]
+		var place_block := int(preview["block"])
+		var place_orientation := int(preview["orientation"])
+		_check(player.place_selected(), "third person places the previewed block")
+		await process_frame
+		_check(world.get_block(place_cell) == place_block,
+			"the third-person placement lands in the previewed cell")
+		_check(world.get_orientation(place_cell) == place_orientation,
+			"the third-person placement uses the previewed orientation")
+		var tool_slot := -1
+		for index in Inventory.HOTBAR_SIZE:
+			if ItemDB.is_tool_item(inventory.slots[index]):
+				tool_slot = index
+				break
+		if tool_slot < 0:
+			inventory.clear_slot(0)
+			inventory.add(ItemDB.WOOD_PICKAXE, 1)
+			tool_slot = 0
+		inventory.select(tool_slot)
+		await process_frame
+		_check(player.break_target(), "tool use / mining works in third person")
+		await process_frame
+		_check(world.get_block(place_cell) == BlockDB.AIR,
+			"the third-person tool action removed the targeted block")
+
+	# Creature attacks use the same eye origin and aim direction in third person.
+	player.teleport_to(Vector3(24.5, float(_test_pad_y) + 2.0, 24.5))
+	player.look_yaw(0.0)
+	player.look_pitch(-10.0)
+	await process_frame
+	var ray_origin: Vector3 = player.eye_position()
+	var ray_direction: Vector3 = player.aim_direction()
+	var creature_position: Vector3 = ray_origin + ray_direction * 1.8 - Vector3(0.0, 0.45, 0.0)
+	var boar_state := {"id": 9301, "species": "boar", "position": creature_position,
+		"health": CreatureDB.health("boar"), "alive": true, "wander": Vector3.ZERO,
+		"key": "camera-boar"}
+	var test_creature = CreatureScript.new()
+	test_creature.configure(boar_state, world)
+	_game.creature_root.add_child(test_creature)
+	test_creature.set_physics_process(false)
+	await physics_frame
+	await process_frame
+	_check(player._creature_in_front() == test_creature,
+		"third-person LMB targeting sees a creature on the crosshair")
+	var creature_health_before: int = int(test_creature.state.health)
+	_check(player.break_target() and int(test_creature.state.health) < creature_health_before,
+		"third-person attacks damage the targeted creature")
+	test_creature.queue_free()
+	await process_frame
+
+	# Menus keep the current view and never move the player.  F4 is inert while a
+	# modal interface owns input; closing restores the same mode.
+	player.set_camera_mode(VoxelPlayer.CAMERA_THIRD)
+	player.teleport_to(Vector3(24.5, float(_test_pad_y) + 2.0, 24.5))
+	player.look_pitch(0.0)
+	await process_frame
+	var menu_position: Vector3 = player.global_position
+	var menu_selected: int = inventory.selected
+	_game._open_inventory()
+	await process_frame
+	_check(_game.inventory_panel.is_open(), "the inventory opens in third person")
+	_check(player.camera_mode == VoxelPlayer.CAMERA_THIRD, "opening the inventory does not switch the view")
+	_check(not player.can_interact, "the inventory owns input while open")
+	_check(player.global_position.distance_to(menu_position) < 0.001, "opening the inventory does not move the player")
+	_press_camera_toggle()
+	await process_frame
+	_check(player.camera_mode == VoxelPlayer.CAMERA_THIRD, "F4 is ignored while the inventory is open")
+	_game._close_inventory()
+	await process_frame
+	_check(player.camera_mode == VoxelPlayer.CAMERA_THIRD, "closing the inventory restores the third-person view")
+	_check(player.can_interact, "closing the inventory restores world interaction")
+	_check(inventory.selected == menu_selected, "the inventory does not change the selected hotbar slot")
+	_check(player.global_position.distance_to(menu_position) < 0.001, "closing the inventory does not move the player")
+
+	# Crafting and Character are pages of the same screen; neither may change the
+	# view or the controller state.
+	_game._open_crafting_page()
+	await process_frame
+	_check(_game.inventory_panel.is_open(), "the crafting page opens in third person")
+	_check(player.camera_mode == VoxelPlayer.CAMERA_THIRD, "the crafting page preserves the third-person view")
+	_game._close_inventory()
+	await process_frame
+	_game._open_inventory(InventoryPanel.PAGE_CHARACTER)
+	await process_frame
+	_check(_game.inventory_panel.is_open(), "the Character page opens in third person")
+	_check(player.camera_mode == VoxelPlayer.CAMERA_THIRD, "the Character page preserves the third-person view")
+	_check(player.global_position.distance_to(menu_position) < 0.001, "the Character page does not move the player")
+	_game._close_inventory()
+	await process_frame
+	_check(player.camera_mode == VoxelPlayer.CAMERA_THIRD, "closing the Character page restores the third-person view")
+
+	_game._open_settings()
+	await process_frame
+	_check(_game.settings_panel.is_open(), "the settings panel opens in third person")
+	_check(player.camera_mode == VoxelPlayer.CAMERA_THIRD, "opening settings preserves the current view")
+	_game._on_setting_changed("camera_mode", "first_person")
+	await process_frame
+	_check(player.camera_mode == VoxelPlayer.CAMERA_FIRST, "the Settings camera control applies live")
+	_game._on_setting_changed("camera_mode", "third_person")
+	await process_frame
+	_check(player.camera_mode == VoxelPlayer.CAMERA_THIRD, "the Settings camera control switches back live")
+	_game._on_setting_changed("camera_shoulder", 0.85)
+	await process_frame
+	_check(absf(player.camera_shoulder - 0.85) < 0.001,
+		"the Settings shoulder offset applies live")
+	_game._close_settings()
+	await process_frame
+	_check(player.camera_mode == VoxelPlayer.CAMERA_THIRD, "closing settings preserves the chosen view")
+	_check(player.can_interact, "closing settings restores world interaction")
+
+	# Held item visibility in both views, using an actually held tool/block.
+	var held_slot := -1
+	for index in Inventory.HOTBAR_SIZE:
+		if ItemDB.is_tool_item(inventory.slots[index]):
+			held_slot = index
+			break
+	if held_slot >= 0:
+		inventory.select(held_slot)
+		player.refresh_visuals()
+		_check(player.character.held_item_id() == inventory.selected_item(),
+			"the third-person character holds the selected item")
+		player.set_camera_mode(VoxelPlayer.CAMERA_FIRST)
+		_check(player.first_person_arms.held_item_id() == inventory.selected_item(),
+			"the first-person hands hold the same selected item")
+
+	# Restore the pre-test state so this section cannot affect the suite.
+	player.set_camera_mode(1 if original_mode == "third_person" else 0)
+	player.camera_distance = player_distance
+	player.camera_shoulder = player_shoulder
+	settings.set_camera_distance(original_distance)
+	settings.set_camera_shoulder(original_shoulder)
+	inventory.select(selected_before)
+	player.flying = false
+	player.look_yaw(0.0)
+	player.look_pitch(0.0)
+	_game._save_settings()
+	await process_frame
+
+
+func _press_camera_toggle() -> void:
+	var event := InputEventAction.new()
+	event.action = "toggle_camera"
+	event.pressed = true
+	_game._unhandled_input(event)

@@ -1,0 +1,236 @@
+{
+	"evidence": "frames captured from the running Godot viewport by run_m41c_demo.gd",
+	"frames": [
+		{
+			"arm_screen_bounds": [
+				789.600708007813,
+				394.891174316406,
+				709.959350585938,
+				842.741638183594
+			],
+			"arm_screen_fraction": [
+				0.554655742645264,
+				1.17047449747721
+			],
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41c-demo-00.png",
+			"note": "pickaxe idle, clear area",
+			"reticle_clear": true,
+			"reticle_top_local": -0.0559080839157104,
+			"state": "idle",
+			"tool": "wood_pickaxe"
+		},
+		{
+			"arm_screen_bounds": [
+				789.599792480469,
+				394.890838623047,
+				709.933410644531,
+				842.7177734375
+			],
+			"arm_screen_fraction": [
+				0.55463547706604,
+				1.17044135199653
+			],
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41c-demo-01.png",
+			"note": "pickaxe facing nearby block",
+			"reticle_clear": true,
+			"reticle_top_local": -0.0559157133102417,
+			"state": "near_block",
+			"tool": "wood_pickaxe"
+		},
+		{
+			"arm_screen_bounds": [
+				786.101013183594,
+				396.346557617188,
+				709.933044433594,
+				846.224853515625
+			],
+			"arm_screen_fraction": [
+				0.554635190963745,
+				1.17531229654948
+			],
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41c-demo-02.png",
+			"note": "pickaxe walking",
+			"reticle_clear": true,
+			"reticle_top_local": -0.0580749213695526,
+			"state": "walking",
+			"tool": "wood_pickaxe"
+		},
+		{
+			"arm_screen_bounds": [
+				801.311096191406,
+				425.484313964844,
+				687.587097167969,
+				823.234191894531
+			],
+			"arm_screen_fraction": [
+				0.537177419662476,
+				1.14338082207574
+			],
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41c-demo-03.png",
+			"note": "pickaxe mining swing",
+			"reticle_clear": true,
+			"reticle_top_local": -0.112573593854904,
+			"state": "swing",
+			"tool": "wood_pickaxe"
+		},
+		{
+			"arm_screen_bounds": [
+				789.600708007813,
+				394.891174316406,
+				709.959350585938,
+				842.741638183594
+			],
+			"arm_screen_fraction": [
+				0.554655742645264,
+				1.17047449747721
+			],
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41c-demo-04.png",
+			"note": "pickaxe in shade under pavilion roof",
+			"reticle_clear": true,
+			"reticle_top_local": -0.0559080839157104,
+			"state": "shade",
+			"tool": "wood_pickaxe"
+		},
+		{
+			"arm_screen_bounds": [
+				828.791687011719,
+				406.374877929688,
+				670.768371582031,
+				831.257934570313
+			],
+			"arm_screen_fraction": [
+				0.524037790298462,
+				1.15452490912543
+			],
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41c-demo-05.png",
+			"note": "stone_axe first person",
+			"reticle_clear": true,
+			"reticle_top_local": -0.0662447512149811,
+			"state": "idle",
+			"tool": "stone_axe"
+		},
+		{
+			"arm_screen_bounds": [
+				835.89501953125,
+				427.262939453125,
+				655.495849609375,
+				818.857299804688
+			],
+			"arm_screen_fraction": [
+				0.512106132507324,
+				1.13730180528429
+			],
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41c-demo-06.png",
+			"note": "axe swing",
+			"reticle_clear": true,
+			"reticle_top_local": -0.101373314857483,
+			"state": "swing",
+			"tool": "stone_axe"
+		},
+		{
+			"arm_screen_bounds": [
+				837.665466308594,
+				395.885192871094,
+				661.894592285156,
+				841.747619628906
+			],
+			"arm_screen_fraction": [
+				0.517105150222778,
+				1.16909391615126
+			],
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41c-demo-07.png",
+			"note": "iron_shovel first person",
+			"reticle_clear": true,
+			"reticle_top_local": -0.0558028817176819,
+			"state": "idle",
+			"tool": "iron_shovel"
+		},
+		{
+			"arm_screen_bounds": [
+				805.057434082031,
+				399.494384765625,
+				694.502624511719,
+				838.138427734375
+			],
+			"arm_screen_fraction": [
+				0.54258017539978,
+				1.16408114963108
+			],
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41c-demo-08.png",
+			"note": "diamond_sword first person",
+			"reticle_clear": true,
+			"reticle_top_local": -0.0573316216468811,
+			"state": "idle",
+			"tool": "diamond_sword"
+		},
+		{
+			"arm_screen_bounds": [
+				789.668579101563,
+				406.286651611328,
+				706.69482421875,
+				850.906616210938
+			],
+			"arm_screen_fraction": [
+				0.552105331420898,
+				1.18181474473741
+			],
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41c-demo-09.png",
+			"note": "pickaxe jumping",
+			"reticle_clear": true,
+			"reticle_top_local": -0.074981153011322,
+			"state": "jump",
+			"tool": "wood_pickaxe"
+		},
+		{
+			"arm_screen_bounds": [
+				789.600708007813,
+				394.891174316406,
+				709.959350585938,
+				842.741638183594
+			],
+			"arm_screen_fraction": [
+				0.554655742645264,
+				1.17047449747721
+			],
+			"camera": "third_person",
+			"camera_distance": 3.8,
+			"camera_shoulder": 0.7,
+			"file": "m41c-demo-10.png",
+			"note": "third-person pickaxe",
+			"reticle_clear": true,
+			"reticle_top_local": -0.0559080839157104,
+			"state": "idle",
+			"tool": "wood_pickaxe"
+		}
+	]
+}

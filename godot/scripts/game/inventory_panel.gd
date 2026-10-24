@@ -2104,6 +2104,8 @@ func _update_held() -> void:
 	var held_icon := find_child("HeldIcon", true, false) as ItemIcon
 	var held_label := find_child("HeldLabel", true, false) as Label
 	var item_id := inventory.selected_item()
+	if _preview != null:
+		_preview.set_held_item(item_id, library)
 	if held_icon != null:
 		held_icon.set_item(item_id, library, ItemDB.icon_tint(item_id))
 	if held_label != null:

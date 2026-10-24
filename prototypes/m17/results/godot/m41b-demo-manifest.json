@@ -1,0 +1,80 @@
+{
+	"evidence": "frames captured from the running Godot viewport by run_camera_demo.gd",
+	"frames": [
+		{
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41b-demo-00.png",
+			"note": "first-person pickaxe"
+		},
+		{
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41b-demo-01.png",
+			"note": "first-person axe"
+		},
+		{
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41b-demo-02.png",
+			"note": "first-person shovel"
+		},
+		{
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41b-demo-03.png",
+			"note": "first-person sword"
+		},
+		{
+			"camera": "third_person",
+			"camera_distance": 3.8,
+			"camera_shoulder": 0.7,
+			"file": "m41b-demo-04.png",
+			"note": "third-person idle pickaxe"
+		},
+		{
+			"action": "walk",
+			"camera": "third_person",
+			"camera_distance": 3.8,
+			"camera_shoulder": 0.7,
+			"file": "m41b-demo-05.png",
+			"note": "third-person walking"
+		},
+		{
+			"action": "jump",
+			"camera": "third_person",
+			"camera_distance": 3.8,
+			"camera_shoulder": 0.7,
+			"file": "m41b-demo-06.png",
+			"note": "third-person jumping"
+		},
+		{
+			"action": "swing",
+			"camera": "third_person",
+			"camera_distance": 3.8,
+			"camera_shoulder": 0.7,
+			"file": "m41b-demo-07.png",
+			"note": "third-person pickaxe swing"
+		},
+		{
+			"camera": "third_person",
+			"camera_distance": 3.8,
+			"camera_shoulder": 0.7,
+			"file": "m41b-demo-08.png",
+			"item": "diamond_sword",
+			"note": "third-person sword"
+		},
+		{
+			"action": "swing",
+			"camera": "first_person",
+			"camera_distance": 0.0,
+			"camera_shoulder": 0.7,
+			"file": "m41b-demo-09.png",
+			"note": "first-person axe swing"
+		}
+	]
+}

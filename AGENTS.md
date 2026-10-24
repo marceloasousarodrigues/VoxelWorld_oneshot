@@ -330,3 +330,11 @@ Before proposing changes to skill design, workflow philosophy, or architecture, 
 - One problem per PR
 - Test on at least one harness and report results in the environment table
 - Describe the problem you solved, not just what you changed
+
+## Visual reference workflow
+
+Before any character, tool, environment, material, lighting, or atmosphere work, read [`docs/references/visual/README.md`](docs/references/visual/README.md) and inspect every available image in that folder. Treat those images as art direction for the intended visual language; do not use them as game textures or copy their pixels into runtime assets.
+
+For broad visual changes, first build and assess a small feasibility slice in the real Godot project. Keep the slice narrow enough to validate the approach before converting the wider world. Do not proceed from a mockup or generated mesh alone: capture and inspect the running Godot application at representative gameplay views, and record the actual runtime captures used as visual evidence.
+
+Preserve all existing user work, including uncommitted changes and assets. Do not reset, clean, overwrite, or discard existing work while carrying out visual tasks. Existing inventory and hotbar icons are approved and should remain as they are unless the user explicitly asks to change them.

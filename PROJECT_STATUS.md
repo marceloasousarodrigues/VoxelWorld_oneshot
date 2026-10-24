@@ -1,6 +1,6 @@
 # Project status
 
-Updated: 2026-10-23
+Updated: 2026-10-24
 
 ## Canonical project
 
@@ -45,17 +45,68 @@ Updated: 2026-10-23
   facing are visually distinct, and the ghost hides while any interface owns
   input. See
   [`prototypes/m17/results/godot/m40-placement-preview-report.md`](prototypes/m17/results/godot/m40-placement-preview-report.md).
+- **M41: Player Character, First-Person Arms and Third-Person Camera is
+  COMPLETE**, including the M41b visual correction pass. First person remains
+  the default and renders a deliberately modelled tool with a wrapped grip in a
+  visible voxel hand at the lower right. Third person renders the shared
+  articulated character (backpack, bedroll, pouches and layered clothing) left
+  of the crosshair, with a collision-safe over-the-shoulder camera (3.8 m
+  default, 0.70 m side offset), F4 view toggle and persisted Settings controls.
+  Both views use the same controller, inventory, targeting and placement
+  transaction. See
+  [`prototypes/m17/results/godot/m41b-report.md`](prototypes/m17/results/godot/m41b-report.md)
+  and the external asset review
+  [`m41b-external-asset-review.md`](prototypes/m17/results/godot/m41b-external-asset-review.md).
+- **M41c (current): First-Person Hand and Tool Visual Polish is COMPLETE**, with
+  documented limitations. The M41b detail layers had been authored on the side
+  of the tool facing away from the camera; M41c moved every face plate, boss,
+  rivet and edge to the camera-facing side and rebuilt the pickaxe, axe, shovel
+  and sword as layered metal heads on segmented wooden hafts. The fist is now
+  built in the item frame with four finger wraps, a thumb, knuckles, creases and
+  a wrist strap, so it closes around the haft. The hand/tool assembly sits in
+  the lower-right quadrant and stays clear of the reticle (measured pickaxe
+  footprint 38.3% width / 45.1% height, highest local point `-0.0559`). The
+  camera, aiming, mining, placement and inventory behaviour are unchanged. See
+  [`prototypes/m17/results/godot/m41c-report.md`](prototypes/m17/results/godot/m41c-report.md)
+  and [`m41c-asset-review.md`](prototypes/m17/results/godot/m41c-asset-review.md).
 
 ## Validation
 
-Validated with Godot 4.7.2 after the M40 v2/v3 work:
+Validated with Godot 4.7.2 after the M41c visual pass:
 
-- Unit suite: `M17_TESTS_PASS 3283 assertions` (M40 v2 baseline: 3092; v2
-  pre-overhaul baseline: 3043).
-- Integration suite: `M17_INTEGRATION_PASS 519 assertions` (M40 v2 baseline:
-  503; includes real-scene preview-stability, navigation, crafting,
-  amount-dialog and placement-ghost input/geometry checks).
-- Regression: `M17_REGRESSION_PASS assertions=52`.
+- Unit suite: `M17_TESTS_PASS 3605 assertions`, exit 0 (M41b baseline 3497;
+  the new `test_tool_visuals.gd` adds 108 assertions). The only stderr is the
+  intentional corrupt-save parse error from `test_m26_protection.gd`.
+- Integration suite: `M17_INTEGRATION_PASS 621 assertions`, exit 0, empty
+  stderr (includes real F4 switching, camera collision, third-person placement,
+  mining, creature targeting and menu-state checks).
+- Regression: `M17_REGRESSION_PASS assertions=52`, exit 0, empty stderr.
+- M41c captures: `prototypes/m17/results/godot/m41c-before-after.png`,
+  `m41c-grip-closeup.png`, `m41c-states.png`, `m41c-demo-00.png` through
+  `m41c-demo-10.png`, `m41c-demo-manifest.json`, plus the supplementary
+  `m41c-model-lineup.png` and `m41c-model-pickaxe.png`. The gameplay images are
+  offscreen viewport captures from the running game, not mockups.
+- External resource review for M41c: `m41c-asset-review.md`. Quaternius Cube
+  World Kit (CC0) was previewed but its tools are simpler than the target;
+  Kenney Voxel Kit (CC0) was downloaded to a temporary folder and contains only
+  plain cubes; Kenney Voxel Pack (CC0) is 2D. Nothing was imported.
+- M41b captures: `prototypes/m17/results/godot/m41b-first-person-pickaxe.png`,
+  `m41b-first-person-axe.png`, `m41b-first-person-shovel.png`,
+  `m41b-first-person-sword.png`, `m41b-third-person-rear.png`,
+  `m41b-third-person-walking.png`, `m41b-third-person-jumping.png`,
+  `m41b-third-person-swing.png`, `m41b-third-person-sword.png`,
+  `m41b-first-person-axe-swing.png`, `m41b-before-after.png`,
+  `m41b-character-preview.png`, `m41b-settings-camera.png`, plus the ten-frame
+  `m41b-camera-demo.gif` and `m41b-demo-manifest.json`. These are rendered
+  viewport captures from the running game, not desktop screenshots or mockups.
+- External resource review: `m41b-external-asset-review.md` with inspected
+  previews under `m41b-asset-previews/`. No external asset was integrated.
+- Camera captures: `prototypes/m17/results/godot/m41-first-person.png`,
+  `m41-first-person-sword.png`, `m41-third-person.png`,
+  `m41-third-person-sword.png`, `m41-character-preview.png`,
+  `m41-settings-camera.png`, plus the eight-frame `m41-camera-demo.gif` and
+  `m41-demo-manifest.json`. These are rendered viewport captures from the running
+  game, not desktop screenshots or mockups.
 - Placement captures: `prototypes/m17/results/godot/m40-place-cube.png`,
   `m40-place-slab.png`, `m40-place-slab-top.png`, `m40-place-stair.png`,
   `m40-place-invalid.png`, with `m40-place-capture.json`. These show the real

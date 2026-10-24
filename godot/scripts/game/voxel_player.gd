@@ -2,6 +2,14 @@ class_name VoxelPlayer
 extends CharacterBody3D
 
 const BlockShape = preload("res://scripts/core/block_shape.gd")
+const PlayerCharacterScript = preload("res://scripts/game/player_character.gd")
+const FirstPersonArmsScript = preload("res://scripts/game/first_person_arms.gd")
+
+## Camera modes.  First person remains the default.
+const CAMERA_FIRST := 0
+const CAMERA_THIRD := 1
+
+signal camera_mode_changed(mode: int)
 
 ## First-person voxel player: mouse look, WASD movement with gravity and jumping,
 ## and block interaction driven by exact voxel traversal (`VoxelRay`) rather than
@@ -57,11 +65,23 @@ const SHAKE_FREQUENCY := 46.0
 @export var fly_speed := 18.0
 @export var repeat_interval := 0.2
 @export var reach := REACH
+@export var camera_distance := 3.8
+## Over-the-shoulder offset: the camera sits to the player's right, so the body
+## occupies the left third of the frame instead of hiding under the reticle.
+## Targeting still converges on the crosshair, so this is framing only.
+@export var camera_shoulder := 0.70
+@export var camera_collision_radius := 0.22
 
 var world: VoxelWorld
 var inventory: Inventory
+var texture_library: TextureLibrary
 var camera: Camera3D
+var third_person_camera: Camera3D
+var first_person_arms
+var character
 var marker: MeshInstance3D
+
+var camera_mode := CAMERA_FIRST
 
 var flying := false
 var can_interact := true
@@ -93,11 +113,22 @@ var _shake_strength := 0.0
 var _shake_time := 0.0
 var _shake_phase := 0.0
 var _shake_offset := Vector3.ZERO
+## Third-person rig: the pivot inherits the player's yaw, the camera sits on the
+## pivot's +Z (behind the character) and the distance is collision-clamped.
+var _camera_pivot: Node3D
+var _current_camera_distance := 0.0
+## Collision-safe horizontal shoulder offset for the current frame.  A wall on
+## the player's right collapses the shoulder before it collapses the whole arm.
+var _current_camera_shoulder := 0.0
+## Last selected hotbar item pushed into the visual models.
+var _visual_item := -999
+var _mining_swing_timer := 0.0
 
 
 func _ready() -> void:
 	_build_body()
 	_build_camera()
+	_build_visuals()
 	_build_marker()
 
 
@@ -128,12 +159,48 @@ func _build_camera() -> void:
 	camera.make_current()
 
 
+## Builds the visible player: a full articulated body for third person, camera
+## arms for first person, and a collision-clamped third-person camera.  Nothing
+## here owns gameplay state; all three follow the same controller.
+func _build_visuals() -> void:
+	first_person_arms = FirstPersonArmsScript.new()
+	first_person_arms.name = "FirstPersonArms"
+	camera.add_child(first_person_arms)
+	first_person_arms.visible = camera_mode == CAMERA_FIRST
+
+	character = PlayerCharacterScript.new()
+	character.name = "Character"
+	# The shared model faces +Z (the inventory preview looks at its face).  The
+	# controller's forward is -Z, so the third-person body is turned to match.
+	character.rotation.y = PI
+	character.visible = camera_mode == CAMERA_THIRD
+	add_child(character)
+
+	_camera_pivot = Node3D.new()
+	_camera_pivot.name = "ThirdPersonPivot"
+	_camera_pivot.position.y = EYE_HEIGHT
+	add_child(_camera_pivot)
+	third_person_camera = Camera3D.new()
+	third_person_camera.name = "ThirdPersonEye"
+	third_person_camera.fov = camera.fov
+	third_person_camera.near = camera.near
+	third_person_camera.far = camera.far
+	third_person_camera.rotation = Vector3.ZERO
+	third_person_camera.position = Vector3(camera_shoulder, 0.0, camera_distance)
+	third_person_camera.current = false
+	_camera_pivot.add_child(third_person_camera)
+
+
 ## A target closer than this is not outlined.  When the camera is inside a block
 ## (spectator/fly captures, or standing in a leaf cell) the raycast reports a hit
 ## at distance zero and the 1 m outline surrounds the camera; its edges then read
 ## as thin dark vertical lines across the whole frame.  Hiding the outline for
 ## such near hits removes that artifact without changing normal block targeting.
 const MIN_MARKER_DISTANCE := 0.75
+## When collision forces the rear camera inside this radius, the body is hidden:
+## a first-person-like view is preferable to a giant head filling the frame.  The
+## character returns as soon as the camera has room again.
+const CHARACTER_MIN_VISIBLE_DISTANCE := 1.35
 
 
 static func target_marker_visible(hit: Dictionary, enabled: bool) -> bool:
@@ -225,6 +292,8 @@ func look_pitch(degrees: float) -> void:
 
 
 func eye_position() -> Vector3:
+	if camera_mode == CAMERA_THIRD:
+		return global_position + Vector3.UP * EYE_HEIGHT
 	return camera.global_position if camera != null else global_position + Vector3.UP * EYE_HEIGHT
 
 
@@ -238,20 +307,103 @@ func look_basis() -> Basis:
 	return Basis(Vector3.UP, rotation.y)
 
 
+# --- camera modes --------------------------------------------------------
+
+## Switches between the first-person arms view and the third-person body.  The
+## controller, inventory, targeting and mouse capture are untouched; only which
+## camera is current and which visual is visible changes.
+func set_camera_mode(mode: int) -> void:
+	var resolved := CAMERA_THIRD if mode == CAMERA_THIRD else CAMERA_FIRST
+	camera_mode = resolved
+	if first_person_arms != null:
+		first_person_arms.visible = resolved == CAMERA_FIRST
+	if character != null:
+		character.visible = resolved == CAMERA_THIRD \
+			and _current_camera_distance > CHARACTER_MIN_VISIBLE_DISTANCE
+	if resolved == CAMERA_FIRST:
+		_current_camera_distance = 0.0
+		_current_camera_shoulder = 0.0
+		if camera != null:
+			camera.make_current()
+	else:
+		# Start close and ease out: a switch never snaps the camera through a
+		# wall and never changes the player's world position.
+		_current_camera_distance = minf(0.45, camera_distance)
+		_current_camera_shoulder = 0.0
+		if _camera_pivot != null:
+			_camera_pivot.rotation.x = _pitch
+		if third_person_camera != null:
+			third_person_camera.make_current()
+	if resolved == CAMERA_THIRD:
+		_update_third_person_camera(0.0)
+	camera_mode_changed.emit(camera_mode)
+
+
+func toggle_camera_mode() -> void:
+	set_camera_mode(CAMERA_THIRD if camera_mode == CAMERA_FIRST else CAMERA_FIRST)
+
+
+func camera_mode_name() -> String:
+	return "third_person" if camera_mode == CAMERA_THIRD else "first_person"
+
+
+func set_camera_mode_name(name: String) -> void:
+	set_camera_mode(CAMERA_THIRD if name == "third_person" else CAMERA_FIRST)
+
+
+func is_third_person() -> bool:
+	return camera_mode == CAMERA_THIRD
+
+
+## Current collision-clamped camera distance, for diagnostics/tests.
+func current_camera_distance() -> float:
+	return _current_camera_distance
+
+
+## Current collision-clamped shoulder offset, for diagnostics/tests.
+func current_camera_shoulder() -> float:
+	return _current_camera_shoulder
+
+
+## The screen-centre look direction.  In third person this points from the eye
+## toward the point the rear camera is looking at, preserving the same reach and
+## the same crosshair target instead of aiming from behind the player's back.
+func aim_direction() -> Vector3:
+	if camera_mode == CAMERA_THIRD and third_person_camera != null:
+		var focus := third_person_camera.global_position \
+			- third_person_camera.global_basis.z * (_current_camera_distance + reach)
+		var offset := focus - eye_position()
+		if offset.length_squared() > 0.0001:
+			return offset.normalized()
+		return -third_person_camera.global_basis.z
+	if camera != null:
+		return -camera.global_basis.z
+	return -global_basis.z
+
+
 # --- frame loop ----------------------------------------------------------
 
 func _process(delta: float) -> void:
 	_break_cooldown = maxf(0.0, _break_cooldown - delta)
 	_place_cooldown = maxf(0.0, _place_cooldown - delta)
 	_update_shake(delta)
+	_sync_camera_rig(delta)
 	_update_target()
+	_update_visuals(delta)
 	if not can_interact or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		_reset_mining()
+		_mining_swing_timer = 0.0
 		return
 	if Input.is_action_pressed("break_block"):
 		mine_step(delta)
+		# Held-button mining plays a repeated chop, not one static arm.
+		_mining_swing_timer = maxf(0.0, _mining_swing_timer - delta)
+		if _mining_active and _mining_swing_timer <= 0.0:
+			_mining_swing_timer = 0.24
+			play_swing_animation()
 	else:
 		_reset_mining()
+		_mining_swing_timer = 0.0
 	if Input.is_action_pressed("place_block") and _place_cooldown <= 0.0:
 		_place_cooldown = repeat_interval
 		place_selected()
@@ -295,6 +447,129 @@ func _physics_process(delta: float) -> void:
 	_update_fall()
 
 
+## Keeps the third-person pivot on the player's look pitch and moves the camera
+## out behind the body, shortening it against world collision.  The first-person
+## camera already carries its own pitch, so both views share one look state.
+func _sync_camera_rig(delta: float) -> void:
+	if _camera_pivot != null:
+		_camera_pivot.rotation.x = _pitch
+	if camera_mode != CAMERA_THIRD:
+		return
+	_update_third_person_camera(delta)
+
+
+func _update_third_person_camera(delta: float) -> void:
+	if _camera_pivot == null or third_person_camera == null:
+		return
+	var desired := maxf(0.45, camera_distance)
+	# Collapse the shoulder before collapsing the arm.  A wall on the player's
+	# right otherwise puts the camera's origin inside stone and reports a
+	# near-zero distance even though the space behind the player is clear.
+	var safe_shoulder := _camera_safe_shoulder(camera_shoulder)
+	if safe_shoulder < _current_camera_shoulder or _current_camera_shoulder <= 0.0:
+		_current_camera_shoulder = safe_shoulder
+	else:
+		_current_camera_shoulder = move_toward(_current_camera_shoulder, safe_shoulder, 2.2 * delta)
+	_current_camera_shoulder = clampf(_current_camera_shoulder, 0.0, camera_shoulder)
+	var safe := _camera_safe_distance(desired, _current_camera_shoulder)
+	if safe < _current_camera_distance or _current_camera_distance <= 0.0:
+		# Shortening is immediate: a camera must never pass through terrain.
+		_current_camera_distance = safe
+	else:
+		_current_camera_distance = move_toward(_current_camera_distance, safe, 8.0 * delta)
+	_current_camera_distance = clampf(_current_camera_distance, 0.0, desired)
+	var ratio := (_current_camera_distance / desired) if desired > 0.0001 else 0.0
+	third_person_camera.position = Vector3(_current_camera_shoulder * ratio + _shake_offset.x,
+		_shake_offset.y, _current_camera_distance)
+	third_person_camera.rotation = Vector3.ZERO
+	if character != null:
+		character.visible = _current_camera_distance > CHARACTER_MIN_VISIBLE_DISTANCE
+
+
+## Distance the shoulder may move sideways without putting the camera origin
+## inside a wall.  This is a short sphere sweep from the player's eye.
+func _camera_safe_shoulder(desired: float) -> float:
+	if desired <= 0.0001 or _camera_pivot == null or not is_inside_tree():
+		return 0.0
+	var space := get_world_3d().direct_space_state
+	if space == null:
+		return desired
+	var sphere := SphereShape3D.new()
+	sphere.radius = maxf(0.05, camera_collision_radius)
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = sphere
+	query.transform = Transform3D(_camera_pivot.global_basis, _camera_pivot.global_position)
+	query.motion = _camera_pivot.global_basis * Vector3(desired, 0.0, 0.0)
+	query.collision_mask = 1
+	query.exclude = [get_rid()]
+	var result := space.cast_motion(query)
+	if result.size() < 2:
+		return desired
+	return desired * clampf(result[0], 0.0, 1.0)
+
+
+## Distance the rear camera can occupy without its collision sphere touching the
+## voxel world.  The sweep starts at the camera's actual (collision-safe)
+## shoulder-offset origin and travels straight back along the view axis, so the
+## collision answer matches the position assigned in
+## `_update_third_person_camera` exactly.  The player's own body is excluded;
+## NPC/creature layers are not in the mask, so only terrain, walls and trees
+## shorten the camera.
+func _camera_safe_distance(desired: float, shoulder: float) -> float:
+	if _camera_pivot == null or not is_inside_tree():
+		return desired
+	var space := get_world_3d().direct_space_state
+	if space == null:
+		return desired
+	var sphere := SphereShape3D.new()
+	sphere.radius = maxf(0.05, camera_collision_radius)
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = sphere
+	query.transform = Transform3D(_camera_pivot.global_basis,
+		_camera_pivot.global_position + _camera_pivot.global_basis * Vector3(shoulder, 0.0, 0.0))
+	query.motion = _camera_pivot.global_basis * Vector3(0.0, 0.0, desired)
+	query.collision_mask = 1
+	query.exclude = [get_rid()]
+	var result := space.cast_motion(query)
+	if result.size() < 2:
+		return desired
+	return desired * clampf(result[0], 0.0, 1.0)
+
+
+## Pushes the authoritative selected item and locomotion state into the visual
+## models.  This is one-way presentation: the models never mutate the inventory.
+func _update_visuals(delta: float) -> void:
+	var speed := Vector2(velocity.x, velocity.z).length()
+	if first_person_arms != null:
+		first_person_arms.animate(delta, speed, is_on_floor(), velocity.y)
+	if character != null:
+		character.animate(delta, speed, is_on_floor(), velocity.y)
+	if inventory != null:
+		var item := inventory.selected_item()
+		if item != _visual_item:
+			_visual_item = item
+			refresh_visuals()
+
+
+## Re-reads the held item immediately (world start, tool break, scripted tests).
+func refresh_visuals() -> void:
+	if inventory == null:
+		return
+	var item := inventory.selected_item()
+	_visual_item = item
+	if first_person_arms != null:
+		first_person_arms.set_held_item(item, texture_library)
+	if character != null:
+		character.set_held_item(item, texture_library)
+
+
+func play_swing_animation() -> void:
+	if first_person_arms != null:
+		first_person_arms.play_swing()
+	if character != null:
+		character.play_swing()
+
+
 ## Tracks the peak of the current airborne arc and reports how far the body fell
 ## when it touches down.  Flying and teleporting are not falls.
 func _update_fall() -> void:
@@ -319,6 +594,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		rotation.y -= event.relative.x * mouse_sensitivity
 		_pitch = clampf(_pitch - event.relative.y * mouse_sensitivity, deg_to_rad(-89.5), deg_to_rad(89.5))
 		camera.rotation.x = _pitch
+		if first_person_arms != null:
+			first_person_arms.add_look_motion(event.relative)
 
 
 func toggle_fly() -> void:
@@ -360,7 +637,8 @@ func _apply_shake() -> void:
 func _update_target() -> void:
 	if world == null or camera == null:
 		return
-	var found := VoxelRay.cast(world, camera.global_position, -camera.global_basis.z, reach)
+	var origin := eye_position()
+	var found := VoxelRay.cast(world, origin, aim_direction(), reach)
 	_hit = found
 	if found.get("hit", false):
 		var cell: Vector3i = found["block"]
@@ -486,6 +764,7 @@ func _finish_break(cell: Vector3i, block_id: int) -> bool:
 		drop = ItemDB.bonus_drop(block_id, cell.x, cell.y, cell.z)
 	_wear_held(held)
 	block_broken.emit(cell, block_id, drop)
+	play_swing_animation()
 	_update_target()
 	return true
 
@@ -496,6 +775,7 @@ func _attack(creature: Node3D) -> int:
 	var held := _held_item()
 	var damage := maxi(1, int(round(ItemDB.attack_damage(held))))
 	_wear_held(held)
+	play_swing_animation()
 	creature_attacked.emit(creature, damage)
 	return damage
 
@@ -512,8 +792,10 @@ func _wear_held(held: int) -> void:
 func _creature_in_front() -> Node3D:
 	if camera == null:
 		return null
-	var query := PhysicsRayQueryParameters3D.create(camera.global_position,
-		camera.global_position - camera.global_basis.z * reach, 2)
+	var origin := eye_position()
+	var direction := aim_direction()
+	var query := PhysicsRayQueryParameters3D.create(origin,
+		origin + direction * reach, 2)
 	query.exclude = [get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
@@ -524,7 +806,7 @@ func _creature_in_front() -> Node3D:
 		var block_distance := reach
 		if _hit.get("hit", false):
 			block_distance = float(_hit.get("distance", reach))
-		if camera.global_position.distance_to(hit.position) < block_distance:
+		if origin.distance_to(hit.position) < block_distance:
 			return body as Node3D
 	return null
 
@@ -536,6 +818,7 @@ func place_selected() -> bool:
 	if ItemDB.is_food(item_id):
 		# Right-click eats when food is held; the game decides and consumes.  This
 		# works while looking at the sky, so it does not need a target.
+		play_swing_animation()
 		eat_requested.emit(item_id)
 		return true
 	var hit := target()
@@ -544,9 +827,11 @@ func place_selected() -> bool:
 	# is checked before the ordinary placement path.
 	if item_id == ItemDB.WHEAT_SEEDS and hit.get("hit", false) \
 			and Farming.PLANTABLE_SOIL.has(aimed_block):
+		play_swing_animation()
 		plant_requested.emit(item_id, hit["block"])
 		return true
 	if item_id == ItemDB.BONE_MEAL and hit.get("hit", false) and Farming.is_crop(aimed_block):
+		play_swing_animation()
 		fertilize_requested.emit(item_id, hit["block"])
 		return true
 	if not hit.get("hit", false):
@@ -572,6 +857,7 @@ func place_selected() -> bool:
 		interaction_failed.emit("That block is outside the loaded world")
 		return false
 	block_placed.emit(cell, block_id)
+	play_swing_animation()
 	_update_target()
 	return true
 
@@ -602,14 +888,14 @@ func placement_orientation(normal: Vector3i) -> int:
 		block_id = ItemDB.placeable_block(inventory.selected_item())
 	if block_id == BlockDB.SLATE_RIDGE:
 		if placement_facing < 0:
-			return BlockShape.orientation_for_placement(-camera.global_basis.z, normal) % 2
+			return BlockShape.orientation_for_placement(aim_direction(), normal) % 2
 		return placement_facing % 2
 	if block_id == BlockDB.SLATE_RAMP:
 		if placement_facing < 0:
-			return BlockShape.orientation_for_placement(-camera.global_basis.z, normal) % 4
+			return BlockShape.orientation_for_placement(aim_direction(), normal) % 4
 		return placement_facing % 4
 	if placement_facing < 0:
-		return BlockShape.orientation_for_placement(-camera.global_basis.z, normal)
+		return BlockShape.orientation_for_placement(aim_direction(), normal)
 	return placement_facing + (4 if normal == Vector3i.DOWN else 0)
 
 

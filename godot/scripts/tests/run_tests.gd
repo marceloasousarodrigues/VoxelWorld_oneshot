@@ -54,6 +54,8 @@ const MODULES := [
 	"res://scripts/tests/test_creatures.gd",
 	"res://scripts/tests/test_hostiles.gd",
 	"res://scripts/tests/test_settings.gd",
+	"res://scripts/tests/test_player_visuals.gd",
+	"res://scripts/tests/test_tool_visuals.gd",
 	"res://scripts/tests/test_m40_inventory_ui.gd",
 	"res://scripts/tests/test_m40_placement_preview.gd",
 ]

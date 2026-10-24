@@ -2951,3 +2951,227 @@ have no visible effect.
 
 **Commits.** `68a8d8e` (preview, placement authority, tests and capture
 diagnostic); the evidence/report commit follows.
+
+---
+
+## M41 - Player Character, First-Person Arms and Third-Person Camera
+
+**Status: COMPLETE**, with the M41b visual correction pass and the documented
+limitations below.
+
+**Canonical project:** `C:/Users/Admin/Documents/Projects/VoxelWorld_Godot`.
+
+**Objective.** Give the player a visible first-person body (arms, hands and the
+held item) and an optional, collision-safe third-person camera while keeping one
+authoritative controller, inventory, targeting and placement path.
+
+**Implemented.**
+- First person remains the default. `VoxelPlayer` owns a camera-local
+  `FirstPersonArms` model built from the same palette and held-item builder as the
+  full character. The weapon hand and a small off hand stay below the reticle and
+  cast no shadows.
+- The third-person body is the shared `PlayerCharacter` model also used by the
+  M40 Character preview. It has articulated shoulders and hips for walk, jump and
+  swing poses, and shows the actually selected hotbar item in its hand.
+- Held items are built from the real item data: blocks use their six face
+  textures, tools are voxel props whose head colour follows the real tool tier,
+  and food/materials keep their transparent sprite art.
+- `F4` toggles first/third person through the new `toggle_camera` InputMap action.
+  F5 was not used because it already saves the game. Switching never changes
+  position, movement, hotbar selection, inventory, world edits or mouse capture.
+- Third person uses a rear camera with a small over-the-shoulder offset. A sphere
+  shape cast against the voxel collision layer shortens the arm immediately and
+  extends it smoothly, excluding the player's own body. The character is hidden
+  only when collision forces the camera inside the body.
+- Targeting still starts at the player's eye and converges on the crosshair, so
+  reach and the placement preview remain the same in both views. The preview and
+  `place_selected()` continue to consume the same `placement_preview()` result.
+- Settings adds a live Camera view selector, a third-person distance slider and
+  the F4 hint. Values are persisted with the existing settings file. Modal menus
+  never change the view; F4 is ignored while an interface owns input.
+- Capture diagnostics: `--camera-mode=first|third`, `--camera-distance=N`,
+  `--select-slot=N`, plus `scripts/tests/run_camera_demo.gd` for a staged
+  first/third-person frame sequence.
+
+**Verified.**
+- Unit `M17_TESTS_PASS 3477 assertions` (M40 baseline 3283).
+- Integration `M17_INTEGRATION_PASS 620 assertions` (M40 baseline 519).
+- Regression `M17_REGRESSION_PASS assertions=52`.
+- New unit coverage: default view, camera current flags, arm reticle clearance,
+  shadow-free first-person parts, model scale/orientation, repeated switching,
+  held-item propagation, swing poses, shared preview model and settings round-trip.
+- New integration coverage: the real F4 action, exact camera-current state,
+  position/inventory/mouse preservation, open-space and wall-collision camera
+  distances, turning, jumping, third-person block preview/placement/mining,
+  third-person creature targeting, menu ownership and restoration, and held-item
+  state in both views.
+- Running-game captures: `m41-first-person.png`, `m41-first-person-sword.png`,
+  `m41-third-person.png`, `m41-third-person-sword.png`,
+  `m41-character-preview.png`, `m41-settings-camera.png` and the eight-frame
+  `m41-camera-demo.gif` with manifest. These are offscreen viewport captures from
+  the running game, not mockups.
+
+**M41b visual correction (2026-10-24).** The first visual pass passed its tests
+but was rejected on visual quality. The correction pass rebuilt the presentation
+and re-verified it against the written acceptance criteria and running-game
+captures.
+- First-person items now come from a shared `ItemPresentation` profile and a
+  rewritten `HeldItemVisual`: bevelled boxes, faceted extruded profiles, per-tier
+  palettes, dark walnut handles with leather wraps and pommels, metal heads with
+  restrained edge highlights, a brass sword guard and readable silhouettes for
+  pickaxe, axe, shovel and sword. The model origin is the grip, so the hand closes
+  around the handle instead of the item floating in front of it.
+- The first-person arm was re-posed and reduced. The shoulder sits off-screen at
+  the lower right, the forearm enters from the bottom edge, and the hand/tool
+  occupy the lower-right quadrant. The reticle stays clear at rest and through
+  the swing; walk bob and look sway were reduced.
+- Third person now defaults to 3.8 m and a 0.70 m over-the-shoulder offset. The
+  character sits clearly left of the crosshair. The camera collision first
+  collapses the shoulder and then the distance, and hides the body below 1.35 m
+  so a tight wall cannot turn the character into a screen-filling head. Aiming
+  still starts at the player's eye and converges on the crosshair; the placement
+  preview and `place_selected()` still consume the same result.
+- The shared `PlayerCharacter` gained a framed backpack, bedroll, straps, side
+  pouches, a shaped tunic hem, hair/face detail, cuffs, hands and boot soles. The
+  held item sits in the right hand and swings with the arm.
+- Settings exposes the persisted "Camera side offset" alongside distance and
+  view. The demo captures use the project's existing `VisualTestArena` so the
+  comparison is against a representative world.
+- Validation after the correction: unit `M17_TESTS_PASS 3497 assertions`,
+  integration `M17_INTEGRATION_PASS 621 assertions`, regression
+  `M17_REGRESSION_PASS assertions=52`.
+- Visual evidence: `m41b-first-person-pickaxe.png`, `m41b-first-person-axe.png`,
+  `m41b-first-person-shovel.png`, `m41b-first-person-sword.png`,
+  `m41b-third-person-rear.png`, `m41b-third-person-walking.png`,
+  `m41b-third-person-jumping.png`, `m41b-third-person-swing.png`,
+  `m41b-third-person-sword.png`, `m41b-first-person-axe-swing.png`,
+  `m41b-before-after.png`, `m41b-camera-demo.gif` and `m41b-demo-manifest.json`.
+- External asset review: `m41b-external-asset-review.md` and the inspected
+  previews under `m41b-asset-previews/`. No external asset was integrated in this
+  pass; the review recommends keeping the in-house models and camera rig.
+
+**Limitations.**
+- No exported player mesh exists; the character and arms are the project's
+  box-built voxel models, not a high-detail rig.
+- Equipment/armour is still not implemented, so no armour is shown on the model.
+  The Character screen continues to mark equipment slots as unavailable.
+- There is no front-facing third-person mode; the optional extension was not
+  implemented.
+- The first-person hand remains a box-built fist with knuckle, thumb and finger
+  blocks and per-item grip orientation. It has no skeletal rig or per-finger
+  animation.
+- There is no shield item in `ItemDB`, so no shield model or shield capture was
+  produced. The shield part of the request is unsupported by the game's item
+  set rather than silently faked.
+- No external asset was downloaded into the game or integrated. The external
+  review is advisory; its preview images are evidence only.
+- The reference concept image is not stored in the repository. Visual assessment
+  used the written acceptance criteria and the running-game captures; the image
+  itself was not used as a texture or measurement target.
+- No human mouse/keyboard session was run. Visual assessment used the running-game
+  viewport captures and the scripted demo; automated tests cover the input and
+  state paths.
+
+**Evidence.** `prototypes/m17/results/godot/m41-report.md` and
+`m41b-report.md`, the `m41-*.png` and `m41b-*.png` captures,
+`m41b-before-after.png`, `m41b-camera-demo.gif`, `m41b-demo-manifest.json`,
+`m41b-external-asset-review.md` and `m41b-asset-previews/`.
+
+## M41c - First-Person Hand and Tool Visual Polish
+
+**Status: COMPLETE**, with the documented limitations below.
+
+**Canonical project:** `C:/Users/Admin/Documents/Projects/VoxelWorld_Godot`.
+
+**Objective.** Raise the visual quality of the first-person hand and held tools
+to the established world standard without changing camera, player, inventory,
+aiming, mining or placement behaviour.
+
+**Root cause found during implementation.** The M41b detail layers were modelled
+on the item's negative-Z side, while the first-person camera sees the item's
+positive-Z side. The lighter face plates, central boss, rivets, axe/shovel faces
+and edge highlights were therefore hidden behind dark body shells. The wooden
+tier also used almost the same brown for head and handle, the pick head was only
+0.70 model units wide and 0.08 units thick, and the fist was built in arm space
+with vertical finger strips instead of closing around the haft.
+
+**Implemented.**
+- Rebuilt the tool geometry with a consistent three-layer metal language: dark
+  faceted body, lighter inset face and bright cutting edge, plus a lighter top
+  bevel on both pickaxe arms. All visible layers and rivets are now on the
+  camera-facing side.
+- Pickaxe: broad 0.984-unit double head, heavy central eye with a domed ring boss
+  and four corner rivets, layered faces, bright tips, shoulder bolsters, socket
+  and leather binding.
+- Axe: tall bearded blade with a flared top horn, concave lower beard, inset
+  cheek, bright curved edge, poll face, eye bands, top lug, rivets and binding.
+- Shovel: shaped spade with a rolled bright lip, recessed scoop face, raised
+  spine, side edges, step, socket and rivets.
+- Sword: layered blade with face, ridge and two edge strips, brass collar and
+  guard, quillon studs, gem, pommel boss and leather grip.
+- Every long tool has a four-section tapered haft, raised grain strips, a
+  leather grip sleeve with five wraps, two metal collars, a riveted butt cap, a
+  head-side ferrule and a second leather binding. All tiers now read as forged
+  metal heads on warm wooden hafts.
+- Rebuilt the fist in the held item's local frame: palm behind the haft, four
+  horizontal finger wraps, side knuckles, dark creases, a three-part thumb and a
+  wrist strap. The arm was moved right/up so the grip remains visible beside the
+  hotbar; the sleeve was muted. The grip origin is inside the palm.
+- Added per-item first-person holds and a higher grip on long hafts so the
+  enlarged heads stay in the lower-right quadrant and clear of the reticle.
+  Third-person rotations and scales were left unchanged.
+- Added `test_tool_visuals.gd` (layered construction, material count, grip
+  containment, per-tool screen bounds, reticle and swing clearance),
+  `run_m41c_demo.gd` (eleven runtime frames) and `run_tool_preview.gd`
+  (supplementary model inspection).
+- External review: Quaternius Cube World Kit (CC0; close style but simpler
+  tools), Kenney Voxel Kit (CC0; actual archive is 47 plain cubes, no tools) and
+  Kenney Voxel Pack (CC0; 2D only) were inspected. Nothing was imported. See
+  `prototypes/m17/results/godot/m41c-asset-review.md`.
+
+**Verified.**
+- Unit: `M17_TESTS_PASS 3605 assertions`, exit 0 (M41b baseline 3497; the new
+  visual module adds 108 assertions). The only stderr is the intentional
+  corrupt-save parse error from `test_m26_protection.gd`.
+- Integration: `M17_INTEGRATION_PASS 621 assertions`, exit 0, empty stderr.
+- Regression: `M17_REGRESSION_PASS assertions=52`, exit 0, empty stderr.
+- Runtime captures: `M41C_DEMO_DONE frames=11`, exit 0. The pickaxe was captured
+  idle, facing a nearby block, walking, at the mining-swing peak, in pavilion
+  shade and mid-jump; the axe, axe swing, shovel, sword and a third-person frame
+  were also captured and inspected.
+- Measured first-person footprint (clipped visible bounds in 1280 x 720):
+  pickaxe 38.3% width / 45.1% height, axe 35.2% / 43.6%, shovel 34.5% / 45.0%,
+  sword 37.1% / 44.6%. All report `reticle_clear() == true`; the pickaxe's
+  highest local point is `-0.0559`, below the `-0.05` threshold.
+- Visual evidence: `m41c-before-after.png`, `m41c-grip-closeup.png`,
+  `m41c-states.png`, `m41c-demo-00.png` ... `m41c-demo-10.png`,
+  `m41c-demo-manifest.json`, `m41c-model-lineup.png` and
+  `m41c-model-pickaxe.png`. These are runtime viewport captures or crops of
+  them, not mockups.
+
+**Third-person camera.** Unchanged. `VoxelPlayer` camera modes, 3.8 m distance,
+0.70 m shoulder offset, collision sweeps, eye-origin aiming and crosshair
+convergence were not modified. Only the shared held-tool model changed.
+`m41c-demo-10.png` shows the unchanged third-person rig.
+
+**Limitations.**
+- The supplied reference image was removed from the working context before it
+  could be inspected and is not stored in the repository. The implementation
+  follows the written design characteristics and the existing style; a
+  pixel-for-pixel comparison against that image remains unverified.
+- The hand remains a box-built voxel fist, not a skeletal rig; there is no
+  per-finger animation.
+- The visible haft between fist and head is shorter than on a real pickaxe
+  because the enlarged head must stay below the reticle and above the hotbar.
+- The axe, shovel and sword are stylised in-house interpretations, not
+  production DCC assets. The sword has no reference counterpart.
+- No human mouse/keyboard play session was run; evidence is from the running
+  game's offscreen viewport and scripted demo.
+- No external asset was imported, so no runtime side-by-side comparison with
+  the external packs exists. Shields remain unsupported because `ItemDB` has no
+  shield item; none was fabricated.
+
+**Evidence.** `prototypes/m17/results/godot/m41c-report.md`,
+`m41c-asset-review.md`, `m41c-before-after.png`, `m41c-grip-closeup.png`,
+`m41c-states.png`, the eleven `m41c-demo-*.png` frames with
+`m41c-demo-manifest.json`, and the two supplementary model inspection renders.

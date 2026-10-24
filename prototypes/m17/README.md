@@ -55,11 +55,38 @@ Measure frame times (windowed; one scripted activity per run, JSON report in `re
 The `...` is a recorded local machine path, not a portable one; set `$godot` to
 another Godot 4.7.2 executable location if needed.
 
+Capture the M41b visual-acceptance sequence (first-person pickaxe/axe/shovel/
+sword, third-person idle/walk/jump/swing/sword) on the existing visual-test arena
+(offscreen viewport frames, not a human desktop recording):
+
+```powershell
+& 'C:\Godot\...\Godot_v4.7.2-stable_mono_win64.exe' --path godot --script res://scripts/tests/run_camera_demo.gd
+```
+
+The M41b evidence is written as `m41b-demo-*.png` with
+`m41b-demo-manifest.json`; the older M41 sequence used `m41-demo-*.png`.
+
+Capture the M41c hand/tool visual-acceptance sequence (pickaxe idle, nearby
+block, walking, swing and pavilion shade, then axe/shovel/sword and a
+third-person frame):
+
+```powershell
+& 'C:\Godot\...\Godot_v4.7.2-stable_mono_win64.exe' --path godot --script res://scripts/tests/run_m41c_demo.gd
+```
+
+The M41c evidence is written as `m41c-demo-*.png` with
+`m41c-demo-manifest.json`. A supplementary studio render of the four models for
+construction inspection (not gameplay evidence) is produced by:
+
+```powershell
+& 'C:\Godot\...\Godot_v4.7.2-stable_mono_win64.exe' --path godot --script res://scripts/tests/run_tool_preview.gd
+```
+
 ## Controls
 
 - **WASD** move · **Space** jump · **Shift** sprint · **mouse** look.
 - **Left mouse** break the targeted block · **Right mouse** place the selected block.
-- **1–9** select a hotbar slot · **F** toggle flight.
+- **1–9** select a hotbar slot · **F** toggle flight · **F4** switch first/third person.
 - **F5** save · **F9** reload the save · **F3** toggle the debug readout · **Esc** pause.
 
 ## Shared contract
@@ -74,5 +101,7 @@ mentions `17015`; the committed contract is authoritative).
 `--capture --capture-name=X.png`, `--shots="yaw:pitch[:x,y,z]; …"`, `--hide-hud`,
 `--fly`, `--player-at=x,y,z`, `--look=yaw,pitch`, `--render-distance=N`, `--settle=S`,
 `--seed=N`, `--fog=<density>` (0 = off), `--no-shadows`, `--straight-to-game`,
-`--quit-after=S`. They exist so the rendered game can be inspected reproducibly; see
-the progress document for the exact commands used and the images that were inspected.
+`--camera-mode=first|third`, `--camera-distance=N`, `--camera-shoulder=N`,
+`--select-slot=N`, `--quit-after=S`. They exist so the rendered game can be
+inspected reproducibly; see the progress document for the exact commands used and
+the images that were inspected.
